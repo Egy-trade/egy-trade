@@ -39,6 +39,3 @@ class ProductTemplate(models.Model):
     driver_manufacture = fields.Many2one(comodel_name='res.partner', string='Driver Manufacturer',
                                          domain="[('is_company', '=', True)]")
 
-
-class Product(models.Model):
-    _inherit = 'product.product'
