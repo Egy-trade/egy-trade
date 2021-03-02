@@ -12,5 +12,4 @@
         'data/product.xml',
         'views/product_view.xml',
     ],
-
 }
