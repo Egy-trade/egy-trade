@@ -1,0 +1,33 @@
+<odoo>
+    <data noupdate="0">
+
+        <record id="color_white" model="product.color">
+            <field name="name">White</field>
+        </record>
+
+        <record id="color_grey" model="product.color">
+            <field name="name">Grey</field>
+        </record>
+
+        <record id="color_chrome" model="product.color">
+            <field name="name">Chrome</field>
+        </record>
+
+        <record id="mounting_type_recessed" model="product.mounting.type">
+            <field name="name">Recessed</field>
+        </record>
+
+        <record id="mounting_type_surface" model="product.mounting.type">
+            <field name="name">Surface</field>
+        </record>
+
+        <record id="mounting_type_suspension_cable" model="product.mounting.type">
+            <field name="name">Suspension Cable</field>
+        </record>
+
+        <record id="mounting_type_wall" model="product.mounting.type">
+            <field name="name">Wall</field>
+        </record>
+        
+    </data>
+</odoo>
