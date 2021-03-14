@@ -9,9 +9,9 @@
             <xpath expr="//group[field[@name='description']]" position="replace">
                 <group>
                     <group>
+                        <field name="vendor_id" readonly="1"/>
                         <field name="family_name"/>
                         <field name="color"/>
-                        <field name="product_code"/>
                         <field name="product_type"/>
                         <field name="cct"/>
                         <field name="driver_manufacture"/>
@@ -37,11 +37,11 @@
         <field name="inherit_id" ref="product.product_template_search_view"/>
         <field name="arch" type="xml">
             <xpath expr="//search" position="inside">
+                <field name="vendor_id"/>
                 <field name="family_name"/>
                 <field name="color"/>
                 <field name="power"/>
                 <field name="lumen"/>
-                <field name="product_code"/>
                 <field name="cct"/>
                 <field name="ip"/>
                 <field name="led_voltage"/>
@@ -49,6 +49,7 @@
             </xpath>
             <xpath expr="//group" position="inside">
                 <separator/>
+                <filter string="Manufacture" name="groupby_vendor_id" context="{'group_by':'vendor_id'}"/>
                 <filter string="Family Name" name="groupby_family_name" context="{'group_by':'family_name'}"/>
                 <filter string="Color" name="groupby_product_color" context="{'group_by':'color'}"/>
                 <filter string="Power" name="groupby_product_power" context="{'group_by':'power'}"/>
@@ -56,6 +57,21 @@
                 <filter string="CCT" name="groupby_product_cct" context="{'group_by':'cct'}"/>
                 <filter string="IP" name="groupby_product_ip" context="{'group_by':'ip'}"/>
                 <filter string="Led Voltage" name="groupby_product_led_voltage" context="{'group_by':'led_voltage'}"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_template_tree_view_inherited" model="ir.ui.view">
+        <field name="name">product.template.tree.inherited</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="vendor_id"/>
+                <field name="family_name"/>
+                <field name="mounting_type"/>
+                <field name="product_type"/>
+                <field name="ip"/>
             </xpath>
         </field>
     </record>

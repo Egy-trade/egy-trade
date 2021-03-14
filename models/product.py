@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields
+from odoo import models, fields, api
 
 
 class MountingType(models.Model):
@@ -31,11 +31,18 @@ class ProductTemplate(models.Model):
                                     string='Mounting Type')
     power = fields.Char(string='Power')
     lumen = fields.Char(string='Lumen')
-    product_code = fields.Char(string='Product Code')
     product_type = fields.Char(string='Product Type')
     cct = fields.Char(string='CCT')
     ip = fields.Char(string='IP Rating')
     led_voltage = fields.Char(string='LED Voltage')
-    driver_manufacture = fields.Many2one(comodel_name='res.partner', string='Driver Manufacturer',
-                                         domain="[('is_company', '=', True)]")
+    driver_manufacture = fields.Char(string='Driver')
+    vendor_id = fields.Many2one('product.supplierinfo', name='Manufacture',
+                                compute='_compute_vendor_id')  # domain in view
 
+    @api.depends('seller_ids')
+    def _compute_vendor_id(self):
+        for rec in self:
+            if rec.seller_ids:
+                rec.vendor_id = rec.seller_ids[0]
+            else:
+                rec.vendor_id = False

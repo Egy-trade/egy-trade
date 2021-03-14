@@ -4,30 +4,96 @@
         <record id="color_white" model="product.color">
             <field name="name">White</field>
         </record>
-
         <record id="color_grey" model="product.color">
             <field name="name">Grey</field>
         </record>
-
+        <record id="color_black" model="product.color">
+            <field name="name">Black</field>
+        </record>
+        <record id="color_Steel" model="product.color">
+            <field name="name">Steel</field>
+        </record>
+        <record id="color_anthracite" model="product.color">
+            <field name="name">Anthracite</field>
+        </record>
+        <record id="color_grey_anthracite" model="product.color">
+            <field name="name">Grey Anthracite</field>
+        </record>
         <record id="color_chrome" model="product.color">
             <field name="name">Chrome</field>
         </record>
-
+        <record id="color_m_silver" model="product.color">
+            <field name="name">M. Silver</field>
+        </record>
+        <record id="color_sand_blasted_silver" model="product.color">
+            <field name="name">Sand Blasted Silver</field>
+        </record>
+        <record id="color_satin_stainless_steel_316l" model="product.color">
+            <field name="name">Satin stainless steel 316L</field>
+        </record>
+        <record id="color_brass_bronze_effect" model="product.color">
+            <field name="name">Brass Bronze Effect</field>
+        </record>
+        <record id="color_graphite" model="product.color">
+            <field name="name">Graphite</field>
+        </record>
+        <record id="color_anthracite_gloss_8_10" model="product.color">
+            <field name="name">Anthracite Gloss 8-10</field>
+        </record>
+        <!--Mounting Type-->
         <record id="mounting_type_recessed" model="product.mounting.type">
             <field name="name">Recessed</field>
         </record>
-
+        <record id="mounting_type_ground_recessed" model="product.mounting.type">
+            <field name="name">Ground Recessed</field>
+        </record>
+        <record id="mounting_type_wall_recessed" model="product.mounting.type">
+            <field name="name">Wall Recessed</field>
+        </record>
+        <record id="mounting_type_suspended" model="product.mounting.type">
+            <field name="name">Suspended</field>
+        </record>
+        <record id="mounting_type_projector" model="product.mounting.type">
+            <field name="name">Projector</field>
+        </record>
+        <record id="mounting_type_ground" model="product.mounting.type">
+            <field name="name">Ground</field>
+        </record>
+        <record id="mounting_type_pole" model="product.mounting.type">
+            <field name="name">Pole</field>
+        </record>
+        <record id="mounting_type_floor" model="product.mounting.type">
+            <field name="name">Floor</field>
+        </record>
+        <record id="mounting_type_base_of_pole" model="product.mounting.type">
+            <field name="name">Base of Pole</field>
+        </record>
+        <record id="mounting_type_ground_recessed" model="product.mounting.type">
+            <field name="name">Ground Recessed</field>
+        </record>
         <record id="mounting_type_surface" model="product.mounting.type">
             <field name="name">Surface</field>
         </record>
-
+        <record id="mounting_type_surface_pendent" model="product.mounting.type">
+            <field name="name">Surface/Pendent</field>
+        </record>
         <record id="mounting_type_suspension_cable" model="product.mounting.type">
             <field name="name">Suspension Cable</field>
         </record>
-
         <record id="mounting_type_wall" model="product.mounting.type">
             <field name="name">Wall</field>
         </record>
-        
+        <record id="mounting_type_wall_washers" model="product.mounting.type">
+            <field name="name">Wall Washers</field>
+        </record>
+        <record id="mounting_type_wall_ground" model="product.mounting.type">
+            <field name="name">Wall/Ground</field>
+        </record>
+        <record id="mounting_type_lkm_3phase_track" model="product.mounting.type">
+            <field name="name">LKM 3-phase track</field>
+        </record>
+        <record id="mounting_type_ceiling" model="product.mounting.type">
+            <field name="name">Ceilings, plasterboard ceilings, Suspended ceilings</field>
+        </record>
     </data>
 </odoo>
