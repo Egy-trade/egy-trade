@@ -46,3 +46,16 @@ class ProductTemplate(models.Model):
                 rec.vendor_id = rec.seller_ids[0]
             else:
                 rec.vendor_id = False
+
+
+class SupplierInfo(models.Model):
+    _inherit = 'product.supplierinfo'
+
+    @api.depends('name')
+    def _compute_delay(self):
+        for rec in self:
+            rec.delay = rec.name.delay
+
+    delay = fields.Integer(
+        'Delivery Lead Time', compute='_compute_delay', required=True, store=True, readonly=False,
+        help="Lead time in days between the confirmation of the purchase order and the receipt of the products in your warehouse. Used by the scheduler for automatic computation of the purchase order planning.")

@@ -10,6 +10,7 @@
     'data': [
         'security/ir.model.access.csv',
         'data/product.xml',
+        'views/res_partner_view.xml',
         'views/product_view.xml',
     ],
     'application': True,
