@@ -66,12 +66,40 @@
         <field name="model">product.template</field>
         <field name="inherit_id" ref="product.product_template_tree_view"/>
         <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="attributes">
+                <attribute name="string">Product Code</attribute>
+            </xpath>
             <xpath expr="//field[@name='name']" position="after">
                 <field name="vendor_id"/>
                 <field name="family_name"/>
                 <field name="mounting_type"/>
                 <field name="product_type"/>
                 <field name="ip"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_template_kanban_view_inherited" model="ir.ui.view">
+        <field name="name">Product.template.product.kanban.inherited</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_kanban_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='product_lst_price']" position="before">
+                <div name="product_vendor" class="mt-1">
+                    Vendor: <field name="vendor_id"/>
+                </div>
+                <div name="product_family" class="mt-1">
+                    Family Name: <field name="family_name"/>
+                </div>
+                <div name="product_mounting" class="mt-1">
+                    Mounting: <field name="mounting_type"/>
+                </div>
+                <div name="product_type" class="mt-1">
+                    Type: <field name="product_type"/>
+                </div>
+                <div name="product_type" class="mt-1">
+                    <field name="ip"/>
+                </div>
             </xpath>
         </field>
     </record>

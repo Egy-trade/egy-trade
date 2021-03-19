@@ -1,6 +1,5 @@
 <odoo>
     <data noupdate="0">
-
         <record id="color_white" model="product.color">
             <field name="name">White</field>
         </record>

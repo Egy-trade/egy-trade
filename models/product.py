@@ -57,5 +57,5 @@ class SupplierInfo(models.Model):
             rec.delay = rec.name.delay
 
     delay = fields.Integer(
-        'Delivery Lead Time', compute='_compute_delay', required=True, store=True, readonly=False,
+        'Delivery Lead Time', compute='_compute_delay', required=True, readonly=False,
         help="Lead time in days between the confirmation of the purchase order and the receipt of the products in your warehouse. Used by the scheduler for automatic computation of the purchase order planning.")
