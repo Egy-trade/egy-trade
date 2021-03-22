@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+
+
+    <record id="stock_picking_status_template_tree_view" model="ir.ui.view">
+        <field name="name">stock.picking.status.template.tree</field>
+        <field name="model">stock.picking.status.template</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="name"/>
+            </tree>
+        </field>
+    </record>
+
+
+    <record id="stock_picking_status_template_from_view" model="ir.ui.view">
+        <field name="name">stock.picking.status.template.form</field>
+        <field name="model">stock.picking.status.template</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Stages">
+                            <field name="stage_ids">
+                                <tree editable="bottom">
+
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="name"/>
+                                    <field name="duration"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_stock_picking_status_template" model="ir.actions.act_window">
+        <field name="name">Stage Templates</field>
+        <field name="res_model">stock.picking.status.template</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No status templates rule found. Let's create one!
+            </p><p>
+            Yada Yada Yada
+        </p>
+        </field>
+    </record>
+
+    <menuitem id="stock_picking_transfer_section"
+              name="Stock Transfer"
+              parent="stock.menu_stock_config_settings"
+              sequence="50"/>
+    <menuitem id="stock_picking_status_template"
+              name="Stage Template"
+              parent="stock_picking_transfer_section"
+              action="action_stock_picking_status_template"
+              sequence="1"/>
+</odoo>

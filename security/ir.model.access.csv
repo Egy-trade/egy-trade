@@ -5,3 +5,7 @@ access_product_color_user,product.color.user,model_product_color,base.group_user
 access_product_color_manager,product.color.manager,model_product_color,base.group_system,1,1,1,1
 access_product_family_name_user,product.family.name.user,model_product_family_name,base.group_user,1,0,0,0
 access_product_family_name_manager,product.family.name.manager,model_product_family_name,base.group_system,1,1,1,1
+access_stock_picking_status_stage_user,stock.picking.status.stage.user,model_stock_picking_status_stage,stock.group_stock_user,1,0,0,0
+access_stock_picking_status_stage_manager,stock.picking.status.stage.manager,model_stock_picking_status_stage,stock.group_stock_manager,1,1,1,1
+access_stock_picking_status_template_user,stock.picking.status.template.user,model_stock_picking_status_template,stock.group_stock_user,1,0,0,0
+access_stock_picking_status_template_manager,stock.picking.status.template.manager,model_stock_picking_status_template,stock.group_stock_manager,1,1,1,1
