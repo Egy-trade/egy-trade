@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <record id="change_stage_form_view" model="ir.ui.view">
+        <field name="name">change.stage.wizard.form</field>
+        <field name="model">change.stage.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Change Stage">
+                <group>
+                    <group>
+                        <field name="status_template_id" invisible="1"/>
+                        <field name="stage" domain="[('status_template_id', '=', status_template_id)]"/>
+                    </group>
+                    <group>
+                        <field name="change_date"/>
+                    </group>
+                </group>
+                <footer>
+                    <button string="Change" type="object" name="change_stage" class="btn-primary"/>
+                    <button string="Cancel" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_change_stage" model="ir.actions.act_window">
+        <field name="name">Change Stage</field>
+        <field name="res_model">change.stage.wizard</field>
+        <field name="view_id" ref="egy-trade.change_stage_form_view"/>
+        <field name="target">new</field>
+    </record>
+</odoo>

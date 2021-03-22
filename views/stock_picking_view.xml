@@ -28,7 +28,6 @@
                         <page string="Stages">
                             <field name="stage_ids">
                                 <tree editable="bottom">
-
                                     <field name="sequence" widget="handle"/>
                                     <field name="name"/>
                                     <field name="duration"/>

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from odoo import models, fields
+from odoo import models, fields, api
+from datetime import date
 
 
 class StockPickingStatusStage(models.Model):
@@ -22,9 +23,11 @@ class StockPickingStatus(models.Model):
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
-    status_template_id = fields.Many2one('stock.picking.status.template', string='Status Template')
-    shipment_state = fields.Selection([
-        ('waiting', 'Waiting'),
-        ('shipped', 'Shipped'),
-        ('customs', 'Customs'),
-    ], string='Shipment Status', tracking=True, default='waiting', required=True)
+    status_template_id = fields.Many2one('stock.picking.status.template',
+                                         string='Status Template',
+                                         tracking=True)
+    status_stage = fields.Many2one('stock.picking.status.stage')
+
+    def _transfer_status_change(self):
+        print('_transfer_status_change')
+        current_date = date.today()

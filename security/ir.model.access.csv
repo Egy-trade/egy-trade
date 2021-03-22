@@ -9,3 +9,5 @@ access_stock_picking_status_stage_user,stock.picking.status.stage.user,model_sto
 access_stock_picking_status_stage_manager,stock.picking.status.stage.manager,model_stock_picking_status_stage,stock.group_stock_manager,1,1,1,1
 access_stock_picking_status_template_user,stock.picking.status.template.user,model_stock_picking_status_template,stock.group_stock_user,1,0,0,0
 access_stock_picking_status_template_manager,stock.picking.status.template.manager,model_stock_picking_status_template,stock.group_stock_manager,1,1,1,1
+access_change_stage_wizard_user,change.stage.wizard.user,model_change_stage_wizard,stock.group_stock_user,1,0,0,0
+access_change_stage_wizard_manager,change.stage.wizard.manager,model_change_stage_wizard,stock.group_stock_manager,1,1,1,1

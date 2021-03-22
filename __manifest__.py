@@ -15,6 +15,7 @@
         'views/stock_picking_view.xml',
         # 'views/purchase_view.xml',
         'views/product_view.xml',
+        'wizard/change_stage_wizard.xml',
     ],
     'application': True,
 }
