@@ -14,14 +14,17 @@
                         class="oe_highlight"
                         context="{'stock_picking_id': id,
                         'status_template_id': status_template_id,
+                        'status_stage': status_stage,
                         }"
                 />
             </xpath>
             <xpath expr="//field[@name='picking_type_id']" position="after">
                 <field name="status_template_id" attrs="{'readonly': [('state', 'not in', ['draft', 'cancel'])]}"/>
-                <field name="status_stage" attrs="{'invisible': [('state', 'in', ['draft', 'cancel'])]}"/>
-                <!-- why the fuck the list is not working? -->
-                <!-- status_template_id.stage_ids.ids -->
+                <div attrs="{'invisible': [('state', 'in', ['draft', 'cancel'])]}">
+                    <label for="status_stage"/>
+                    <field name="status_stage" class="oe_inline" readonly="1"/>
+                    <field name="expected_date" class="oe_inline"/>
+                </div>
             </xpath>
         </field>
     </record>

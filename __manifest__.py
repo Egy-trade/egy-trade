@@ -10,6 +10,7 @@
     'data': [
         'security/ir.model.access.csv',
         'data/product.xml',
+        'data/stock_picking.xml',
         'views/res_partner_view.xml',
         'views/stock_view.xml',
         'views/stock_picking_view.xml',

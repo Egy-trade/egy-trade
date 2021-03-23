@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
+from datetime import date
 
 
 class MountingType(models.Model):
@@ -46,6 +47,13 @@ class ProductTemplate(models.Model):
                 rec.vendor_id = rec.seller_ids[0]
             else:
                 rec.vendor_id = False
+
+    cost_change_date = fields.Date(string='Last Changed', compute='_compute_cost_change', store=True)
+
+    @api.depends('standard_price')
+    def _compute_cost_change(self):
+        for rec in self:
+            rec.cost_change_date = date.today()
 
 
 class SupplierInfo(models.Model):
