@@ -7,6 +7,7 @@
         <field name="model">stock.picking</field>
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
+            <!-- Need to define when the button is visible otherwise it's not -->
             <xpath expr="//header" position="inside">
                 <button name="%(action_change_stage)d"
                         string="Change Stage"
@@ -18,9 +19,11 @@
                         }"
                 />
             </xpath>
+            <!-- Untested -->
             <xpath expr="//field[@name='picking_type_id']" position="after">
-                <field name="status_template_id" attrs="{'readonly': [('state', 'not in', ['draft', 'cancel'])]}"/>
-                <div attrs="{'invisible': [('state', 'in', ['draft', 'cancel'])]}">
+                <field name="status_template_id" attrs="{'readonly': [('state', 'not in', ['draft', 'cancel'])],
+                'invisible': [('status_template_id', '=', False), ('state', 'not in', ['draft', 'cancel'])]}"/>
+                <div attrs="{'invisible': [ '&amp;', '|', ('state', 'in', ['draft', 'cancel']), ('status_template_id', '=', False), ('state', 'not in', ['draft', 'cancel'])]}">
                     <label for="status_stage"/>
                     <field name="status_stage" class="oe_inline" readonly="1"/>
                     <field name="expected_date" class="oe_inline"/>

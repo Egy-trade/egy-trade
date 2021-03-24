@@ -55,6 +55,8 @@ class ProductTemplate(models.Model):
         for rec in self:
             rec.cost_change_date = date.today()
 
+    margin = fields.Integer(string='Margin', help='Percentage of profit calculated off the cost/standard price')
+
 
 class SupplierInfo(models.Model):
     _inherit = 'product.supplierinfo'

@@ -6,6 +6,9 @@
         <field name="model">product.template</field>
         <field name="inherit_id" ref="product.product_template_only_form_view"/>
         <field name="arch" type="xml">
+            <!--            <xpath expr="//field[@name='company_id']" position="before">-->
+            <!--                <field name="change_date"/>-->
+            <!--            </xpath>-->
             <xpath expr="//group[field[@name='description']]" position="replace">
                 <group>
                     <group>
@@ -26,6 +29,18 @@
                 <group name="internal_notes" string="Internal Notes">
                     <field name="description" nolabel="1" placeholder="This note is only for internal purposes."/>
                 </group>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_template_form_view_inherited" model="ir.ui.view">
+        <field name="name">product.template.form.view.inherited</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='company_id']" position="before">
+                <field name="cost_change_date"/>
+                <field name="margin"/>
             </xpath>
         </field>
     </record>
