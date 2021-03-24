@@ -26,7 +26,7 @@
     <record id="action_change_stage" model="ir.actions.act_window">
         <field name="name">Change Stage</field>
         <field name="res_model">change.stage.wizard</field>
-        <field name="view_id" ref="egy-trade.change_stage_form_view"/>
+        <field name="view_id" ref="egy-trade_custom.change_stage_form_view"/>
         <field name="target">new</field>
     </record>
 </odoo>
