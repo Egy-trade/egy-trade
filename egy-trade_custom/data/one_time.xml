@@ -5,6 +5,7 @@
         <field name="state">code</field>
         <field name="interval_number">0</field>
         <field name="code">model._insert_data_cron()</field>
+        <field name="active">False</field>
     </record>
 
 </odoo>
