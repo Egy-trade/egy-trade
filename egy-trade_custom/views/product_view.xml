@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <record id="product_template_form_view_inherited" model="ir.ui.view">
+    <record id="product_template_form_inherited" model="ir.ui.view">
         <field name="name">product.template.form.inherited</field>
         <field name="model">product.template</field>
         <field name="inherit_id" ref="product.product_template_only_form_view"/>
@@ -15,7 +15,7 @@
                         <field name="vendor_id" readonly="1"/>
                         <field name="family_name"/>
                         <field name="color"/>
-                        <field name="product_type"/>
+                        <field name="product_type_spec"/>
                         <field name="cct"/>
                         <field name="driver_manufacture"/>
                     </group>
@@ -88,7 +88,7 @@
                 <field name="vendor_id"/>
                 <field name="family_name"/>
                 <field name="mounting_type"/>
-                <field name="product_type"/>
+                <field name="product_type_spec"/>
                 <field name="ip"/>
             </xpath>
         </field>
@@ -109,10 +109,10 @@
                 <div name="product_mounting" class="mt-1">
                     Mounting: <field name="mounting_type"/>
                 </div>
-                <div name="product_type" class="mt-1">
-                    Type: <field name="product_type"/>
+                <div name="product_type_spec" class="mt-1">
+                    Type: <field name="product_type_spec"/>
                 </div>
-                <div name="product_type" class="mt-1">
+                <div name="product_ip" class="mt-1">
                     <field name="ip"/>
                 </div>
             </xpath>

@@ -32,7 +32,7 @@ class ProductTemplate(models.Model):
                                     string='Mounting Type')
     power = fields.Char(string='Power')
     lumen = fields.Char(string='Lumen')
-    product_type = fields.Char(string='Product Type')
+    product_type_spec = fields.Char(string='Product Type Spec')
     cct = fields.Char(string='CCT')
     ip = fields.Char(string='IP Rating')
     led_voltage = fields.Char(string='LED Voltage')
