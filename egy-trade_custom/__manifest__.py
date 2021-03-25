@@ -20,4 +20,5 @@
         'wizard/change_stage_wizard.xml',
     ],
     'application': True,
+    'external_dependencies': {'python': ['pandas']}
 }
