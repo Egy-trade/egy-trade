@@ -85,7 +85,7 @@ class ProductTemplate(models.Model):
 
 
     def _insert_data_cron(self):
-        data = pd.read_excel('/home/odoo/src/user/client_data\product_template.xlsx', sheet_name='Template')
+        data = pd.read_excel('/home/odoo/src/user/client_data/product_template.xlsx', sheet_name='Template')
         # df = pd.read_excel("C:\\Users\\Rottab\\Dev\\Odoo\\odoo-14.0-enterprise\\custom-addons\\egy-trade\\client_data\\product_template.xlsx", sheet_name='Template')
         for _, pt in df.iterrows():
             pt_obj = self.env['product.template'].search([('name', '=', str(pt['Name']))], limit=1)
