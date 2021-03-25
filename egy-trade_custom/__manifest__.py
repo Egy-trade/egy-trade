@@ -9,6 +9,7 @@
     'depends': ['product', 'stock', 'purchase', 'crm', 'sale'],
     'data': [
         'security/ir.model.access.csv',
+        'data/one_time.xml',
         'data/product.xml',
         'data/stock_picking.xml',
         'views/res_partner_view.xml',

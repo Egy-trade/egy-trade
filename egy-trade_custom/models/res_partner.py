@@ -6,4 +6,4 @@ from odoo import models, fields
 class SupplierInfo(models.Model):
     _inherit = 'res.partner'
 
-    delay = fields.Integer(string='Delivery Lead Time', default=2)
+    delay = fields.Integer(string='Delivery Lead Time', default=1)

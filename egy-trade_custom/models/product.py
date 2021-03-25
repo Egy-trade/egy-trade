@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
 from datetime import date
-
+import pandas as pd
 
 class MountingType(models.Model):
     _name = 'product.mounting.type'
@@ -48,7 +48,7 @@ class ProductTemplate(models.Model):
             else:
                 rec.vendor_id = False
 
-    cost_change_date = fields.Date(string='Last Changed', compute='_compute_cost_change', store=True)
+    cost_change_date = fields.Date(string='Cost Last Updated', compute='_compute_cost_change', store=True)
 
     @api.depends('standard_price')
     def _compute_cost_change(self):
@@ -57,6 +57,43 @@ class ProductTemplate(models.Model):
 
     margin = fields.Integer(string='Margin', help='Percentage of profit calculated off the cost/standard price')
 
+    list_price = fields.Float(
+        'Sales Price', default=1.0,
+        digits='Product Price',
+        help="Price at which the product is sold to customers.",
+        compute='_compute_list_price',
+        readonly=False,
+        store=True
+    )
+
+    @api.depends('margin', 'standard_price')
+    def _compute_list_price(self):
+        for rec in self:
+            if rec.margin:
+                rec.list_price = rec.standard_price * (rec.margin / 100) + rec.standard_price
+            else:
+                rec.list_price = 1
+
+    def write(self, values):
+        print(values)
+        if 'margin' in values and 'list_price' in values:
+            pass
+        elif 'list_price' in values:
+            values['margin'] = 0
+        res = super(ProductTemplate, self).write(values)
+        return res
+
+
+    def _insert_data_cron(self):
+        data = pd.read_excel('/home/odoo/src/user/client_data\product_template.xlsx', sheet_name='Template')
+        # df = pd.read_excel("C:\\Users\\Rottab\\Dev\\Odoo\\odoo-14.0-enterprise\\custom-addons\\egy-trade\\client_data\\product_template.xlsx", sheet_name='Template')
+        for _, pt in df.iterrows():
+            pt_obj = self.env['product.template'].search([('name', '=', str(pt['Name']))], limit=1)
+            vendor_id = self.env['res.partner'].search([('name', '=', str(pt['Vendors']))])
+            self.env['product.supplierinfo'].create({
+                'name': vendor_id.id,
+                'product_tmpl_id': pt_obj.id
+            })
 
 class SupplierInfo(models.Model):
     _inherit = 'product.supplierinfo'

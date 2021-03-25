@@ -41,28 +41,27 @@ class StockPicking(models.Model):
     @api.model
     def _transfer_status_change(self):
         print('***')
-        print('_transfer_status_change')
-        # res = self.env['mail.message'].create({'message_type': "notification",
-        #                                        "subtype_id": self.env.ref("mail.mt_comment").id,  # subject type
-        #                                        'body': "Need to take action on this transfer",
-        #                                        'subject': "Action Needed YO",
-        #                                        'partner_ids': [1, 2, 3, 4, 5, 6, 7, 8, 9],
-        #                                        'notified_partner_ids': [1, 2, 3, 4, 5, 6, 7, 8, 9],
-        #                                        'model': self._name,
-        #                                        'res_id': self.id,
-        #                                        })
-        # print(res)
-
         today = date.today()
         stock_picking_ids = self.env['stock.picking'].search([('status_template_id', '!=', False),
                                                               ('state', 'not in', ['draft', 'cancel'])])
         for line in stock_picking_ids:
             if line.expected_date >= today:
-                print('send the notification')
+                print('sending the notification ...')
+                # res = self.env['mail.message'].create({'message_type': "notification",
+                #                                        "subtype_id": self.env.ref("mail.mt_comment").id,  # subject type
+                #                                        'body': "Need to take action on this transfer",
+                #                                        'subject': "Action Needed YO",
+                #                                        'partner_ids': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                #                                        'notified_partner_ids': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                #                                        'model': self._name,
+                #                                        'res_id': self.id,
+                #                                        })  # Should properly set the partner_ids
+                # print(res)
 
     def action_confirm(self):
         result = super(StockPicking, self).action_confirm()
-        self.status_stage = self.status_template_id.stage_ids[0].id
-        self.expected_date = self.stage_change_date + timedelta(
+        if len(self.status_template_id.stage_ids):
+            self.status_stage = self.status_template_id.stage_ids[0].id
+            self.expected_date = self.stage_change_date + timedelta(
             days=rec.status_stage.duration) if self.stage_change_date else False
         return result
