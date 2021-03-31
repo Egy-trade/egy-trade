@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+
+    <record id="view_order_form_inherited" model="ir.ui.view">
+        <field name="name">sale.order.form</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="replace">
+                <header>
+                    <field name="authorized_transaction_ids" invisible="1"/>
+                    <button name="payment_action_capture" type="object"
+                            string="Capture Transaction" class="oe_highlight"
+                            attrs="{'invisible': [('authorized_transaction_ids', '=', [])]}"/>
+                    <button name="payment_action_void" type="object"
+                            string="Void Transaction"
+                            confirm="Are you sure you want to void the authorized transaction? This action can't be undone."
+                            attrs="{'invisible': [('authorized_transaction_ids', '=', [])]}"/>
+                    <button name="%(sale.action_view_sale_advance_payment_inv)d" string="Create Invoice"
+                            type="action" class="btn-primary"
+                            attrs="{'invisible': [('invoice_status', '!=', 'to invoice')]}"/>
+                    <button name="%(sale.action_view_sale_advance_payment_inv)d" string="Create Invoice"
+                            type="action" context="{'default_advance_payment_method': 'percentage'}"
+                            attrs="{'invisible': ['|',('invoice_status', '!=', 'no'), ('state', '!=', 'sale')]}"/>
+
+                    <button name="action_quotation_send" type="object" string="Send PRO-FORMA Invoice"
+                            groups="sale.group_proforma_sales" class="btn-primary"
+                            attrs="{'invisible': ['|', ('state', '!=', 'draft'), ('invoice_count','&gt;=',1)]}"
+                            context="{'proforma': True}"/>
+                    <button name="action_to_approve" type="object"
+                            string="Approve Order" class="btn-primary"
+                            attrs="{'invisible': [('state', 'not in', ['draft'])]}"/>
+                    <button name="action_confirm"
+                            string="Confirm" type="object"
+                            attrs="{'invisible': [('state', 'in', ['draft', 'sale', 'done', 'cancel'])]}"/>
+                    <button name="action_quotation_send" type="object" string="Send PRO-FORMA Invoice"
+                            groups="sale.group_proforma_sales"
+                            attrs="{'invisible': ['|', ('state', '=', 'draft'), ('invoice_count','&gt;=',1)]}"
+                            context="{'proforma': True}"/>
+                    <button name="action_quotation_send" string="Send by Email" type="object" states="approve,sent,sale"/>
+                    <button name="action_cancel" type="object" string="Cancel"
+                            attrs="{'invisible': ['|', ('state', 'not in', ['draft', 'sent','sale']), ('id', '=', False)]}"/>
+                    <button name="action_draft" states="cancel" type="object" string="Set to Quotation"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,approve,sent,sale"/>
+                </header>
+            </xpath>
+
+            <xpath expr="//tree/field[@name='discount']" position="attributes">
+                <attribute name="attrs">{'readonly': [('state', 'not in', ['draft'])]}</attribute>
+            </xpath>
+
+        </field>
+    </record>
+</odoo>
