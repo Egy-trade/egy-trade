@@ -16,7 +16,7 @@
         'views/res_partner_view.xml',
         'views/stock_view.xml',
         'views/stock_picking_view.xml',
-        # 'views/purchase_view.xml',
+        'views/purchase_view.xml',
         'views/product_view.xml',
         'views/sale_order.xml',
 
