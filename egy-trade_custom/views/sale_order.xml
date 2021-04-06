@@ -40,10 +40,16 @@
                     <button name="action_quotation_send" string="Send by Email" type="object"
                             states="approve,sent,sale"/>
                     <button name="action_cancel" type="object" string="Cancel"
-                            attrs="{'invisible': ['|', ('state', 'not in', ['draft', 'sent','sale']), ('id', '=', False)]}"/>
+                            attrs="{'invisible': ['|', ('state', 'not in', ['draft', 'sent','sale', 'approve']), ('id', '=', False)]}"/>
                     <button name="action_draft" states="cancel" type="object" string="Set to Quotation"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,approve,sent,sale"/>
                 </header>
+            </xpath>
+            <xpath expr="//tree/field[@name='tax_id']" position="attributes">
+                <attribute name="attrs">{'readonly': [('state', 'not in', ['draft'])]}</attribute>
+            </xpath>
+             <xpath expr="//tree/field[@name='price_unit']" position="attributes">
+                <attribute name="attrs">{'readonly': [('state', 'not in', ['draft'])]}</attribute>
             </xpath>
             <xpath expr="//tree/field[@name='discount']" position="attributes">
                 <attribute name="attrs">{'readonly': [('state', 'not in', ['draft'])]}</attribute>
