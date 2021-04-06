@@ -3,6 +3,7 @@ from odoo import models, fields, api
 from datetime import date
 import pandas as pd
 
+
 class MountingType(models.Model):
     _name = 'product.mounting.type'
 
@@ -55,49 +56,47 @@ class ProductTemplate(models.Model):
         for rec in self:
             rec.cost_change_date = date.today()
 
-    margin = fields.Integer(string='Margin', help='Percentage of profit calculated off the cost/standard price')
-
     list_price = fields.Float(
         'Sales Price', default=1.0,
         digits='Product Price',
         help="Price at which the product is sold to customers.",
-        compute='_compute_list_price',
         readonly=False,
         store=True
     )
 
-    @api.depends('margin', 'standard_price')
-    def _compute_list_price(self):
-        for rec in self:
-            if rec.margin:
-                rec.list_price = rec.standard_price * (rec.margin / 100) + rec.standard_price
-            else:
-                rec.list_price = 1
+    @api.onchange('margin', 'standard_price')
+    def _onchange_list_price(self):
+        if self.margin:
+            self.list_price = self.standard_price * (1 + (self.margin / 100))
+
+    @api.onchange('list_price')
+    def _onchange_margin(self):
+        if self.list_price:
+            self.margin = (self.list_price / self.standard_price - 1) * 100
+        else:
+            self.margin = 0
+
+    margin = fields.Integer(string='Margin',
+                            help='Percentage of profit calculated off the cost/standard price',
+                            readonly=False,
+                            store=True
+                            )
 
     def write(self, values):
-        print(values)
-        if 'margin' in values and 'list_price' in values:
-            pass
-        elif 'list_price' in values:
-            values['margin'] = 0
         res = super(ProductTemplate, self).write(values)
         return res
-
 
     def _insert_data_cron(self):
         df = pd.read_excel('/home/odoo/src/user/client_data/product_template.xlsx', sheet_name='Template')
         # df = pd.read_excel("C:\\Users\\Rottab\\Dev\\Odoo\\odoo-14.0-enterprise\\custom-addons\\egy-trade\\client_data\\product_template.xlsx", sheet_name='Template')
         for _, pt in df.iterrows():
-
             pt_obj = self.env['product.template'].search([('name', '=', str(pt['Name']))], limit=1)
             vendor_id = self.env['res.partner'].search([('name', '=', str(pt['Vendors']))])
-            print('***')
-            print(pt_obj)
-            print(vendor_id)
             self.env['product.supplierinfo'].create({
                 'name': vendor_id.id,
                 'product_tmpl_id': pt_obj.id
             })
+
 
 class SupplierInfo(models.Model):
     _inherit = 'product.supplierinfo'
@@ -110,3 +109,12 @@ class SupplierInfo(models.Model):
     delay = fields.Integer(
         'Delivery Lead Time', compute='_compute_delay', required=True, readonly=False,
         help="Lead time in days between the confirmation of the purchase order and the receipt of the products in your warehouse. Used by the scheduler for automatic computation of the purchase order planning.")
+
+    @api.depends('product_tmpl_id.standard_price')
+    def _compute_price(self):
+        for rec in self:
+            rec.price = self.product_tmpl_id.standard_price
+
+    price = fields.Float(
+        'Price', default=0.0, digits='Product Price',
+        required=True, help="The price to purchase a product", compute='_compute_price', readonly=True, store=True)
