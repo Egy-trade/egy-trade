@@ -30,7 +30,8 @@ class StockPicking(models.Model):
                                          )
     status_stage = fields.Many2one('stock.picking.status.stage', string='Location', tracking=True)
     stage_change_date = fields.Date(string='Change Date')
-    expected_date = fields.Date(string='Expected Date', readonly=True, compute='_compute_status_stage')  # should fix this later on
+    expected_date = fields.Date(string='Expected Date', readonly=True,
+                                compute='_compute_status_stage')  # should fix this later on
 
     @api.depends('status_stage')
     def _compute_status_stage(self):
@@ -40,28 +41,21 @@ class StockPicking(models.Model):
 
     @api.model
     def _transfer_status_change(self):
-        print('***')
         today = date.today()
         stock_picking_ids = self.env['stock.picking'].search([('status_template_id', '!=', False),
                                                               ('state', 'not in', ['draft', 'cancel'])])
         for line in stock_picking_ids:
-            if line.expected_date >= today:
+            if line.expected_date >= today or True:
                 print('sending the notification ...')
-                # res = self.env['mail.message'].create({'message_type': "notification",
-                #                                        "subtype_id": self.env.ref("mail.mt_comment").id,  # subject type
-                #                                        'body': "Need to take action on this transfer",
-                #                                        'subject': "Action Needed YO",
-                #                                        'partner_ids': [1, 2, 3, 4, 5, 6, 7, 8, 9],
-                #                                        'notified_partner_ids': [1, 2, 3, 4, 5, 6, 7, 8, 9],
-                #                                        'model': self._name,
-                #                                        'res_id': self.id,
-                #                                        })  # Should properly set the partner_ids
-                # print(res)
+                template_id = self.env.ref('egy-trade_custom.mail_template_transfer_status_alert').id
+                template = self.env['mail.template'].browse(template_id)
+                template['email_to'] = self.env['res.users'].browse(8).partner_id.email_formatted
+                template.send_mail(self.id, force_send=True)
 
     def action_confirm(self):
         result = super(StockPicking, self).action_confirm()
         if len(self.status_template_id.stage_ids):
             self.status_stage = self.status_template_id.stage_ids[0].id
             self.expected_date = self.stage_change_date + timedelta(
-            days=rec.status_stage.duration) if self.stage_change_date else False
+                days=rec.status_stage.duration) if self.stage_change_date else False
         return result

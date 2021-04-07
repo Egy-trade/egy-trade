@@ -30,8 +30,6 @@ class ChangeStageWizard(models.TransientModel):
         return result
 
     def change_stage(self):
-        print('change stage')
-        print('change stage')
         self.stock_picking_id.status_stage = self.stage
         self.stock_picking_id.stage_change_date = self.change_date
 

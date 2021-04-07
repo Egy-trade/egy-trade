@@ -1,4 +1,23 @@
 <odoo>
+
+
+
+    <record model="mail.template" id="mail_template_transfer_status_alert">
+        <field name="name">Account Invoice Extract Notification</field>
+        <!--        <field name="email_from">iap@odoo.com</field>-->
+        <!--        <field name="email_to">${(object.partner_id.email_formatted) |safe}</field>-->
+        <field name="subject">Transfer Order Status Check</field>
+        <field name="model_id" ref="egy-trade_custom.model_stock_picking"/>
+        <field name="body_html" type="html">
+            <div style="margin: 0px; padding: 0px;">
+                <p>Dear,<br/></p>
+                <p>You need to take action <br/></p>
+                <p>Best regards,<br/></p>
+                <p>System</p>
+            </div>
+        </field>
+    </record>
+
     <record model="ir.cron" id="cron_transfer_status_change">
         <field name="name">Transfer: Status Alert</field>
         <field name="model_id" ref="egy-trade_custom.model_stock_picking"/>
