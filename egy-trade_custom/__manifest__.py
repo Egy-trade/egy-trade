@@ -6,13 +6,14 @@
     'author': 'EffVision',
     'category': 'Inventory',
 
-    'depends': ['product', 'stock', 'purchase', 'crm', 'sale_management'],
+    'depends': ['product', 'stock', 'purchase', 'purchase_stock', 'crm', 'sale_management'],
     'data': [
         'security/ir.model.access.csv',
         'data/one_time.xml',
         'data/product.xml',
         'data/stock_picking.xml',
         'wizard/change_stage_wizard.xml',
+        'wizard/set_stage_wizard.xml',
         'views/res_partner_view.xml',
         'views/stock_view.xml',
         'views/stock_picking_view.xml',

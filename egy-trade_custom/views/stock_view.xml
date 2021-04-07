@@ -20,6 +20,12 @@
                         attrs="{'invisible': ['|', ('state', 'in', ['draft', 'cancel']),
                          ('status_template_id', '=', False)]}"
                 />
+                <button name="%(action_set_stage)d"
+                        string="Set Route"
+                        type="action"
+                        class="oe_highlight"
+                        attrs="{'invisible': ['&amp;', ('state', 'not in', ['ready']), ('status_template_id', '!=', False)]}"
+                />
             </xpath>
             <!-- Untested -->
             <xpath expr="//field[@name='picking_type_id']" position="after">

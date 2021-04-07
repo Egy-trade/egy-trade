@@ -54,7 +54,6 @@
             <xpath expr="//tree/field[@name='discount']" position="attributes">
                 <attribute name="attrs">{'readonly': [('state', 'not in', ['draft'])]}</attribute>
             </xpath>
-
         </field>
     </record>
 
