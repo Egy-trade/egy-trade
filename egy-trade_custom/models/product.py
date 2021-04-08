@@ -99,6 +99,7 @@ class ProductTemplate(models.Model):
 
     def _insert_data_cron(self):
         print('****')
+        print('****')
 
         df = pd.read_excel('/home/odoo/src/user/client_data/product_template.xlsx', sheet_name='Template')
         # df = pd.read_excel("C:\\Users\\Rottab\\Dev\\Odoo\\odoo-14.0-enterprise\\custom-addons\\egy-trade\\client_data\\product_template.xlsx", sheet_name='Template')
