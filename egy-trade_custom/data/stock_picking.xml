@@ -1,7 +1,4 @@
 <odoo>
-
-
-
     <record model="mail.template" id="mail_template_transfer_status_alert">
         <field name="name">Account Invoice Extract Notification</field>
         <!--        <field name="email_from">iap@odoo.com</field>-->

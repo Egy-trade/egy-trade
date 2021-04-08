@@ -25,6 +25,15 @@ class ProductColor(models.Model):
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
 
+    standard_price = fields.Float(
+        'Cost', compute='_compute_standard_price',
+        inverse='_set_standard_price', search='_search_standard_price',
+        digits='Product Price', groups="egy-trade_custom.group_product_logistics",
+        help="""In Standard Price & AVCO: value of the product (automatically computed in AVCO).
+            In FIFO: value of the last unit that left the stock (automatically computed).
+            Used to value the product when the purchase cost is not known (e.g. inventory adjustment).
+            Used to compute margins on sale orders.""")
+
     family_name = fields.Many2one(comodel_name='product.family.name',
                                   string='Family Name')
     color = fields.Many2one(comodel_name='product.color',
@@ -49,7 +58,8 @@ class ProductTemplate(models.Model):
             else:
                 rec.vendor_id = False
 
-    cost_change_date = fields.Date(string='Cost Last Updated', compute='_compute_cost_change', store=True)
+    cost_change_date = fields.Date(string='Cost Last Updated', compute='_compute_cost_change', store=True,
+                                   groups="egy-trade_custom.group_product_logistics")
 
     @api.depends('standard_price')
     def _compute_cost_change(self):
@@ -71,7 +81,7 @@ class ProductTemplate(models.Model):
 
     @api.onchange('list_price')
     def _onchange_margin(self):
-        if self.list_price:
+        if self.list_price and self.standard_price:
             self.margin = (self.list_price / self.standard_price - 1) * 100
         else:
             self.margin = 0
@@ -79,7 +89,8 @@ class ProductTemplate(models.Model):
     margin = fields.Integer(string='Margin',
                             help='Percentage of profit calculated off the cost/standard price',
                             readonly=False,
-                            store=True
+                            store=True,
+                            groups="egy-trade_custom.group_product_logistics"
                             )
 
     def write(self, values):

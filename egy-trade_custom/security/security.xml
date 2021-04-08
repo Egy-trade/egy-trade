@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+<!--    <record model="ir.module.category" id="module_logistics_management">-->
+<!--        <field name="name">Logistics</field>-->
+<!--        <field name="description">Product Logistics</field>-->
+<!--        <field name="sequence">1</field>-->
+<!--    </record>-->
+
+
+<!--   <record id="group_logistics_user" model="res.groups">-->
+<!--        <field name="name">User</field>-->
+<!--        <field name="category_id" ref="egy-trade_custom.module_logistics_management"/>-->
+<!--        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>-->
+<!--    </record>-->
+
+
+    <record id="group_product_logistics" model="res.groups">
+        <field name="name">Product Logistics</field>
+        <field name="category_id" ref="base.module_category_hidden"/>
+    </record>
+</odoo>

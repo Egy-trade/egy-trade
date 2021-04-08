@@ -39,8 +39,11 @@
         <field name="inherit_id" ref="product.product_template_form_view"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='company_id']" position="before">
-                <field name="cost_change_date"/>
-                <field name="margin"/>
+                <field name="cost_change_date" groups="egy-trade_custom.group_product_logistics"/>
+                <field name="margin" groups="egy-trade_custom.group_product_logistics"/>
+            </xpath>
+            <xpath expr="//field[@name='standard_price']" position="attributes">
+                <attribute name="groups">egy-trade_custom.group_product_logistics</attribute>
             </xpath>
         </field>
     </record>

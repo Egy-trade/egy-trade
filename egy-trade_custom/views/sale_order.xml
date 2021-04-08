@@ -48,7 +48,7 @@
             <xpath expr="//tree/field[@name='tax_id']" position="attributes">
                 <attribute name="attrs">{'readonly': [('state', 'not in', ['draft'])]}</attribute>
             </xpath>
-             <xpath expr="//tree/field[@name='price_unit']" position="attributes">
+            <xpath expr="//tree/field[@name='price_unit']" position="attributes">
                 <attribute name="attrs">{'readonly': [('state', 'not in', ['draft'])]}</attribute>
             </xpath>
             <xpath expr="//tree/field[@name='discount']" position="attributes">
@@ -56,5 +56,25 @@
             </xpath>
         </field>
     </record>
+
+    <!-- Need to check why this one didn't work when I tried to inherit from it-->
+    <!-- I copied the record directly and edited so I can get by-->
+    <record model="ir.ui.view" id="sale_margin.sale_margin_sale_order">
+        <field name="name">sale.order.margin.view.form</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='amount_total']" position="after">
+                <label for="margin" groups="egy-trade_custom.group_product_logistics"/>
+                <div class="text-nowrap" groups="egy-trade_custom.group_product_logistics">
+                    <field name="margin" class="oe_inline"/>
+                    <span class="oe_inline" attrs="{'invisible': [('amount_untaxed', '=', 0)]}">
+                        (<field name="margin_percent" nolabel="1" class="oe_inline" widget="percentage"/>)
+                    </span>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
 
 </odoo>
