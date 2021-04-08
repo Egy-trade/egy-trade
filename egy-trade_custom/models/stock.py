@@ -39,18 +39,23 @@ class StockPicking(models.Model):
             rec.expected_date = rec.stage_change_date + timedelta(
                 days=rec.status_stage.duration) if rec.stage_change_date else False
 
+    # Need to improve this function
     @api.model
     def _transfer_status_change(self):
         today = date.today()
         stock_picking_ids = self.env['stock.picking'].search([('status_template_id', '!=', False),
                                                               ('state', 'not in', ['draft', 'cancel'])])
+        users = self.env['res.users'].search([])
+        mail_list = [u for u in users if u.has_group('egy-trade_custom.group_shipment_logistics')]
         for line in stock_picking_ids:
-            if line.expected_date >= today or True:
-                print('sending the notification ...')
-                template_id = self.env.ref('egy-trade_custom.mail_template_transfer_status_alert').id
-                template = self.env['mail.template'].browse(template_id)
-                template['email_to'] = self.env['res.users'].browse(8).partner_id.email_formatted
-                template.send_mail(self.id, force_send=True)
+            if type(line.expected_date) != type(False):
+                if line.expected_date >= today:
+                    for u in mail_list:
+                        # print(f'sending the notification to {u.partner_id.email_formatted}')
+                        template_id = self.env.ref('egy-trade_custom.mail_template_transfer_status_alert').id
+                        template = self.env['mail.template'].browse(template_id)
+                        template['email_to'] = u.partner_id.email_formatted
+                        template.send_mail(self.id, force_send=True)
 
     def action_confirm(self):
         result = super(StockPicking, self).action_confirm()
