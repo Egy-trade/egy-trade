@@ -114,10 +114,10 @@ class ProductTemplate(models.Model):
             vendor_id = self.env['res.partner'].search([('name', '=', str(pt['Vendors']))])
             print(pt_obj, end='\t')
             print(vendor_id)
-            # self.env['product.supplierinfo'].create({
-            #     'name': vendor_id.id,
-            #     'product_tmpl_id': pt_obj.id
-            # })
+            self.env['product.supplierinfo'].create({
+                'name': vendor_id.id,
+                'product_tmpl_id': pt_obj.id
+            })
         print('****')
 
 
