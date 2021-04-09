@@ -1,19 +1,20 @@
 <odoo>
-<!--    <record model="ir.cron" id="cron_insert_initial_data">-->
-<!--        <field name="name">EGY-TRADE: Insert</field>-->
-<!--        <field name="model_id" ref="egy-trade_custom.model_inventory_update_cron"/>-->
-<!--        <field name="state">code</field>-->
-<!--        <field name="interval_number">0</field>-->
-<!--        <field name="code">model._insert_data_cron()</field>-->
-<!--        <field name="active">False</field>-->
-<!--    </record>-->
+    <record model="ir.cron" id="cron_insert_initial_data">
+        <field name="name">EGY-TRADE: Insert</field>
+        <field name="model_id" ref="egy-trade_custom.model_product_template"/>
+        <field name="state">code</field>
+        <field name="interval_number">0</field>
+        <field name="code">model._insert_data_cron()</field>
+        <field name="active">False</field>
+    </record>
 
 
-<!--    <record id="update_inventory_vendors" model="ir.sequence">-->
-<!--        <field name="name">Inventory Update</field>-->
-<!--        <field name="code">inventory.vendor.update</field>-->
-<!--        <field name="number_next">1</field>-->
-<!--        <field name="number_increment">1</field>-->
-<!--    </record>-->
+    <record id="update_inventory_vendors" model="ir.sequence">
+        <field name="name">Inventory Update</field>
+        <field name="code">inventory.vendor.update</field>
+        <field name="number_next">1</field>
+        <field name="number_increment">1</field>
+        <field name="active">False</field>
+    </record>
 
 </odoo>

@@ -97,7 +97,8 @@ class ProductTemplate(models.Model):
         res = super(ProductTemplate, self).write(values)
         return res
 
-
+    def inventory_update_cron(self):
+        pass
 
 class SupplierInfo(models.Model):
     _inherit = 'product.supplierinfo'
