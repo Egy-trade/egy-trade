@@ -2,7 +2,7 @@
 {
     'name': 'Egy-Trade',
     'description': 'Egy-Trade Technical Modifications',
-    'version': '0.0.1',
+    'version': '1.0.1',
     'author': 'EffVision',
     'category': 'Inventory',
 
