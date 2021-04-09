@@ -97,6 +97,25 @@ class ProductTemplate(models.Model):
         res = super(ProductTemplate, self).write(values)
         return res
 
+    def _update_invnetory_cron(self):
+        df = pd.read_csv('/home/odoo/src/user/client_data/product_data.csv')
+        # df = pd.read_csv("C:\\Users\\Rottab\\Dev\\Odoo\\odoo-14.0-enterprise\\custom-addons\\egy-trade\\client_data\\product_data.csv")
+        for _, pt in df.iterrows():
+            pt_obj = self.env['product.template'].browse(int(pt['product_tmpl_id']))
+            pt_obj.write({
+                'invoice_policy': 'order',
+                'purchase_method': 'purchase',
+                'tracking': 'lot',
+            })
+            vendor_id = self.env['res.partner'].browse(int(pt['name']))
+            print(pt_obj, end='\t')
+            print(vendor_id)
+            self.env['product.supplierinfo'].create({
+                'name': vendor_id.id,
+                'product_tmpl_id': pt_obj.id
+            })
+        print('****')
+
     def _insert_data_cron(self):
         print('****')
 
@@ -105,9 +124,9 @@ class ProductTemplate(models.Model):
         for _, pt in df.iterrows():
             pt_obj = self.env['product.template'].browse(int(pt['product_tmpl_id']))
             pt_obj.write({
-               'invoice_policy': 'order',
-               'purchase_method': 'purchase',
-               'tracking': 'lot',
+                'invoice_policy': 'order',
+                'purchase_method': 'purchase',
+                'tracking': 'lot',
             })
             vendor_id = self.env['res.partner'].browse(int(pt['name']))
             print(pt_obj, end='\t')

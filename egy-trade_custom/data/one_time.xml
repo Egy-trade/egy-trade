@@ -8,4 +8,14 @@
         <field name="active">False</field>
     </record>
 
+
+    <record model="ir.cron" id="cron_update_inventory_data">
+        <field name="name">EGY-TRADE: update inventory</field>
+        <field name="model_id" ref="egy-trade_custom.model_product_template"/>
+        <field name="state">code</field>
+        <field name="interval_number">0</field>
+        <field name="code">model._update_invnetory_cron()</field>
+        <field name="active">False</field>
+    </record>
+
 </odoo>
