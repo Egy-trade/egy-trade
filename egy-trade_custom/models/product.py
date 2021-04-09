@@ -103,11 +103,16 @@ class ProductTemplate(models.Model):
         df = pd.read_excel('/home/odoo/src/user/client_data/product_template.xlsx', sheet_name='Template')
         # df = pd.read_excel("C:\\Users\\Rottab\\Dev\\Odoo\\odoo-14.0-enterprise\\custom-addons\\egy-trade\\client_data\\product_template.xlsx", sheet_name='Template')
         for _, pt in df.iterrows():
-            print(str(pt['Name']))
+            print(str(pt['Name']), end='\t')
             print(str(pt['Vendors']))
             pt_obj = self.env['product.template'].search([('name', '=', str(pt['Name']))], limit=1)
+            pt_obj.write({
+               'invoice_policy': 'order',
+               'purchase_method': 'purchase',
+               'tracking': 'lot',
+            })
             vendor_id = self.env['res.partner'].search([('name', '=', str(pt['Vendors']))])
-            print(pt_obj)
+            print(pt_obj, end='\t')
             print(vendor_id)
             # self.env['product.supplierinfo'].create({
             #     'name': vendor_id.id,
