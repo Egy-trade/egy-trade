@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <record id="group_product_logistics" model="res.groups">
+        <field name="name">Product Logistics</field>
+        <field name="category_id" ref="base.module_category_hidden"/>
+    </record>
+
+    <record id="group_shipment_logistics" model="res.groups">
+        <field name="name">Shipment Logistics</field>
+        <field name="category_id" ref="base.module_category_hidden"/>
+    </record>
+</odoo>

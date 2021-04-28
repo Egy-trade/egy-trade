@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <!--  view_picking_form  -->
+
+    <record id="view_picking_form_inherited" model="ir.ui.view">
+        <field name="name">stock.picking.form.inherited</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <!-- Need to define when the button is visible otherwise it's not -->
+            <xpath expr="//header" position="inside">
+                <button name="%(action_change_stage)d"
+                        string="Update Location"
+                        type="action"
+                        class="oe_highlight"
+                        context="{'stock_picking_id': id,
+                        'status_template_id': status_template_id,
+                        'status_stage': status_stage,
+                        }"
+                        attrs="{'invisible': ['|', ('state', 'in', ['draft', 'cancel']),
+                         ('status_template_id', '=', False)]}"
+                />
+                <button name="%(action_set_stage)d"
+                        string="Set Route"
+                        type="action"
+                        class="oe_highlight"
+                        attrs="{'invisible': ['&amp;', ('state', 'not in', ['ready']), ('status_template_id', '!=', False)]}"
+                />
+            </xpath>
+            <!-- Untested -->
+            <xpath expr="//field[@name='picking_type_id']" position="after">
+                <field name="status_template_id" attrs="{'readonly': [('state', 'not in', ['draft', 'cancel'])],
+                'invisible': [('status_template_id', '=', False), ('state', 'not in', ['draft', 'cancel'])]}"/>
+                    <field name="status_stage" attrs="{'invisible': [ '&amp;', '|', ('state', 'in', ['draft', 'cancel']), ('status_template_id', '=', False), ('state', 'not in', ['draft', 'cancel'])]}" readonly="1"/>
+                    <field name="expected_date" attrs="{'invisible': [ '&amp;', '|', ('state', 'in', ['draft', 'cancel']), ('status_template_id', '=', False), ('state', 'not in', ['draft', 'cancel'])]}" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="vpicktree_inherited" model="ir.ui.view">
+        <field name="name">stock.picking.tree</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.vpicktree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='state']" position="before">
+                <field name="status_template_id"/>
+                <field name="status_stage"/>
+                <field name="expected_date"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="product_template_form_inherited" model="ir.ui.view">
+        <field name="name">product.template.form.inherited</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="arch" type="xml">
+            <!--            <xpath expr="//field[@name='company_id']" position="before">-->
+            <!--                <field name="change_date"/>-->
+            <!--            </xpath>-->
+            <xpath expr="//group[field[@name='description']]" position="replace">
+                <group>
+                    <group>
+                        <field name="vendor_id" readonly="1"/>
+                        <field name="family_name"/>
+                        <field name="color"/>
+                        <field name="product_type_spec"/>
+                        <field name="cct"/>
+                        <field name="driver_manufacture"/>
+                    </group>
+                    <group>
+                        <field name="power"/>
+                        <field name="ip"/>
+                        <field name="led_voltage"/>
+                        <field name="lumen"/>
+                    </group>
+                </group>
+                <group name="internal_notes" string="Internal Notes">
+                    <field name="description" nolabel="1" placeholder="This note is only for internal purposes."/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_template_form_view_inherited" model="ir.ui.view">
+        <field name="name">product.template.form.view.inherited</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='company_id']" position="before">
+                <field name="cost_change_date" groups="egy-trade_custom.group_product_logistics"/>
+                <field name="margin" groups="egy-trade_custom.group_product_logistics"/>
+            </xpath>
+            <xpath expr="//field[@name='standard_price']" position="attributes">
+                <attribute name="groups">egy-trade_custom.group_product_logistics</attribute>
+            </xpath>
+        </field>
+    </record>
+
+
+    <record id="product_template_search_inherited" model="ir.ui.view">
+        <field name="name">product.template.search.inherited</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_search_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <field name="vendor_id"/>
+                <field name="family_name"/>
+                <field name="color"/>
+                <field name="power"/>
+                <field name="lumen"/>
+                <field name="cct"/>
+                <field name="ip"/>
+                <field name="led_voltage"/>
+                <field name="driver_manufacture"/>
+            </xpath>
+            <xpath expr="//group" position="inside">
+                <separator/>
+                <filter string="Manufacture" name="groupby_vendor_id" context="{'group_by':'vendor_id'}"/>
+                <filter string="Family Name" name="groupby_family_name" context="{'group_by':'family_name'}"/>
+                <filter string="Color" name="groupby_product_color" context="{'group_by':'color'}"/>
+                <filter string="Power" name="groupby_product_power" context="{'group_by':'power'}"/>
+                <filter string="Lumen" name="groupby_product_lumen" context="{'group_by':'lumen'}"/>
+                <filter string="CCT" name="groupby_product_cct" context="{'group_by':'cct'}"/>
+                <filter string="IP" name="groupby_product_ip" context="{'group_by':'ip'}"/>
+                <filter string="Led Voltage" name="groupby_product_led_voltage" context="{'group_by':'led_voltage'}"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_template_tree_view_inherited" model="ir.ui.view">
+        <field name="name">product.template.tree.inherited</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="attributes">
+                <attribute name="string">Product Code</attribute>
+            </xpath>
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="vendor_id"/>
+                <field name="family_name"/>
+                <field name="mounting_type"/>
+                <field name="product_type_spec"/>
+                <field name="ip"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_template_kanban_view_inherited" model="ir.ui.view">
+        <field name="name">Product.template.product.kanban.inherited</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_kanban_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='product_lst_price']" position="before">
+                <div name="product_vendor" class="mt-1">
+                    Vendor: <field name="vendor_id"/>
+                </div>
+                <div name="product_family" class="mt-1">
+                    Family Name: <field name="family_name"/>
+                </div>
+                <div name="product_mounting" class="mt-1">
+                    Mounting: <field name="mounting_type"/>
+                </div>
+                <div name="product_type_spec" class="mt-1">
+                    Type: <field name="product_type_spec"/>
+                </div>
+                <div name="product_ip" class="mt-1">
+                    <field name="ip"/>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

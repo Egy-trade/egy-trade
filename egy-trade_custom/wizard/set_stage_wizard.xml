@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+     <record id="set_stage_form_view" model="ir.ui.view">
+        <field name="name">set.stage.wizard.form</field>
+        <field name="model">set.stage.wizard</field>
+        <field name="arch" type="xml">
+            <form string="set Stage">
+                <group>
+                    <group>
+                        <field name="route"/>
+                    </group>
+                    <group>
+                    </group>
+                </group>
+                <footer>
+                    <button string="set" type="object" name="set_stage" class="btn-primary"/>
+                    <button string="Cancel" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_set_stage" model="ir.actions.act_window">
+        <field name="name">Set Stage</field>
+        <field name="res_model">set.stage.wizard</field>
+        <field name="view_id" ref="egy-trade_custom.set_stage_form_view"/>
+        <field name="target">new</field>
+    </record>
+</odoo>
