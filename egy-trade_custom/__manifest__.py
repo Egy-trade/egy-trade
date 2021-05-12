@@ -21,6 +21,7 @@
         'views/purchase_view.xml',
         'views/product_view.xml',
         'views/sale_order.xml',
+        'views/crm_lead.xml',
 
     ],
     'application': True,

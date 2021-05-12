@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--    crm_lead_view_form-->
+    <record id="crm_lead_view_form_inherited" model="ir.ui.view">
+        <field name="name">crm.lead.form.inherited</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='team_id']" position="after">
+                <field name="crm_project_id"/>
+            </xpath>
+            <xpath expr="//page[@name='internal_notes']" position="after">
+                <page name="project_details" string="Project Details">
+                    <group>
+                        <group>
+                            <field name="mep_contractor"/>
+                            <field name="arch_consultant"/>
+                            <field name="electrical_consultant"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

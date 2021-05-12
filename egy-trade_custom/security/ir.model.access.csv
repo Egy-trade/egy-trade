@@ -13,3 +13,5 @@ access_change_stage_wizard_user,change.stage.wizard.user,model_change_stage_wiza
 access_change_stage_wizard_manager,change.stage.wizard.manager,model_change_stage_wizard,stock.group_stock_manager,1,1,1,1
 access_set_stage_wizard_user,set.stage.wizard.user,model_set_stage_wizard,stock.group_stock_user,1,0,0,0
 access_set_stage_wizard_manager,set.stage.wizard.manager,model_set_stage_wizard,stock.group_stock_manager,1,1,1,1
+access_crm_project_salesman,crm.project.salesman,model_crm_project,sales_team.group_sale_salesman,1,0,0,0
+access_crm_project_manager,crm.project.manager,model_crm_project,sales_team.group_sale_manager,1,1,1,1
