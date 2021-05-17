@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <data>
+        <record id="action_report_delivery_receipt" model="ir.actions.report">
+            <field name="name">Delivery Receipt</field>
+            <field name="model">stock.picking</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">stock.report_deliveryslip</field>
+            <field name="report_file">stock.report_deliveryslip</field>
+            <field name="print_report_name">'Delivery Receipt - %s - %s' % (object.partner_id.name or '',
+                object.name)</field>
+            <field name="binding_model_id" ref="model_stock_picking"/>
+            <field name="binding_type">report</field>
+        </record>
+    </data>
+</odoo>

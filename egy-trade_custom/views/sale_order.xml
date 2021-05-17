@@ -54,6 +54,18 @@
             <xpath expr="//tree/field[@name='discount']" position="attributes">
                 <attribute name="attrs">{'readonly': [('state', 'not in', ['draft'])]}</attribute>
             </xpath>
+            <xpath expr="//tree/field[@name='name']" position="after">
+                <field name="product_vendor"/>
+                <field name="product_family_name"/>
+                <field name="product_color"/>
+                <field name="product_type_spec"/>
+                <field name="product_cct"/>
+                <field name="product_driver"/>
+                <field name="product_power"/>
+                <field name="product_ip"/>
+                <field name="product_led_voltage"/>
+                <field name="product_lumen"/>
+            </xpath>
         </field>
     </record>
 

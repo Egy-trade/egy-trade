@@ -32,3 +32,17 @@ class SaleOrderLine(models.Model):
         string='Cost', compute="_compute_purchase_price",
         digits='Product Price', store=True, readonly=False,
         groups="egy-trade_custom.group_product_logistics")
+
+
+    product_vendor = fields.Many2one(related='product_id.vendor_id')
+    product_family_name = fields.Many2one(related='product_id.family_name')
+    product_color = fields.Many2one(related='product_id.color')
+    product_type_spec = fields.Char(related='product_id.product_type_spec')
+    product_cct = fields.Char(related='product_id.cct')
+    product_driver = fields.Char(related='product_id.driver_manufacture')
+    product_power = fields.Char(related='product_id.power')
+    product_ip = fields.Char(related='product_id.ip')
+    product_led_voltage = fields.Char(related='product_id.led_voltage')
+    product_lumen = fields.Char(related='product_id.lumen')
+
+
