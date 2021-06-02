@@ -5,8 +5,8 @@
             <field name="name">Delivery Receipt</field>
             <field name="model">stock.picking</field>
             <field name="report_type">qweb-pdf</field>
-            <field name="report_name">stock.report_deliveryslip</field>
-            <field name="report_file">stock.report_deliveryslip</field>
+            <field name="report_name">egy-trade_custom.report_deliveryreceipt</field>
+            <field name="report_file">egy-trade_custom.report_deliveryreceipt</field>
             <field name="print_report_name">'Delivery Receipt - %s - %s' % (object.partner_id.name or '',
                 object.name)</field>
             <field name="binding_model_id" ref="model_stock_picking"/>
