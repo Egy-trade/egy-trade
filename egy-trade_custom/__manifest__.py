@@ -13,6 +13,7 @@
         'data/one_time.xml',
         'data/product.xml',
         'data/stock_picking.xml',
+        'data/res_partner_documents.xml',
         'wizard/change_stage_wizard.xml',
         'wizard/set_stage_wizard.xml',
         'views/res_partner_view.xml',
@@ -24,6 +25,7 @@
         'views/product_view.xml',
         'views/sale_order.xml',
         'views/crm_lead.xml',
+        'views/res_partner_document.xml',
 
     ],
     'application': True,

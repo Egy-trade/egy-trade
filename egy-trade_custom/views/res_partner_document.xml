@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+
+    <record id="view_partner_form_inherited" model="ir.ui.view">
+        <field name="name">res.partner.form.inherited</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_view_opportunity']" position="before">
+                <button class="oe_stat_button" type="object"
+                        name="action_view_documents"
+                        context="{'partner_id': active_id, 'default_partner_id': active_id}"
+                        icon="fa-file">
+                    <field string="Documents" name="document_count" widget="statinfo"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="res_partner_document_form_view" model="ir.ui.view">
+        <field name="name">res.partner.document.form.view</field>
+        <field name="model">res.partner.document</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="document"/>
+                        </group>
+                        <group>
+                            <field name="expires"/>
+                            <field name="expiration_date" attrs="{'invisible': [('expires', '=', False)]}"/>
+                        </group>
+                    </group>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids" groups="base.group_user"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <record id="res_partner_document_tree_view" model="ir.ui.view">
+        <field name="name">res.partner.document.tree.view</field>
+        <field name="model">res.partner.document</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="name"/>
+                <field name="expires"/>
+                <field name="expiration_date"/>
+                <field name="document"/>
+            </tree>
+        </field>
+    </record>
+
+
+    <record id="action_res_partner_documents" model="ir.actions.act_window">
+        <field name="name">Partner Documents</field>
+        <field name="res_model">res.partner.document</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+</odoo>

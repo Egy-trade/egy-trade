@@ -9,4 +9,9 @@
         <field name="name">Shipment Logistics</field>
         <field name="category_id" ref="base.module_category_hidden"/>
     </record>
+
+    <record id="group_accounting_documents" model="res.groups">
+        <field name="name">Accounting Documents</field>
+        <field name="category_id" ref="base.module_category_hidden"/>
+    </record>
 </odoo>

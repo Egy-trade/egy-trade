@@ -1,0 +1,42 @@
+<odoo>
+    <record model="mail.template" id="mail_template_document_expired_reminder">
+        <field name="name">Account Invoice Extract Notification</field>
+        <!--        <field name="email_from">iap@odoo.com</field>-->
+        <!--        <field name="email_to">${(object.partner_id.email_formatted) |safe}</field>-->
+        <field name="subject">Reminder to Update the Documents</field>
+        <field name="model_id" ref="egy-trade_custom.model_res_partner_document"/>
+        <field name="body_html" type="html">
+            <div style="margin: 0px; padding: 0px;">
+                <p>Dear,<br/></p>
+                <p>A document is about to expire and needs to be updated <br/></p>
+                <p>Best regards,<br/></p>
+                <p>System</p>
+            </div>
+        </field>
+    </record>
+
+    <record model="mail.template" id="mail_template_document_reminder">
+        <field name="name">Account Invoice Extract Notification</field>
+        <!--        <field name="email_from">iap@odoo.com</field>-->
+        <!--        <field name="email_to">${(object.partner_id.email_formatted) |safe}</field>-->
+        <field name="subject">Reminder to Update the Documents</field>
+        <field name="model_id" ref="egy-trade_custom.model_res_partner_document"/>
+        <field name="body_html" type="html">
+            <div style="margin: 0px; padding: 0px;">
+                <p>Dear,<br/></p>
+                <p>A document is about to expire and needs to be updated <br/></p>
+                <p>Best regards,<br/></p>
+                <p>System</p>
+            </div>
+        </field>
+    </record>
+
+    <record model="ir.cron" id="cron_partner_document_alert">
+        <field name="name">Partner Document: Expiration Alert</field>
+        <field name="model_id" ref="egy-trade_custom.model_res_partner_document"/>
+        <field name="state">code</field>
+        <field name="code">model._document_alert()</field>
+        <field name="interval_type">days</field>
+        <field name="numbercall">-1</field>
+    </record>
+</odoo>
