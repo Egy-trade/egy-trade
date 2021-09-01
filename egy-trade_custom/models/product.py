@@ -48,7 +48,7 @@ class ProductTemplate(models.Model):
     led_voltage = fields.Char(string='LED Voltage')
     driver_manufacture = fields.Char(string='Driver')
     vendor_id = fields.Many2one('product.supplierinfo', name='Manufacture',
-                                compute='_compute_vendor_id')  # domain in view
+                                compute='_compute_vendor_id', store=True)  # domain in view
 
     @api.depends('seller_ids')
     def _compute_vendor_id(self):
