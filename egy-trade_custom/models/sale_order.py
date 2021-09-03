@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from odoo import models, fields, api
+from odoo import models, fields, api, _
+from odoo.exceptions import ValidationError
 
 
 class SaleOrder(models.Model):
@@ -46,3 +47,8 @@ class SaleOrderLine(models.Model):
     product_lumen = fields.Char(related='product_id.lumen')
 
 
+
+    @api.constrains('discount')
+    def _check_discount(self):
+        if self.discount > self.env.user.max_discount:
+            raise ValidationError(_(f'Your maximum allowed discount per order line is {self.env.user.max_discount}'))

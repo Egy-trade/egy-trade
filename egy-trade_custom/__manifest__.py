@@ -18,6 +18,7 @@
         'wizard/set_stage_wizard.xml',
         'views/res_partner_view.xml',
         'reports/delivery_receipt.xml',
+        'views/res_users.xml',
         'views/stock_view.xml',
         'views/stock_reports.xml',
         'views/stock_picking_view.xml',
