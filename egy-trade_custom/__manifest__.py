@@ -21,7 +21,7 @@
         'reports/purchase_quotation_report_template.xml',
         'reports/purchase_report_template.xml',
         'reports/sale_report_template.xml',
-        'views/res_users.xml',
+        # 'views/res_users.xml',
         'views/stock_view.xml',
         'views/stock_reports.xml',
         'views/stock_picking_view.xml',
