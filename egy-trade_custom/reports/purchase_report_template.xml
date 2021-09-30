@@ -4,6 +4,7 @@
             <th name="th_vendor" class="text-left">Manufacturer</th>
         </xpath>
         <xpath expr="//th[@name='th_description']" position="after">
+            <th name="th_product_code" class="text-left">Code</th>
             <th name="th_family_name" class="text-left">Family Name</th>
             <th name="th_power" class="text-left">Power</th>
             <th name="th_lumen" class="text-left">Lumen</th>
@@ -11,13 +12,26 @@
         </xpath>
 
         <xpath expr="//td[@id='product']" position="before">
-            <td name="td_product_vendor" class="text-left"><span t-field="line.product_vendor"/></td>
+            <td name="td_product_vendor" class="text-left">
+                <span t-field="line.product_vendor"/>
+            </td>
         </xpath>
         <xpath expr="//td[@id='product']" position="after">
-            <td name="td_product_family_name" class="text-left"><span t-field="line.product_family_name"/></td>
-            <td name="td_product_power" class="text-left"><span t-field="line.product_power"/></td>
-            <td name="td_product_ip" class="text-left"><span t-field="line.product_ip"/></td>
-            <td name="td_product_lumen" class="text-left"><span t-field="line.product_lumen"/></td>
+             <td name="td_product_code" class="text-left">
+                <span t-field="line.product_id.code"/>
+            </td>
+            <td name="td_product_family_name" class="text-left">
+                <span t-field="line.product_family_name"/>
+            </td>
+            <td name="td_product_power" class="text-left">
+                <span t-field="line.product_power"/>
+            </td>
+            <td name="td_product_ip" class="text-left">
+                <span t-field="line.product_ip"/>
+            </td>
+            <td name="td_product_lumen" class="text-left">
+                <span t-field="line.product_lumen"/>
+            </td>
         </xpath>
     </template>
 </odoo>
