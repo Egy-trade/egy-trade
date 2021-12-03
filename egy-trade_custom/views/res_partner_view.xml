@@ -12,4 +12,116 @@
         </field>
     </record>
 
+    <!--  Invisible some fields contact form   -->
+    <record id="egytrade_inherited_view_partner_form" model="ir.ui.view">
+        <field name="name">egy-trade.inherit.res.partner.form</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='team_id']" position="attributes">
+                <attribute name="groups">sales_team.group_sale_manager</attribute>
+            </xpath>
+            <xpath expr="//group[@name='sale']//field[@name='user_id']" position="attributes">
+                <attribute name="groups">sales_team.group_sale_manager</attribute>
+            </xpath>
+            <xpath expr="//field[@name='vat']" position="after">
+                <field name="current_user" invisible="1"/>
+            </xpath>
+            <field name="phone" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </field>
+            <field name="parent_id" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </field>
+            <field name="name" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </field>
+            <field name="mobile" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </field>
+            <field name="email" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </field>
+        </field>
+    </record>
+
+    <!--  Invisible some fields contact tree  -->
+    <record id="inherited_view_partner_tree" model="ir.ui.view">
+        <field name="name">inherited.res.partner.tree</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='phone']" position="before">
+                <field name="current_user" invisible="1"/>
+            </xpath>
+            <xpath expr="//field[@name='phone']" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </xpath>
+            <xpath expr="//field[@name='display_name']" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </xpath>
+            <xpath expr="//field[@name='email']" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </xpath>
+            <xpath expr="//field[@name='vat']" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </xpath>
+            <xpath expr="//field[@name='user_id']" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!--   Inherit Kanban View for Invisible some fields  -->
+    <record id="inherit_res_partner_view_kanban" model="ir.ui.view">
+        <field name="name">inherit.res.partner.view.kanban</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.res_partner_kanban_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//kanban" position="inside">
+                <field name="current_user"/>
+            </xpath>
+            <xpath expr="//ul//field[@name='parent_id']" position="attributes">
+                <attribute name="attrs">{
+                    'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </xpath>
+            <xpath expr="//ul//li[3]//field[@name='parent_id']" position="attributes">
+                <attribute name="attrs">{
+                    'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </xpath>
+            <xpath expr="//div[hasclass('flex-column')]//field[@name='display_name']" position="attributes">
+                <attribute name="attrs">{
+                    'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </xpath>
+            <xpath expr="//li[hasclass('o_text_overflow')]//field[@name='email']" position="attributes">
+                <attribute name="attrs">{
+                    'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </xpath>
+        </field>
+    </record>
+
 </odoo>

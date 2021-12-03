@@ -20,6 +20,131 @@
                     </group>
                 </page>
             </xpath>
+            <!--        Add invisible for some fields    -->
+            <xpath expr="//group[1]//group[@name='opportunity_partner']//field[@name='partner_id']" position="before">
+                <field name="partner_allow_ids" widget="many2many_tags" invisible="1"/>
+                <field name="current_user" invisible="1"/>
+            </xpath>
+            <xpath expr="//field[@name='team_id']" position="attributes">
+                <attribute name="groups">sales_team.group_sale_manager</attribute>
+            </xpath>
+            <xpath expr="//field[@name='user_id']" position="attributes">
+                <attribute name="groups">sales_team.group_sale_manager</attribute>
+            </xpath>
+            <xpath expr="//field[@name='user_id']" position="attributes">
+                <attribute name="attrs">{'invisible': [('current_user', '!=', True)]}</attribute>
+            </xpath>
+            <xpath expr="//group[1]//group[@name='opportunity_partner']//field[@name='partner_id']"
+                   position="attributes">
+                <attribute name="domain">[('id', 'in', partner_allow_ids)]</attribute>
+                <attribute name="attrs">{'readonly': [('current_user', '!=', True)]}</attribute>
+            </xpath>
+            <xpath expr="//group[1]//group[@name='opportunity_partner']//field[@name='phone']"
+                   position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </xpath>
+            <xpath expr="//group[1]//group[@name='opportunity_partner']//field[@name='email_from']"
+                   position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </xpath>
+
         </field>
     </record>
+
+    <!--  Invisible some fields on kanban form  -->
+    <record id="inherited_quick_create_opportunity_form" model="ir.ui.view">
+        <field name="name">inherited.crm.lead.form.quick_create</field>
+        <field name="model">crm.lead</field>
+        <field name="priority">100</field>
+        <field name="inherit_id" ref="crm.quick_create_opportunity_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='team_id']" position="attributes">
+                <attribute name="invisible">0</attribute>
+                <attribute name="groups">sales_team.group_sale_manager</attribute>
+            </xpath>
+            <xpath expr="//field[@name='partner_id']" position="before">
+                <field name="partner_allow_ids" widget="many2many_tags" invisible="1"/>
+                <field name="current_user" invisible="1"/>
+            </xpath>
+            <xpath expr="//field[@name='partner_id']" position="attributes">
+                <attribute name="domain">[('id', 'in', partner_allow_ids)]</attribute>
+            </xpath>
+            <xpath expr="//field[@name='email_from']" position="attributes">
+                <attribute name="attrs">{'readonly': [('current_user', '!=', True)]}</attribute>
+            </xpath>
+            <xpath expr="//field[@name='phone']" position="attributes">
+                <attribute name="attrs">{'readonly': [('current_user', '!=', True)]}</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!--   Inherit Tree CRM For invisible some fields-->
+    <record id="inherit_crm_case_tree_view_oppor" model="ir.ui.view">
+        <field name="name">inherit.crm.case.tree.view.oppor</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_case_tree_view_oppor"/>
+        <field name="arch" type="xml">
+            <field name="name" position="before">
+                <field name="current_user" invisible="1"/>
+            </field>
+            <field name="name" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </field>
+            <field name="partner_id" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </field>
+            <field name="contact_name" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </field>
+            <field name="email_from" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </field>
+            <field name="phone" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </field>
+            <field name="user_id" position="attributes">
+                <attribute name="groups">sales_team.group_sale_manager</attribute>
+            </field>
+            <field name="team_id" position="attributes">
+                <attribute name="groups">sales_team.group_sale_manager</attribute>
+            </field>
+        </field>
+    </record>
+
+    <!-- Inherit CRM Kanban -->
+    <record id="inherit_crm_lead_kanban" model="ir.ui.view">
+        <field name="name">inherit.crm.lead.kanban</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_case_kanban_view_leads"/>
+        <field name="arch" type="xml">
+            <xpath expr="//kanban" position="inside">
+                <field name="current_user"/>
+            </xpath>
+            <xpath expr="//div[hasclass('o_kanban_record_title')]//field[@name='name']" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </xpath>
+            <xpath expr="//div[hasclass('oe_kanban_content')]//div[3]//span" position="attributes">
+                <attribute name="attrs">
+                    {'invisible': [('current_user', '!=', True)]}
+                </attribute>
+            </xpath>
+        </field>
+    </record>
+
 </odoo>

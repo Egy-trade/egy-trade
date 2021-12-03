@@ -3,6 +3,8 @@
 from odoo import models, fields, api, _
 from datetime import date, timedelta, datetime
 
+from setuptools import depends
+
 
 class PartnerDocument(models.Model):
     _name = 'res.partner.document'
@@ -70,3 +72,15 @@ class SupplierInfo(models.Model):
             rec.document_count = len(rec.documents)
 
     document_count = fields.Integer(string='Document Count', compute='_compute_document_count')
+
+    def _compute_current_user(self):
+        is_team_leader = self.env.user.has_group('egy-trade_custom.salas_team_leader')
+        current_user = self.env.user
+        is_sale_manger = self.env.user.has_group('sales_team.group_sale_manager')
+        for rec in self:
+            if rec.user_id == current_user or is_sale_manger or (is_team_leader and rec.team_id.user_id == current_user):
+                rec.current_user = True
+            else:
+                rec.current_user = False
+
+    current_user = fields.Boolean('current_user', compute='_compute_current_user', default=1)

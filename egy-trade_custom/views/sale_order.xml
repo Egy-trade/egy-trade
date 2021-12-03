@@ -6,6 +6,7 @@
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
+
             <xpath expr="//header" position="replace">
                 <header>
                     <field name="authorized_transaction_ids" invisible="1"/>
@@ -45,6 +46,18 @@
                     <field name="state" widget="statusbar" statusbar_visible="draft,approve,sent,sale"/>
                 </header>
             </xpath>
+            <xpath expr="//group[@name='sales_person']//field[@name='team_id']" position="attributes">
+                <attribute name="groups">sales_team.group_sale_manager</attribute>
+            </xpath>
+            <xpath expr="//group[@name='sales_person']//field[@name='user_id']" position="attributes">
+                <attribute name="groups">sales_team.group_sale_manager</attribute>
+            </xpath>
+            <field name="partner_id" position="after">
+                <field name="partner_allow_ids" widget="many2many_tags" invisible="1"/>
+            </field>
+            <field name="partner_id" position="attributes">
+                <attribute name="domain">[('id', 'in', partner_allow_ids)]</attribute>
+            </field>
             <xpath expr="//tree/field[@name='tax_id']" position="attributes">
                 <attribute name="attrs">{'readonly': [('state', 'not in', ['draft'])]}</attribute>
             </xpath>

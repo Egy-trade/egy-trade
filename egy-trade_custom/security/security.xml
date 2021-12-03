@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <odoo>
+
+     <!--  Group Sales Team Leader -->
+    <record id="salas_team_leader" model="res.groups">
+        <field name="name">Sales Team Leader</field>
+    </record>
+
     <record id="group_product_logistics" model="res.groups">
         <field name="name">Product Logistics</field>
         <field name="category_id" ref="base.module_category_hidden"/>
