@@ -119,4 +119,4 @@ class SupplierInfo(models.Model):
 
     price = fields.Float(
         'Price', default=0.0, digits='Product Price',
-        required=True, help="The price to purchase a product", compute='_compute_price', readonly=True, store=True)
+        required=True, help="The price to purchase a product", compute='_compute_price', readonly=False, store=True)
