@@ -100,6 +100,7 @@ class ProductTemplate(models.Model):
     def inventory_update_cron(self):
         pass
 
+
 class SupplierInfo(models.Model):
     _inherit = 'product.supplierinfo'
 
@@ -115,7 +116,7 @@ class SupplierInfo(models.Model):
     @api.depends('product_tmpl_id.standard_price')
     def _compute_price(self):
         for rec in self:
-            rec.price = self.product_tmpl_id.standard_price
+            rec.price = rec.product_tmpl_id.standard_price
 
     price = fields.Float(
         'Price', default=0.0, digits='Product Price',

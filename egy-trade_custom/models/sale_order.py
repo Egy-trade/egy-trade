@@ -60,6 +60,7 @@ class SaleOrderLine(models.Model):
 
     @api.constrains('discount')
     def _check_discount(self):
-        if self.discount > self.env.user.max_discount:
-            raise ValidationError(_(f'Your maximum allowed discount per order line is {self.env.user.max_discount}'))
+        for rec in self:
+            if rec.discount > self.env.user.max_discount:
+                raise ValidationError(_(f'Your maximum allowed discount per order line is {self.env.user.max_discount}'))
 
