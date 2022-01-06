@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+
+        <!--    Sales Person Team Leader Can See Other Opps for only team
+                Other members can see all opps
+
+           -->
+        <function name="write" model="ir.model.data">
+            <function name="search" model="ir.model.data">
+                <value eval="[('module', '=', 'crm'), ('name', '=', 'crm_rule_personal_lead')]"/>
+            </function>
+            <value eval="{'noupdate': False}"/>
+        </function>
+
+        <record id="crm.crm_rule_personal_lead" model="ir.rule">
+            <field name="name">Personal Leads</field>
+            <field ref="crm.model_crm_lead" name="model_id"/>
+            <field name="domain_force">['|', '|','|',('user_id','=',user.id),('user_id','=',False),
+                ('team_id.user_id', '=', user.id), ('team_id', '=', user.sale_team_id.id)]
+            </field>
+            <field name="groups" eval="[(4, ref('sales_team.group_sale_salesman'))]"/>
+        </record>
+
+
+        <function name="write" model="ir.model.data">
+            <function name="search" model="ir.model.data">
+                <value eval="[('module', '=', 'crm'), ('name', '=', 'crm_rule_personal_lead')]"/>
+            </function>
+            <value eval="{'noupdate': True}"/>
+        </function>
+
+
+    </data>
+</odoo>

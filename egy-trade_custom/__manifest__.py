@@ -10,6 +10,7 @@
     'data': [
         'security/security.xml',
         'security/ir.model.access.csv',
+        'security/rule_security.xml',
         'data/one_time.xml',
         'data/product.xml',
         'data/stock_picking.xml',
