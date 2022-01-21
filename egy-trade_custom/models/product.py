@@ -100,6 +100,16 @@ class ProductTemplate(models.Model):
     def inventory_update_cron(self):
         pass
 
+    @api.onchange('seller_ids')
+    def _compute_standard_price_from_price(self):
+        if self.seller_ids:
+            vendor_id = self.seller_ids[0]
+            if vendor_id.price and vendor_id.currency_id and vendor_id.currency_id.name != 'EGP':
+                EGP = self.env['res.currency'].search([('name', '=', 'EGP')])
+                today = fields.Date.today()
+                new_price = EGP._convert(vendor_id.price, vendor_id.currency_id, self.env.company, today)
+                self.standard_price = new_price
+
 
 class SupplierInfo(models.Model):
     _inherit = 'product.supplierinfo'
@@ -113,11 +123,11 @@ class SupplierInfo(models.Model):
         'Delivery Lead Time', compute='_compute_delay', required=True, readonly=False,
         help="Lead time in days between the confirmation of the purchase order and the receipt of the products in your warehouse. Used by the scheduler for automatic computation of the purchase order planning.")
 
-    @api.depends('product_tmpl_id.standard_price')
-    def _compute_price(self):
-        for rec in self:
-            rec.price = rec.product_tmpl_id.standard_price
+    # @api.depends('product_tmpl_id.standard_price')
+    # def _compute_price(self):
+    #     for rec in self:
+    #         rec.price = rec.product_tmpl_id.standard_price
 
     price = fields.Float(
         'Price', default=0.0, digits='Product Price',
-        required=True, help="The price to purchase a product", compute='_compute_price', readonly=False, store=True)
+        required=True, help="The price to purchase a product")
