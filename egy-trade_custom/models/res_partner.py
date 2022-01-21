@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
-
 from odoo import models, fields, api, _
 from datetime import date, timedelta, datetime
-
-from setuptools import depends
 
 
 class PartnerDocument(models.Model):
@@ -83,4 +80,4 @@ class SupplierInfo(models.Model):
             else:
                 rec.current_user = False
 
-    current_user = fields.Boolean('current_user', compute='_compute_current_user', default=1)
+    current_user = fields.Boolean('current_user', compute='_compute_current_user', default=True)
