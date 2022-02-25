@@ -45,6 +45,11 @@
             <xpath expr="//field[@name='standard_price']" position="attributes">
                 <attribute name="groups">egy-trade_custom.group_product_logistics</attribute>
             </xpath>
+            <notebook position="before">
+                <group>
+                    <field name="mounting_type"/>
+                </group>
+            </notebook>
         </field>
     </record>
 
