@@ -31,6 +31,7 @@
         'views/sale_order.xml',
         'views/crm_lead.xml',
         'views/res_partner_document.xml',
+        'views/customers_menus.xml',
 
     ],
     'application': True,
