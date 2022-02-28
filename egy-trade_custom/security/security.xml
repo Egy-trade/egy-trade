@@ -20,4 +20,9 @@
         <field name="name">Accounting Documents</field>
         <field name="category_id" ref="base.module_category_hidden"/>
     </record>
+
+    <record id="group_see_own_customers" model="res.groups">
+        <field name="name">See own customers</field>
+        <field name="category_id" ref="base.module_category_hidden"/>
+    </record>
 </odoo>
