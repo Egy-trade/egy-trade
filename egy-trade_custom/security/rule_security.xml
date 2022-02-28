@@ -30,6 +30,7 @@
             <value eval="{'noupdate': True}"/>
         </function>
 
+        
 <!--        <function name="write" model="ir.model.data">-->
 <!--            <function name="search" model="ir.model.data">-->
 <!--                <value eval="[('module', '=', 'base'), ('name', '=', 'res_partner_rule_private_employee')]"/>-->
