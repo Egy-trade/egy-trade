@@ -34,8 +34,11 @@
             <function name="search" model="ir.model.data">
                 <value eval="[('module', '=', 'base'), ('name', '=', 'res_partner_rule_private_employee')]"/>
             </function>
-            <value eval="{'active': False}"/>
+            <value eval="{'noupdate': False}"/>
         </function>
+        <record id="base.res_partner_rule_private_employee" model="ir.rule">
+            <field name="active" eval="False"/>
+        </record>
 
 
         <record id="crm_rule_salesteam_own_customers" model="ir.rule">
