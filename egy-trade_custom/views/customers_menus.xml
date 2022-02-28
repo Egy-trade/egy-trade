@@ -10,7 +10,7 @@
             <field name="view_mode">kanban,tree,form</field>
             <field name="domain">[('customer_rank','=',1),('user_id','=', uid)]</field>
             <field name="context">{'res_partner_search_mode': 'customer'}</field>
-            <field name="search_view_id" ref="crm.view_res_partner_filter"/>
+            <field name="search_view_id" ref="base.view_res_partner_filter"/>
             <field name="help" type="html">
               <p class="o_view_nocontent_smiling_face">
                 Create a new customer in your address book
