@@ -30,23 +30,23 @@
             <value eval="{'noupdate': True}"/>
         </function>
 
-        <function name="write" model="ir.model.data">
-            <function name="search" model="ir.model.data">
-                <value eval="[('module', '=', 'base'), ('name', '=', 'res_partner_rule_private_employee')]"/>
-            </function>
-            <value eval="{'noupdate': False}"/>
-        </function>
-        <record id="base.res_partner_rule_private_employee" model="ir.rule">
-            <field name="active" eval="False"/>
-        </record>
+<!--        <function name="write" model="ir.model.data">-->
+<!--            <function name="search" model="ir.model.data">-->
+<!--                <value eval="[('module', '=', 'base'), ('name', '=', 'res_partner_rule_private_employee')]"/>-->
+<!--            </function>-->
+<!--            <value eval="{'noupdate': False}"/>-->
+<!--        </function>-->
+<!--        <record id="base.res_partner_rule_private_employee" model="ir.rule">-->
+<!--            <field name="active" eval="False"/>-->
+<!--        </record>-->
 
 
-        <record id="crm_rule_salesteam_own_customers" model="ir.rule">
-            <field name="name">See own customers</field>
-            <field ref="base.model_res_partner" name="model_id"/>
-            <field name="domain_force">['|',('type','=','contact'),'&amp;',('user_id','=',user.id),('customer_rank','=',1)]</field>
-            <field name="groups" eval="[(4, ref('egy-trade_custom.group_see_own_customers'))]"/>
-        </record>
+<!--        <record id="crm_rule_salesteam_own_customers" model="ir.rule">-->
+<!--            <field name="name">See own customers</field>-->
+<!--            <field ref="base.model_res_partner" name="model_id"/>-->
+<!--            <field name="domain_force">['|',('type','=','contact'),'&amp;',('user_id','=',user.id),('customer_rank','=',1)]</field>-->
+<!--            <field name="groups" eval="[(4, ref('egy-trade_custom.group_see_own_customers'))]"/>-->
+<!--        </record>-->
 
     </data>
 </odoo>
