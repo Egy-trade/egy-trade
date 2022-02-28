@@ -65,7 +65,7 @@
         <field name="groups_id" eval="[(6,0, [ref('sales_team.group_sale_salesman_all_leads')])]"/>
     </record>
     <menuitem id="res_partner_menu"
-            parent="sale_order_menu"
+            parent="sale.sale_order_menu"
             action="res_partner_action_customer_2"
             sequence="4"
             groups="egy-trade_custom.group_see_own_customers"/>
