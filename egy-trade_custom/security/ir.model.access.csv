@@ -16,3 +16,4 @@ access_set_stage_wizard_manager,set.stage.wizard.manager,model_set_stage_wizard,
 access_crm_project_salesman,crm.project.salesman,model_crm_project,sales_team.group_sale_salesman,1,0,0,0
 access_crm_project_manager,crm.project.manager,model_crm_project,sales_team.group_sale_manager,1,1,1,1
 access_res_partner_document_user,res.partner.document.user,model_res_partner_document,base.group_user,1,1,1,1
+access_p_tags_user,access.p.tags.user,model_purchase_tag,base.group_user,1,1,1,1
