@@ -8,7 +8,7 @@
         <field name="arch" type="xml">
             <field name="partner_id" position="after">
                 <field name="partner_allow_ids" widget="many2many_tags" invisible="1"/>
-                <field name="p_tag_ids" widget="many2many_tags"/>
+                <field name="p_tag_ids" widget="many2many_tags" options="{'no_create_edit': False}"/>
             </field>
 <!--            <field name="partner_id" position="attributes">-->
 <!--                <attribute name="domain">[('id', 'in', partner_allow_ids)]</attribute>-->
