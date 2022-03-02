@@ -134,16 +134,16 @@
             <xpath expr="//kanban" position="inside">
                 <field name="current_user"/>
             </xpath>
-            <xpath expr="//div[hasclass('o_kanban_record_title')]//field[@name='name']" position="attributes">
-                <attribute name="attrs">
-                    {'invisible': [('current_user', '!=', True)]}
-                </attribute>
-            </xpath>
-            <xpath expr="//div[hasclass('oe_kanban_content')]//div[3]//span" position="attributes">
-                <attribute name="attrs">
-                    {'invisible': [('current_user', '!=', True)]}
-                </attribute>
-            </xpath>
+<!--            <xpath expr="//div[hasclass('o_kanban_record_title')]//field[@name='name']" position="attributes">-->
+<!--                <attribute name="attrs">-->
+<!--                    {'invisible': [('current_user', '!=', True)]}-->
+<!--                </attribute>-->
+<!--            </xpath>-->
+<!--            <xpath expr="//div[hasclass('oe_kanban_content')]//div[3]//span" position="attributes">-->
+<!--                <attribute name="attrs">-->
+<!--                    {'invisible': [('current_user', '!=', True)]}-->
+<!--                </attribute>-->
+<!--            </xpath>-->
         </field>
     </record>
 

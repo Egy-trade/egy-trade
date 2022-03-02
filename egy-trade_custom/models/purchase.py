@@ -2,6 +2,11 @@
 
 from odoo import models, fields, api
 
+class PurchaseTag(models.Model):
+    _name = 'purchase.tag'
+
+    name = fields.Char(string="Name")
+
 
 class PurchaseOrderLine(models.Model):
     _inherit = 'purchase.order'
@@ -27,6 +32,7 @@ class PurchaseOrderLine(models.Model):
         self.partner_allow_ids = partners
 
     partner_allow_ids = fields.Many2many('res.partner', compute='_get_partner_allows')
+    p_tag_ids = fields.Many2many('purchase.tag',string="Tags")
 
 
 class PurchaseOrderLine(models.Model):
