@@ -10,9 +10,10 @@
                 <field name="partner_allow_ids" widget="many2many_tags" invisible="1"/>
                 <field name="p_tag_ids" widget="many2many_tags" options="{'no_create_edit': False}"/>
             </field>
-<!--            <field name="partner_id" position="attributes">-->
+            <field name="partner_id" position="attributes">
+                <attribute name="domain">[('supplier_rank','>',0)]</attribute>
 <!--                <attribute name="domain">[('id', 'in', partner_allow_ids)]</attribute>-->
-<!--            </field>-->
+            </field>
             <xpath expr="//field[@name='product_id']" position="attributes">
 <!--                <attribute name="domain">-->
 <!--                    [('purchase_ok', '=', True), '|', ('company_id', '=', False),-->
@@ -31,6 +32,18 @@
                 <field name="product_ip"/>
                 <field name="product_lumen"/>
             </xpath>
+        </field>
+    </record>
+
+
+    <record id="purchase_order_kpis_tree_inherit" model="ir.ui.view">
+        <field name="name">purchase.order.inherit.purchase.order.tree.inherit</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_kpis_tree"/>
+        <field name="arch" type="xml">
+            <field name="user_id" position="after">
+                <field name="p_tag_ids"/>
+            </field>
         </field>
     </record>
 </odoo>

@@ -56,7 +56,8 @@
                 <field name="partner_allow_ids" widget="many2many_tags" invisible="1"/>
             </field>
             <field name="partner_id" position="attributes">
-                <attribute name="domain">[('id', 'in', partner_allow_ids)]</attribute>
+                <attribute name="domain">[('customer_rank','>',0)]</attribute>
+<!--                <attribute name="domain">[('id', 'in', partner_allow_ids)]</attribute>-->
             </field>
             <xpath expr="//tree/field[@name='tax_id']" position="attributes">
                 <attribute name="attrs">{'readonly': [('state', 'not in', ['draft'])]}</attribute>
