@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 
+from random import randint
 from odoo import models, fields, api
 
 class PurchaseTag(models.Model):
     _name = 'purchase.tag'
 
+    def _get_default_color(self):
+        return randint(1, 11)
+
     name = fields.Char(string="Name")
+    color = fields.Integer(string='Color Index', default=_get_default_color)
 
 
 class PurchaseOrderLine(models.Model):
