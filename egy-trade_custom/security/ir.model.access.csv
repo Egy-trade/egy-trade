@@ -17,3 +17,6 @@ access_crm_project_salesman,crm.project.salesman,model_crm_project,sales_team.gr
 access_crm_project_manager,crm.project.manager,model_crm_project,sales_team.group_sale_manager,1,1,1,1
 access_res_partner_document_user,res.partner.document.user,model_res_partner_document,base.group_user,1,1,1,1
 access_p_tags_user,access.p.tags.user,model_purchase_tag,base.group_user,1,1,1,1
+access_egy_trade_sale_order_user,access_egy_trade_sale_order_user,sale.model_sale_order,group_egy_trade_user,1,0,0,0
+access_egy_trade_purchase_order_user,access_egy_trade_purchase_order_user,purchase.model_purchase_order,group_egy_trade_user,1,0,0,0
+access_egy_trade_account_move_user,access_egy_trade_account_move_user,account.model_account_move,group_egy_trade_user,1,0,0,0

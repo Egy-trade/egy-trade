@@ -42,11 +42,25 @@
 <!--        </record>-->
 
 
-<!--        <record id="crm_rule_salesteam_own_customers" model="ir.rule">-->
-<!--            <field name="name">See own customers</field>-->
-<!--            <field ref="base.model_res_partner" name="model_id"/>-->
-<!--            <field name="domain_force">['|',('type','=','contact'),'&amp;',('user_id','=',user.id),('customer_rank','=',1)]</field>-->
-<!--            <field name="groups" eval="[(4, ref('egy-trade_custom.group_see_own_customers'))]"/>-->
+<!--        <record id="sales_order_egytrade_rule" model="ir.rule">-->
+<!--            <field name="name">Sales Order Egy Trade User</field>-->
+<!--            <field ref="sale.model_sale_order" name="model_id"/>-->
+<!--            <field name="domain_force">[('message_follower_ids','in',[user.id])]</field>-->
+<!--            <field name="groups" eval="[(4, ref('egy-trade_custom.group_egy_trade_user'))]"/>-->
+<!--        </record>-->
+
+<!--        <record id="purchase_order_egytrade_rule" model="ir.rule">-->
+<!--            <field name="name">Purchase Order Egy Trade User</field>-->
+<!--            <field ref="purchase.model_purchase_order" name="model_id"/>-->
+<!--            <field name="domain_force">[('message_follower_ids','in',[user.id])]</field>-->
+<!--            <field name="groups" eval="[(4, ref('egy-trade_custom.group_egy_trade_user'))]"/>-->
+<!--        </record>-->
+
+<!--        <record id="account_move_egytrade_rule" model="ir.rule">-->
+<!--            <field name="name">Account Move Egy Trade User</field>-->
+<!--            <field ref="account.model_account_move" name="model_id"/>-->
+<!--            <field name="domain_force">[('message_follower_ids','in',[user.id])]</field>-->
+<!--            <field name="groups" eval="[(4, ref('egy-trade_custom.group_egy_trade_user'))]"/>-->
 <!--        </record>-->
 
     </data>
