@@ -145,22 +145,56 @@
     </record>
 
     <record id="action_move_out_refund_type_2" model="ir.actions.act_window">
-            <field name="name">Credit Notes</field>
-            <field name="res_model">account.move</field>
-            <field name="view_mode">tree,kanban,form</field>
-            <field name="view_id" ref="account.view_invoice_tree"/>
-            <field name="search_view_id" ref="account.view_account_invoice_filter"/>
-            <field name="domain">[('move_type', '=', 'out_refund'),('message_follower_ids','in', [uid])]</field>
-            <field name="context">{'default_move_type': 'out_refund'}</field>
-            <field name="help" type="html">
-              <p class="o_view_nocontent_smiling_face">
-                Create a credit note
-              </p><p>
-                Note that the easiest way to create a credit note is to do it directly
-                from the customer invoice.
-              </p>
-            </field>
-        </record>
+        <field name="name">Credit Notes</field>
+        <field name="res_model">account.move</field>
+        <field name="view_mode">tree,kanban,form</field>
+        <field name="view_id" ref="account.view_invoice_tree"/>
+        <field name="search_view_id" ref="account.view_account_invoice_filter"/>
+        <field name="domain">[('move_type', '=', 'out_refund'),('message_follower_ids','in', [uid])]</field>
+        <field name="context">{'default_move_type': 'out_refund'}</field>
+        <field name="help" type="html">
+          <p class="o_view_nocontent_smiling_face">
+            Create a credit note
+          </p><p>
+            Note that the easiest way to create a credit note is to do it directly
+            from the customer invoice.
+          </p>
+        </field>
+    </record>
+
+    <record id="action_move_in_invoice_type_2" model="ir.actions.act_window">
+        <field name="name">Bills</field>
+        <field name="res_model">account.move</field>
+        <field name="view_mode">tree,kanban,form</field>
+        <field name="view_id" ref="account.view_in_invoice_tree"/>
+        <field name="search_view_id" ref="account.view_account_invoice_filter"/>
+        <field name="domain">[('move_type', '=', 'in_invoice'),('message_follower_ids','in', [uid])]</field>
+        <field name="context">{'default_move_type': 'in_invoice'}</field>
+        <field name="help" type="html">
+          <p class="o_view_nocontent_smiling_face">
+            Create a vendor bill
+          </p><p>
+            Create invoices, register payments and keep track of the discussions with your vendors.
+          </p>
+        </field>
+    </record>
+
+    <record id="action_move_in_refund_type_2" model="ir.actions.act_window">
+        <field name="name">Refunds</field>
+        <field name="res_model">account.move</field>
+        <field name="view_mode">tree,kanban,form</field>
+        <field name="view_id" ref="account.view_in_invoice_tree"/>
+        <field name="search_view_id" ref="account.view_account_invoice_filter"/>
+        <field name="domain">[('move_type', '=', 'in_refund'),('message_follower_ids','in', [uid])]</field>
+        <field name="context">{'default_move_type': 'in_refund'}</field>
+        <field name="help" type="html">
+          <p class="o_view_nocontent_smiling_face">
+            Create a vendor credit note
+          </p><p>
+            Note that the easiest way to create a vendor credit note it to do it directly from the vendor bill.
+          </p>
+        </field>
+    </record>
 
      <menuitem name="Invoicing"
         id="menu_finance"
@@ -170,6 +204,10 @@
          <menuitem id="menu_finance_receivables" name="Customers" sequence="2">
             <menuitem id="menu_action_move_out_invoice_type" action="action_move_out_invoice_type_2" sequence="1"/>
             <menuitem id="menu_action_move_out_refund_type" action="action_move_out_refund_type_2" sequence="2"/>
+         </menuitem>
+         <menuitem id="menu_finance_payables" name="Vendors" sequence="3">
+            <menuitem id="menu_action_move_in_invoice_type" action="action_move_in_invoice_type_2" sequence="1"/>
+            <menuitem id="menu_action_move_in_refund_type" action="action_move_in_refund_type_2" sequence="2"/>
          </menuitem>
      </menuitem>
 </odoo>
