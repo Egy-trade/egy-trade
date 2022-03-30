@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Sales Order -->
+
+    <record id="action_orders_2" model="ir.actions.act_window">
+        <field name="name">Sales Orders</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">sale.order</field>
+        <field name="view_mode">tree,kanban,form,calendar,pivot,graph,activity</field>
+        <field name="search_view_id" ref="sale.sale_order_view_search_inherit_sale"/>
+        <field name="context">{}</field>
+        <field name="domain">[('state', 'not in', ('draft', 'sent', 'cancel')), ('message_follower_ids','in', [uid])]</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create a new quotation, the first step of a new sale!
+            </p><p>
+                Once the quotation is confirmed, it becomes a sales order.<br/> You will be able to create an invoice and collect the payment.
+            </p>
+        </field>
+    </record>
+
+    <menuitem
+        id="menu_sale_order"
+        name="Orders"
+        action="action_orders_2"
+        parent="sale.sale_order_menu"
+        sequence="2"
+        groups="egy-trade_custom.group_egy_trade_user"/>
+
+
+
+
+    <!-- QUOTATIONS -->
+
+    <record id="action_quotations_with_onboarding_2" model="ir.actions.act_window">
+        <field name="name">Quotations</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">sale.order</field>
+        <field name="view_id" ref="sale.view_quotation_tree_with_onboarding"/>
+        <field name="view_mode">tree,kanban,form,calendar,pivot,graph,activity</field>
+        <field name="search_view_id" ref="sale.sale_order_view_search_inherit_quotation"/>
+        <field name="context">{'search_default_my_quotation': 1}</field>
+        <field name="domain">[('message_follower_ids','in', [uid])]</field>
+        <field name="help" type="html">
+          <p class="o_view_nocontent_smiling_face">
+            Create a new quotation, the first step of a new sale!
+          </p><p>
+            Once the quotation is confirmed by the customer, it becomes a sales order.<br/> You will be able to create an invoice and collect the payment.
+          </p>
+        </field>
+    </record>
+
+    <menuitem
+        id="menu_sale_quotations"
+        action="action_quotations_with_onboarding_2"
+        parent="sale.sale_order_menu"
+        sequence="1"
+        groups="egy-trade_custom.group_egy_trade_user"/>
+
+
+    <!-- Purchase Order-->
+    <menuitem name="Purchase"
+            id="menu_purchase_root"
+            groups="egy-trade_custom.group_egy_trade_user"
+            web_icon="purchase,static/description/icon.png"
+            sequence="25"/>
+    <menuitem id="menu_procurement_management"
+              name="Orders"
+              parent="menu_purchase_root"
+              sequence="1" />
+
+     <record id="purchase_form_action_2" model="ir.actions.act_window">
+        <field name="name">Purchase Orders</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">purchase.order</field>
+        <field name="view_mode">tree,kanban,form,pivot,graph,calendar,activity</field>
+        <field name="view_id" ref="purchase.purchase_order_view_tree"/>
+        <field name="domain">[('state','in',('purchase', 'done')), ('message_follower_ids','in', [uid])]</field>
+        <field name="search_view_id" ref="purchase.purchase_order_view_search"/>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+          <p class="o_view_nocontent_smiling_face">
+            No purchase order found. Let's create one!
+          </p><p>
+            Once you ordered your products to your supplier, confirm your request for quotation and it will turn into a purchase order.
+          </p>
+        </field>
+    </record>
+
+    <menuitem
+            id="menu_purchase_form_action"
+            action="purchase_form_action_2"
+            parent="menu_procurement_management"
+            sequence="6"/>
+
+
+
+    <!-- Request For Quotation -->
+
+
+    <record id="purchase_rfq_2" model="ir.actions.act_window">
+        <field name="name">Requests for Quotation</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">purchase.order</field>
+        <field name="view_mode">tree,kanban,form,pivot,graph,calendar,activity</field>
+        <field name="view_id" ref="purchase.purchase_order_kpis_tree"/>
+        <field name="domain">[]</field>
+        <field name="search_view_id" ref="purchase.view_purchase_order_filter"/>
+        <field name="context">{'quotation_only': True}</field>
+        <field name="domain">[('message_follower_ids','in', [uid])]</field>
+        <field name="help" type="html">
+          <p class="o_view_nocontent_smiling_face">
+            No request for quotation found. Let's create one!
+          </p><p>
+            Requests for quotation are documents that will be sent to your suppliers to request prices for different products you consider buying.
+            Once an agreement has been found with the supplier, they will be confirmed and turned into purchase orders.
+          </p>
+        </field>
+    </record>
+
+    <menuitem
+            id="menu_purchase_rfq"
+            action="purchase_rfq_2"
+            parent="menu_procurement_management"
+            sequence="0"/>
+
+
+    <!-- INVOICES -->
+    <record id="action_move_out_invoice_type_2" model="ir.actions.act_window">
+        <field name="name">Invoices</field>
+        <field name="res_model">account.move</field>
+        <field name="view_mode">tree,kanban,form</field>
+        <field name="view_id" ref="account.view_out_invoice_tree"/>
+        <field name="search_view_id" ref="account.view_account_invoice_filter"/>
+        <field name="domain">[('move_type', '=', 'out_invoice'),('message_follower_ids','in', [uid])]</field>
+        <field name="context">{'default_move_type': 'out_invoice'}</field>
+        <field name="help" type="html">
+          <p class="o_view_nocontent_smiling_face">
+            Create a customer invoice
+          </p><p>
+            Create invoices, register payments and keep track of the discussions with your customers.
+          </p>
+        </field>
+    </record>
+
+    <record id="action_move_out_refund_type_2" model="ir.actions.act_window">
+            <field name="name">Credit Notes</field>
+            <field name="res_model">account.move</field>
+            <field name="view_mode">tree,kanban,form</field>
+            <field name="view_id" ref="account.view_invoice_tree"/>
+            <field name="search_view_id" ref="account.view_account_invoice_filter"/>
+            <field name="domain">[('move_type', '=', 'out_refund'),('message_follower_ids','in', [uid])]</field>
+            <field name="context">{'default_move_type': 'out_refund'}</field>
+            <field name="help" type="html">
+              <p class="o_view_nocontent_smiling_face">
+                Create a credit note
+              </p><p>
+                Note that the easiest way to create a credit note is to do it directly
+                from the customer invoice.
+              </p>
+            </field>
+        </record>
+
+     <menuitem name="Invoicing"
+        id="menu_finance"
+        groups="egy-trade_custom.group_egy_trade_user"
+        web_icon="account,static/description/icon.png"
+        sequence="40">
+         <menuitem id="menu_finance_receivables" name="Customers" sequence="2">
+            <menuitem id="menu_action_move_out_invoice_type" action="action_move_out_invoice_type_2" sequence="1"/>
+            <menuitem id="menu_action_move_out_refund_type" action="action_move_out_refund_type_2" sequence="2"/>
+         </menuitem>
+     </menuitem>
+</odoo>

@@ -32,6 +32,7 @@
         'views/crm_lead.xml',
         'views/res_partner_document.xml',
         'views/customers_menus.xml',
+        'views/egy_trade_views.xml',
 
     ],
     'application': True,
