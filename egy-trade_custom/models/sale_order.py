@@ -15,6 +15,13 @@ class SaleOrder(models.Model):
         ('done', 'Locked'),
         ('cancel', 'Cancelled'),
     ], string='Status', readonly=True, copy=False, index=True, tracking=3, default='draft')
+    follower_user_ids = fields.Many2many('res.users', compute="_get_follower_user_ids", store=True)
+
+    @api.depends('message_follower_ids')
+    def _get_follower_user_ids(self):
+        for rec in self:
+            follower_users = self.env['res.users'].search([('partner_id', 'in', rec.message_follower_ids.mapped('partner_id').ids)])
+            rec.follower_user_ids = [(6, 0, follower_users.ids)]
 
     # Incomplete validation of the approved state
     def action_to_approve(self):
