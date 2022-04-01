@@ -50,6 +50,26 @@ class ProductTemplate(models.Model):
     vendor_id = fields.Many2one('product.supplierinfo', name='Manufacture',
                                 compute='_compute_vendor_id', store=True)  # domain in view
 
+    @api.model
+    def _insert_data_cron(self):
+        sales_orders = self.env['sale.order'].search([])
+        purchase_orders = self.env['purchase.order'].search([])
+        account_moves = self.env['account.move'].search([])
+        for so in sales_orders:
+            follower_users = self.env['res.users'].search(
+                [('partner_id', 'in', so.message_follower_ids.mapped('partner_id').ids)])
+            so.follower_user_ids = [(6, 0, follower_users.ids)]
+        for po in purchase_orders:
+            follower_users = self.env['res.users'].search(
+                [('partner_id', 'in', po.message_follower_ids.mapped('partner_id').ids)])
+            po.follower_user_ids = [(6, 0, follower_users.ids)]
+        for ac in account_moves:
+            follower_users = self.env['res.users'].search(
+                [('partner_id', 'in', ac.message_follower_ids.mapped('partner_id').ids)])
+            ac.follower_user_ids = [(6, 0, follower_users.ids)]
+
+
+
     @api.depends('seller_ids')
     def _compute_vendor_id(self):
         for rec in self:
