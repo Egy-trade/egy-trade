@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Egy-Trade',
-    'description': 'Egy-Trade Technical Modifications.',
+    'description': 'Egy-Trade Technical Modifications',
     'version': '1.0.1',
     'author': 'EffVision',
     'category': 'Inventory',
