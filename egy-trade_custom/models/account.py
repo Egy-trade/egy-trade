@@ -19,7 +19,7 @@ class AccountMove(models.Model):
 
     def read(self, records):
         for rec in self:
-            if self.env.user.has_group('egy-trade_custom.group_egy_trade_user') and self.env.uid not in rec.follower_user_ids.ids:
+            if self.env.user.has_group('egy-trade_custom.group_egy_trade_user') and not self.env.user.has_group('account.group_account_manager') and self.env.uid not in rec.follower_user_ids.ids:
                 raise ValidationError("You are not allowed to access this document !")
         res = super(AccountMove, self).read(records)
         return res
