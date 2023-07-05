@@ -11,7 +11,6 @@ class PartnerDocument(models.Model):
     expires = fields.Boolean(string='Expires')
     expiration_date = fields.Date(string='Expiration Date')
     document = fields.Binary(string='Document')
-
     partner_id = fields.Many2one(
         'res.partner',
         string='Partner'
