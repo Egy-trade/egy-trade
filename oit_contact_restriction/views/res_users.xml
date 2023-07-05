@@ -1,0 +1,37 @@
+<data>
+    <record id="inherit_res_users_form" model="ir.ui.view">
+        <field name="name">inherit.res.users.form</field>
+        <field name="model">res.users</field>
+        <!--<field name="groups_id" eval="[(4, ref(''))]"/>-->
+        <field name="inherit_id" ref="base.view_users_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page name="owner_allowed_partner" string="Owner / Allowed Partner">
+                    <group>
+                        <group>
+                            <field name="allowed_partner_ids" widget="many2many_tags"/>
+                        </group>
+                        <group>
+                            <field name="owner_partner_ids" widget="many2many_tags"/>
+                        </group>
+                    </group>
+
+                </page>
+
+            </xpath>
+        </field>
+    </record>
+
+
+    <record model="ir.cron" id="hr_is_user">
+        <field name="name">Partner is User</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="numbercall">-1</field>
+        <field name="doall" eval="False"/>
+        <field name="model_id" ref="model_res_users"/>
+        <field name="state">code</field>
+        <field name="code">model.update_is_user()</field>
+    </record>
+
+</data>

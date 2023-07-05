@@ -5,8 +5,7 @@
     'version': '1.0.1',
     'author': 'EffVision',
     'category': 'Inventory',
-
-    'depends': ['product', 'stock', 'purchase', 'purchase_stock', 'crm', 'sale_management', 'sale_margin'],
+    'depends': ['product', 'stock', 'purchase', 'purchase_stock', 'crm', 'sale_management', 'sale_margin','sale_crm'],
     'data': [
         'security/security.xml',
         'security/ir.model.access.csv',

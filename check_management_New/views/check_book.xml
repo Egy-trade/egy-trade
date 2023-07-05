@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="check_book_view_form" model="ir.ui.view">
+            <field name="name">check.book.form</field>
+            <field name="model">check.book</field>
+            <field name="arch" type="xml">
+                <form string="Check Book">
+                    <sheet>
+                          <div class="oe_button_box" name="button_box">
+                            <button name="toggle_active" type="object" class="oe_stat_button" icon="fa-archive">
+                                <field name="active" widget="boolean_button" options="{&quot;terminology&quot;: &quot;archive&quot;}"/>
+                            </button>
+                        </div>
+                        <div class="oe_title">
+                            <h1>
+                                <field name="name" readonly="1"/>
+                            </h1>
+                        </div>
+                        <group col="4">
+                            <field name="bank_id"/>
+                            <field name="book_num"/>
+                            <field name="first_check_num"/>
+                            <field name="last_check_num"/>
+                            <field name="next_check_num" readonly="1" invisible="0"/>
+
+                        </group>
+                        <group col="1">
+                             <field name="serial_ids" widget="one2many" nolabel="1" context="{'default_book_id': active_id}">
+                                <tree name="serial" string="Serial" create="0">
+                                    <field name="name" readonly="1" />
+                                    <field name="reserved" readonly="1"/>
+
+                                </tree>
+                             </field>
+
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="check_book_view_tree" model="ir.ui.view">
+            <field name="name">check.book.tree</field>
+            <field name="model">check.book</field>
+            <field name="arch" type="xml">
+                <tree string="Check Book">
+                    <field name="name"/>
+                    <field name="bank_id"/>
+                    <field name="book_num"/>
+                    <field name="first_check_num"/>
+                     <field name="last_check_num"/>
+                    <field name="next_check_num"/>
+                </tree>
+            </field>
+        </record>
+        <record id="action_check_book_view" model="ir.actions.act_window">
+            <field name="name">Check Book</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">check.book</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+              <p class="oe_view_nocontent_create">
+                <!-- Add Text Here -->
+              </p><p>
+                <!-- More details about what a user can do with this object will be OK -->
+              </p>
+            </field>
+        </record>
+        <!-- This Menu Item must have a parent and an action -->
+        <menuitem id="menu_action_check_book" name="Check Book" parent="account.account_banks_menu" action="action_check_book_view" sequence="10"/>
+
+
+    </data>
+</odoo>

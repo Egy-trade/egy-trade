@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data noupdate="0">
+        <record id="initial_lg" model="res.groups">
+            <field name="name">Show Initial LG Menu</field>
+            <field name="category_id" ref="base.module_category_hidden"/>
+        </record>
+
+        <record id="final_lg" model="res.groups">
+            <field name="name">Show Final LG Menu</field>
+            <field name="category_id" ref="base.module_category_hidden"/>
+        </record>
+
+        <record id="vp_approved" model="res.groups">
+            <field name="name">VP Approved</field>
+            <field name="category_id" ref="base.module_category_hidden"/>
+        </record>
+
+        <record id="project_manager_office" model="res.groups">
+            <field name="name">Project Manager Office</field>
+            <field name="category_id" ref="base.module_category_hidden"/>
+        </record>
+
+    </data>
+</odoo>

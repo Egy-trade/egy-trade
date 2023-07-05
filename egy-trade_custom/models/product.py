@@ -36,7 +36,8 @@ class ProductTemplate(models.Model):
 
     family_name = fields.Many2one(comodel_name='product.family.name',
                                   string='Family Name')
-    color = fields.Many2one(comodel_name='product.color',
+    color = fields.Many2one(
+        comodel_name='product.color',
                             string='Color', help='Color Corrected Temperature')
     mounting_type = fields.Many2one(comodel_name='product.mounting.type',
                                     string='Mounting Type')
@@ -49,6 +50,9 @@ class ProductTemplate(models.Model):
     driver_manufacture = fields.Char(string='Driver')
     vendor_id = fields.Many2one('product.supplierinfo', name='Manufacture',
                                 compute='_compute_vendor_id', store=True)  # domain in view
+    manufacturer = fields.Char()
+    origin = fields.Char()
+
 
     @api.model
     def _insert_data_cron(self):
@@ -134,10 +138,11 @@ class ProductTemplate(models.Model):
 class SupplierInfo(models.Model):
     _inherit = 'product.supplierinfo'
 
-    @api.depends('name')
+    partner_id = fields.Many2one('res.partner')
+    @api.depends('partner_id')
     def _compute_delay(self):
         for rec in self:
-            rec.delay = rec.name.delay
+            rec.delay = rec.partner_id.delay
 
     delay = fields.Integer(
         'Delivery Lead Time', compute='_compute_delay', required=True, readonly=False,

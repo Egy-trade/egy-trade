@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+<data>
+    <record id="print_view_account_payment_form" model="ir.ui.view">
+        <field name="name">account.payment.print</field>
+        <field name="model">account.payment</field>
+        <field name="inherit_id" ref="account.view_account_payment_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//button[@name='action_post']" position="after">
+                <button name="print_cash_payment" string="Print Cash" type="object"
+                        attrs="{'invisible': [('check_payment_transaction_ids', '!=', False)]}"
+                        class="btn-primary o_sale_print"/>
+
+            </xpath>
+
+
+        </field>
+    </record>
+
+    <template id="custom_header_cash_report">
+
+<style>
+    .parent {
+  width: 100%;
+}
+.block1 {
+  width: 30%;
+  float: left;
+  padding-right: 10px;
+}
+
+.block2 {
+  width: 30%;
+  float: left;
+  padding-right: 10px;
+}
+.block3 {
+  width: 30%;
+  float: left;
+}
+
+</style>
+        <div class="header" style="font-size:14px;font-weight: bold;">
+            <table class="text-center" width="100%" style="font-family:KacstOne;">
+                <tr>
+                    <td width="30%"><img t-if="res_company.logo"
+                          t-att-src="'data:image/png;base64,%s' % to_text(res_company.logo)"
+                          style="padding: 0px; margin: 0px; height:250; width: 250px;" />
+                    </td>
+                    <td class="text-center" width="40%">
+                        <strong><span t-field="res_company.name" style="color:blue;"/></strong>
+                        <br/>
+                        <span t-if="res_company.street" t-field="res_company.street"/><br/>
+                        <span t-if="res_company.country_id" t-field="res_company.country_id"/><span t-if="res_company.zip"  t-field="res_company.zip"/><br/>
+                        Phone: <span t-field="res_company.phone"/><br/>
+                        Email: <span t-field="res_company.email" style="color:#044dae"/><br/>
+                        <span t-field="res_company.website" style="color:#044dae"/>
+                    </td>
+                    <td class="text-center" width="30%">
+                        <img t-if="o.region.logo"
+                          t-att-src="'data:image/png;base64,%s' % to_text(o.region.logo)"
+                          style="padding: 0px; margin: 0px; height:150px; width: 250px;" />
+                    </td>
+                </tr>
+            </table>
+
+            <br/>
+            <div width="100%">
+                <center>
+
+                <hr style="height:2px;border:none;color:#044dae ;background-color: #044dae;margin-top:0px;margin-bottom:1px"/>
+                </center>
+            </div>
+
+
+        </div>
+        <div class="article" style="font-size:10px;font-weight: bold;">
+          <t t-raw="0" />
+        </div>
+    </template>
+      <record id="print_cash_paper_format" model='report.paperformat'>
+            <field name="name">Print Cash Format</field>
+            <field name="format">custom</field>
+            <field name="orientation">Portrait</field>
+            <field name="margin_top">67</field>
+            <field name="margin_bottom">15</field>
+            <field name="margin_left">7</field>
+            <field name="margin_right">7</field>
+            <field name="header_line" eval="False" />
+            <field name="header_spacing">65</field>
+            <field name="dpi">90</field>
+        </record>
+
+
+    <report
+        id="action_print_cash_report"
+        model="account.payment"
+        report_type="qweb-pdf"
+        string="سند قبض/صرف نقدية"
+        name="check_management_New.print_cash_doc"
+        file="check_management_New.print_cash_doc"
+        paperformat="check_management_New.print_cash_paper_format"
+
+    />
+	<template id="print_cash_doc">
+		<t t-call="web.html_container">
+			<t t-foreach="docs" t-as="o">
+				<t t-call="check_management_New.print_cash_doc_document" t-lang="request.lang"/>
+			</t>
+		</t>
+	</template>
+	<template id="print_cash_doc_document">
+		<t t-call="web.html_container">
+			<t t-call="check_management_New.custom_header_cash_report">
+				<t t-foreach="docs" t-as="o">
+					<div class="page" dir="rtl" style="font-family:KacstOne;">
+
+
+
+
+                                <center>
+                               <h2 t-if="not o.is_visa and o.payment_type == 'inbound' "><strong style="text-decoration: underline;">سند قبض نقدي</strong></h2>
+                               <h2 t-if="o.is_visa and o.payment_type == 'inbound'"><strong style="text-decoration: underline;"> سند قبض حواله بنكيه </strong></h2><h2 t-if="not o.is_visa and o.payment_type == 'outbound' "><strong style="text-decoration: underline;">سند صرف نقدي</strong></h2>
+                               <h2 t-if="o.is_visa and o.payment_type == 'outbound'"><strong style="text-decoration: underline;"> سند صرف حواله بنكيه </strong></h2>
+                                    <t t-if="o.payment_type == 'transfer'">
+                                        <h2 t-if="o.internal_payment_transfer_type == 'journal_to_account' "><strong style="text-decoration: underline;">إذن صرف نقدي</strong></h2>
+                                        <h2 t-if="o.internal_payment_transfer_type == 'journal_to_journal' "><strong style="text-decoration: underline;">سند تمويل</strong></h2>
+                                        <h2 t-if="o.internal_payment_transfer_type == 'account_to_journal' "><strong style="text-decoration: underline;">سند قبض</strong></h2>
+                                </t>
+
+
+
+                           </center>
+
+                            <br/>
+                        <h2>بيانات المستند: </h2>
+                <div style="border-radius: 20px 20px 20px 20px; border:2px solid black;width:100%;font-size:14px;font-weight: bold;" dir="rtl" >
+
+                            <table class="text-right" style="width: 100%;">
+                                <tr>
+                                    <th class="text-center" height="35" style="width:15%;">رقم المستند: </th>
+                                    <th class="text-center" height="35" style="width:50%;"><span t-if="o.state != 'draft'" t-field="o.move_line_ids[0].move_id.name"/></th>
+                                    <th class="text-center" height="35" style="width:15%;">تاريخ المستند: </th>
+                                    <th class="text-center" height="35" style="width:20%;"><span t-field="o.payment_date"/></th>
+                                </tr>
+                                <tr>
+                                    <th class="text-center" height="35" style="width:15%;">اسم الخزينة:</th>
+                                    <th class="text-center" height="35" style="width:50%;"><span t-field="o.journal_id"/></th>
+                                    <th class="text-center" height="35" style="width:15%;">نوع الدفع: </th>
+                                    <th t-if="not o.is_visa" class="text-center" height="35" style="width:20%;">نقدي</th>
+                                    <th t-if="o.is_visa" class="text-center" height="35" style="width:20%;">حوالة بنكية</th>
+                                </tr>
+
+                                <tr>
+                                    <th class="text-center" height="35" style="width:15%;"> القيمة:</th>
+                                    <th class="text-center" height="35" style="width:50%;"><span t-field="o.amount"/></th>
+                                    <th class="text-center" height="35" style="width:15%;left :1 px ;">العملة</th>
+                                    <th class="text-center" height="35" style="width:50%;left :1 px ;"><span t-field="o.currency_id"/></th>
+
+                                </tr>
+                                <tr>
+                                    <th class="text-center" height="35" style="width:15%;">وقدرها: </th>
+                                    <th class="text-center" height="35" style="width:20%;"><span t-field="o.mount_text"/></th>
+
+                                </tr>
+                            </table>
+                </div>
+                        <br/>
+                        <br/>
+                        <h2>بيانات جهه التعامل : </h2>
+                        <div style="border-radius: 20px 20px 20px 20px; border:2px solid black;width:100%;font-size:14px;font-weight: bold;" dir="rtl" >
+
+                        <table>
+                                <t t-if="o.partner_id.ref">
+                                    <t t-set="name" t-value="o.partner_id.name +'[' + o.partner_id.ref +']'" />
+                                </t>
+                                <t t-if="not o.partner_id.ref">
+                                    <t t-set="name" t-value="o.partner_id.name" />
+                                </t>
+                                <tr>
+                                    <th class="text-center" height="35" style="width:15%;">اسم جهه التعامل: </th>
+                                    <th class="text-center" height="35" style="width:50%;"><span t-field="o.partner_id.name"/></th>
+                                    <th class="text-center" height="35" style="width:15%;">كود جهه التعامل:</th>
+                                    <th class="text-center" height="35" style="width:20%;"><span t-field="o.partner_id.ref"/></th>
+                                </tr>
+
+                            <tr>
+                                    <th class="text-center" height="35" style="width:15%;"> البيان: </th>
+                                    <th class="text-center" height="35" style="width:50%;"><span t-field="o.communication"/></th>
+
+                                </tr>
+
+                            </table>
+                        </div>
+                        <br/>
+                        <br/>
+                    <hr style="height:1px;border:none;color:#044dae ;background-color: #044dae;margin-top:0px;margin-bottom:1px"/>
+
+                <div class="row" style="width:100%;font-size:18px;font-weight: bold;" dir="rtl">
+                    <div class="col-xs-4">
+                        <center>
+                            <strong>اعتماد المدير</strong>
+                        <br/>
+                        <strong>manager</strong>
+                         <br/>
+                        <span>.....................</span>
+                            <br/>
+                        </center>
+
+                    </div>
+                    <div class="col-xs-4">
+                        <center><strong>الحسابات</strong>
+                        <br/>
+                        <strong>Accounts</strong>
+                         <br/>
+                        <span>.....................</span>
+                        <br/>
+                        </center>
+
+                    </div>
+                    <div class="col-xs-4">
+                        <center>
+                             <strong>اعتماد المستلم</strong>
+                        <br/>
+                        <strong>Receiver</strong>
+                         <br/>
+                        <span>.....................</span>
+                            <br/>
+                        </center>
+
+                    </div>
+                </div>
+                    </div>
+
+
+                </t>
+
+			</t>
+		</t>
+	</template>
+</data>
+</odoo>

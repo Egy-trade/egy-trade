@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<odoo>
+    <data>
+        <record id="initial_letter_guarantee_view_form" model="ir.ui.view">
+            <field name="name">initial.letter.guarantee.form</field>
+            <field name="model">initial.letter.guarantee</field>
+            <field name="arch" type="xml">
+                <form string="Letter Of Guarantee">
+                    <header>
+                        <button name="button_inprogress" string="In Progress" type="object" states="draft"
+                                class="btn-primary"
+                                groups="account.group_account_manager"/>
+                        <button name="button_close" string="Close" type="object" states="in_progress"
+                                groups="account.group_account_manager"/>
+                        <field name="state" widget="statusbar"/>
+                    </header>
+                    <sheet string="Letter Of Guarantee">
+                        <div class="oe_button_box" name="button_box">
+                            <button class="oe_stat_button"
+                                    name="get_move_lines"
+                                    type="object"
+                                    attrs="{'invisible': [('state', '=', 'draft')]}"
+                                    icon="fa-television">
+                                <span style="color:teal;">Moves</span>
+                            </button>
+                        </div>
+                        <div class="oe_title">
+                            <h1>
+                                <field name='name'/>
+                            </h1>
+                        </div>
+                        <group>
+                            <field name="type" widget="radio" options="{'horizontal': True}"
+                                   readonly="1"/>
+                        </group>
+                        <group>
+                            <group>
+                                <field name="currency_id" options="{'no_create':True}"
+                                       attrs="{'readonly':[('state','!=','draft')]}"/>
+                                <field name="amount"/>
+                                <field name="journal_id" options="{'no_create':True}"
+                                       attrs="{'readonly':[('state','!=','draft')]}"/>
+                                <field name="bank_id" options="{'no_create':True}" invisible="1"
+                                       attrs="{'readonly':[('state','!=','draft')]}"/>
+                                <field name="analytic_id" options="{'no_create':True}"
+                                       attrs="{'readonly':[('state','!=','draft')]}"/>
+                                <field name="bank_amount" required="1" attrs="{'readonly':[('state','!=','draft')]}"/>
+                                <field name="tax" required="1" attrs="{'readonly':[('state','!=','draft')]}"/>
+
+                            </group>
+                            <group>
+                                <field name="partner_id" options="{'no_create':True}"
+                                       attrs="{'readonly':[('state','!=','draft')]}"/>
+                                <field name="date_issue" options="{'no_create':True}"
+                                       attrs="{'readonly':[('state','!=','draft')]}"/>
+                                <field name="expire_date" attrs="{'readonly':[('state','!=','draft')]}"/>
+                                <field name="project" attrs="{'readonly':[('state','!=','draft')]}"/>
+                                <field name="lg_ref" required="1" attrs="{'readonly':[('state','!=','draft')]}"/>
+                                <field name="request_lg_id" string=" Initial LG Request"/>
+                            </group>
+                        </group>
+                        <notebook>
+                            <page string="Notice">
+                                <div>
+                                    <field name="notice" attrs="{'readonly':[('state','!=','draft')]}"/>
+                                </div>
+                            </page>
+                        </notebook>
+                    </sheet>
+                    <div class="oe_chatter">
+                        <field name="message_follower_ids" widget="mail_followers"/>
+                        <field name="activity_ids" widget="mail_activity"/>
+                        <field name="message_ids" widget="mail_thread"/>
+                    </div>
+                </form>
+            </field>
+        </record>
+
+        <record id="initial_letter_guarantee_view_tree" model="ir.ui.view">
+            <field name="name">initial.letter.guarantee.tree</field>
+            <field name="model">initial.letter.guarantee</field>
+            <field name="arch" type="xml">
+                <tree string="Letters Of Guarantee">
+                    <field name="name"/>
+                    <field name="amount"/>
+                    <field name="partner_id"/>
+                    <field name="date_issue"/>
+                    <field name="expire_date"/>
+                    <field name="state"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="initial_letter_guarantee_action" model="ir.actions.act_window">
+            <field name="name">Initial Letters Of Guarantee</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">initial.letter.guarantee</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+
+        <menuitem id="menu_initial_letter_guarantee"
+                  name="Initial Letter Of Guarantee"
+                  sequence="2"
+                  groups="letter_of_guarantee.initial_lg"
+                  parent="letter_of_guarantee.menu_main_lg"
+                  action="initial_letter_guarantee_action"/>
+    </data>
+</odoo>

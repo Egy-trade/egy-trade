@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="partner_restriction_form_view" model="ir.ui.view">
+        <field name="name">partner.form.view</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='category_id']" position="after">
+                <field name="owner_user" attrs="{'readonly': [('check_allow', '=', False)]}"/>
+                <field name="check_allow" invisible="1"/>
+                <field name="check_user" invisible="1"/>
+                <field name="allowed_users_ids" widget="many2many_tags" attrs="{'readonly': [('check_user', '=', False)]}"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

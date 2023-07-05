@@ -1,0 +1,468 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Check Payment transactions -->
+<!--        customer sequence   -->
+        <record id="check_payment_sequence" model="ir.sequence">
+            <field name="name">Check Received Sequence</field>
+            <field name="code">check.received.code</field>
+            <field name="prefix">CHK/IN/</field>
+            <field name="padding">7</field>
+            <field name="company_id" eval="False"/>
+        </record>
+        <!--        vendor sequence   -->
+        <record id="check_issue_payment_sequence" model="ir.sequence">
+            <field name="name">Check Sequence</field>
+            <field name="code">check.issue.code</field>
+            <field name="prefix">CHK/OUT/</field>
+            <field name="padding">7</field>
+            <field name="company_id" eval="False"/>
+        </record>
+
+        <record id="check_payment_list" model="ir.ui.view">
+            <field name="name">check.payment.list</field>
+            <field name="model">check.payment.transaction</field>
+            <field name="arch" type="xml">
+                <tree string="Check Payments">
+                    <field name="ref"/>
+                    <field name="check_name"/>
+                    <field name="check_number"/>
+                    <field name="check_payment_date"/>
+                    <field name="amount"/>
+                    <field name="check_issue_date" invisible="1" />
+                    <field name="issue_date"  />
+                    <field name="partner_bank"/>
+                    <field name="bank_id" options="{'no_open': True, 'no_create': True}"/>
+                    <field name="bank_journal_id" options="{'no_open': True, 'no_create': True}"/>
+
+                    <field name="partner_id" invisible="1"/>
+                    <field name="currency_id" options="{'no_open': True, 'no_create': True}"
+                           groups="base.group_multi_currency"/>
+                    <field name="company_id" groups="base.group_multi_company"/>
+                    <field name="journal_id" invisible="1"/>
+                    <field name="rec_journal_id" invisible="1"/>
+
+                    <field name="state" invisible="1"/>
+                    <field name="payment_type" invisible="1"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="check_payment_customer_list" model="ir.ui.view">
+            <field name="name">check.payment.payment.customer.tree</field>
+            <field name="model">check.payment.transaction</field>
+            <field name="arch" type="xml">
+                <tree decoration-info="state == 'draft'" decoration-muted="state in ['returned', 'cancelled']"
+                      edit="false">
+                    <field name="ref"/>
+                    <field name="check_name"/>
+                    <field name="check_number"/>
+                    <field name="check_payment_date"/>
+                    <field name="amount" sum="Amount"/>
+                    <field name="check_issue_date" invisible="1"/>
+                    <field name="issue_date"/>
+                    <field name="partner_bank"/>
+                    <field name="bank_id" options="{'no_open': True, 'no_create': True}"/>
+                    <field name="bank_journal_id" options="{'no_open': True, 'no_create': True}"/>
+                    <field name="partner_id" string="Customer"/>
+                    <field name="currency_id" options="{'no_open': True, 'no_create': True}"
+                           groups="base.group_multi_currency"/>
+                    <field name="company_id" groups="base.group_multi_company"/>
+                    <field name="state"/>
+                    <field name="is_reviewed"/>
+                    <field name="journal_id" invisible="1"/>
+                    <field name="rec_journal_id" invisible="1"/>
+                    <field name="payment_type" invisible="1"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="check_payment_vendor_list" model="ir.ui.view">
+            <field name="name">check.payment.payment.vendor.tree</field>
+            <field name="model">check.payment.transaction</field>
+            <field name="arch" type="xml">
+                <tree decoration-info="state == 'draft'" decoration-muted="state in ['returned', 'cancelled']"
+                      edit="false">
+                    <field name="ref"/>
+                    <field name="check_name"/>
+                    <field name="check_number"/>
+                    <field name="check_payment_date"/>
+                    <field name="amount" sum="Amount"/>
+                    <field name="check_issue_date" invisible="1" />
+                    <field name="issue_date"  />
+                    <field name="partner_bank"/>
+                    <field name="bank_id" options="{'no_open': True, 'no_create': True}"/>
+                    <field name="bank_journal_id" options="{'no_open': True, 'no_create': True}"/>
+                    <field name="partner_id" string="Vendor"/>
+                    <field name="currency_id" options="{'no_open': True, 'no_create': True}"
+                           groups="base.group_multi_currency"/>
+                    <field name="company_id" groups="base.group_multi_company"/>
+                    <field name="state"/>
+                    <field name="journal_id" invisible="1"/>
+                    <field name="rec_journal_id" invisible="1"/>
+                    <field name="payment_type" invisible="1"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="check_payment_form" model="ir.ui.view">
+            <field name="name">check.payment.transaction.form</field>
+            <field name="model">check.payment.transaction</field>
+            <field name="arch" type="xml">
+                <form string="Check Payment">
+                    <sheet>
+
+                        <div class="oe_button_box" name="button_box">
+                            <button class="oe_stat_button" name="button_journal_entries"
+                                    string="Journal Items" type="object"
+                                    icon="fa-bars"/>
+                        </div>
+                        <group>
+                            <group>
+                                <field name="ref"/>
+<!--                                <field name="book_id" options="{'no_open': True, 'no_create': True}"/>-->
+<!--                                <field name="serials_filter" />-->
+<!--                                <field name="book_serial" options="{'no_open': True, 'no_create': True}" domain="[('id','in',serials_filter)]"/>-->
+                                <field name="check_name"/>
+                                <field name="check_number" />
+                                <field name="check_payment_date"/>
+                                <label for="amount"/>
+                                <div class="o_row">
+                                    <field name="amount"/>
+                                    <field name="currency_id" options="{'no_open': True, 'no_create': True}"
+                                           groups="base.group_multi_currency"/>
+                                </div>
+
+                            </group>
+                            <group>
+                                <field name="state" invisible="1"/>
+                                <field name="check_issue_date" invisible="1" />
+                                <field name="partner_bank"/>
+                                <field name="bank_id" options="{'no_open': True, 'no_create': True}" attrs="{'readonly':[('state','in',['posted','returned'])]}"/>
+                                <field name="bank_journal_id" options="{'no_open': True, 'no_create': True}" attrs="{'readonly':[('state','in',['posted','returned'])]}"/>
+                                <field name="journal_id" invisible="1"/>
+                                <field name="rec_journal_id" invisible="1"/>
+
+                                <field name="partner_id" invisible="1"/>
+                                <field name="company_id" groups="base.group_multi_company"/>
+
+                                <field name="payment_type" invisible="1"/>
+                                <field name="currency_id" invisible="1"/>
+                                <field name="check_amount_in_words" invisible="0"/>
+                            </group>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="check_payment_form_statusbar_customer" model="ir.ui.view">
+            <field name="name">check.payment.transaction.form</field>
+            <field name="model">check.payment.transaction</field>
+            <field name="arch" type="xml">
+                <form string="Check Payment">
+                    <header>
+
+                        <button type="object" name="action_receive" states="draft" string="Validate"
+                                class="oe_highlight"/>
+                        <button type="object" name="action_deposit" states="received" string="Deposited to Bank" class="oe_highlight"/>
+                        <button type="object" name="action_deposit" attrs="{'invisible':[('refund_customer','=',False)]}" string="Deposited to Bank" class="oe_highlight"/>
+                        <button type="object" name="action_fund_credited" states="deposited" string="Done"
+                                class="oe_highlight"/>
+                        <button type="object" name="action_return_received_check" states="deposited"
+                                string="Returned Bank Checks"/>
+                        <button type="object" name="action_return_received_check2"
+                                string="Returned Customer Checks" attrs="{'invisible':[('refund_customer','=',False)]}"/>
+                        <button type="object" name="action_cancel" states="draft"  string="Cancel"/>
+<!--                        <button type="object" name="rest_draft" states="cancelled,returned" string="Rest To Draft"/>-->
+<!--                        <button type="object" name="rest_draft" attrs="{'invisible':[('state','=','draft')]}"  string="Rest To Draft"/>-->
+                        <button type="object" name="action_endorse" states="received" string="Endorse"/>
+                        <button name="reset_draft" string="RESET TO  DRAFT" type="object" icon="fa-undo" class="btn-warning" />
+
+
+
+                        <field name="state" widget="statusbar"
+                               statusbar_visible="draft,received,endorse,deposited,returned,posted,cancelled"/>
+                    </header>
+                    <sheet>
+
+                        <div class="oe_button_box" name="button_box">
+                            <button class="oe_stat_button" name="button_journal_entries"
+                                    string="Journal Items" type="object"
+                                    icon="fa-bars"/>
+                        </div>
+                        <group>
+                            <group>
+                                <field name="ref" readonly="1"/>
+                                <field name="check_name"/>
+                                <field name="check_number" attrs="{'readonly':[('state','!=','draft')]}"/>
+
+                                <field name="check_payment_date" string="Payment received Date" required="1" attrs="{'readonly':[('state','!=','draft')]}"/>
+                                <label for="amount"/>
+                                <div class="o_row">
+                                    <field name="amount"/>
+                                    <field name="currency_id" options="{'no_open': True, 'no_create': True}"
+                                           groups="base.group_multi_currency"/>
+                                </div>
+                                <field name="receive_date" attrs="{'readonly':[('state','!=','draft')]}"/>
+                                <field name="deposite_date" attrs="{'readonly':[('state','!=','received')],'invisible':[('state','=','draft')]}"/>
+                                <field name="receive_refund_date" attrs="{'readonly':[('state','!=','deposited')],'invisible':[('state','in',['draft','received','posted'])]}"/>
+                                <field name="receive_return_date" attrs="{'readonly':[('state','not in',['deposited','returned'])],'invisible':[('state','in',['draft','received','posted'])]}"/>
+                                <field name="paid_date" attrs="{'readonly':[('state','!=','deposited')],'invisible':[('state','in',['draft','received'])]}"/>
+                                <label for="check_type"/>
+                                <div class="o_row">
+                                    <field name="check_type"/>
+                                    <field name="check_type_date"/>
+                                </div>
+
+                            </group>
+                            <group>
+                                <field name="is_reviewed"/>
+                                <field name="position"/>
+                                <field name="check_issue_date" invisible="1" />
+                                <field name="partner_bank" options="{'no_open': True, 'no_create': True}" />
+                                <field name="bank_id" options="{'no_open': True, 'no_create': True}" attrs="{'readonly':[('state','in',['posted','returned','deposited'])]}"/>
+                                <field name="bank_journal_id" options="{'no_open': True, 'no_create': True}" attrs="{'readonly':[('state','in',['posted','returned','deposited'])]}"/>
+                                <field name="rec_journal_id" widget="selection"
+                                       attrs="{'readonly': [('state', '!=', 'draft')],'required': [('payment_type', '=', 'inbound'),('state', '=', 'draft')],'invisible': ['|',('payment_type', '!=', 'inbound'),('state', '!=', 'draft')]}"/>
+
+                                <field name="dep_journal_id" widget="selection"
+                                       attrs="{'readonly': [('state', '!=', 'received')],'invisible': ['|',('payment_type', '!=', 'inbound'),('state', '!=', 'received')]}"/>
+
+                                <!--<field name="ret_journal_id" widget="selection"-->
+                                       <!--attrs="{'readonly': [('state', '!=', 'deposited')],'invisible': ['|',('payment_type', '!=', 'inbound'),('state', '!=', 'deposited')]}"/>-->
+
+                                <field name="ref_journal_id" widget="selection"
+                                       attrs="{'readonly': [('state', '!=', 'deposited')],'invisible': ['|',('payment_type', '!=', 'inbound'),('state', '!=', 'deposited')]}"/>
+
+                                <label for="partner_id" />
+                                <div>
+                                    <field name="partner_id" context="{'show_address': 1}"
+                                           options="{'always_reload': True,'no_open': True, 'no_create': True}" domain="[('customer_rank','>',0)]" attrs="{'readonly': [('state', '!=', 'draft')]}"/>
+                                </div>
+
+                                <field name="company_id" groups="base.group_multi_company"/>
+                                <field name="payment_type" invisible="1"/>
+                                <field name="refund_customer" invisible="1"/>
+
+                            </group>
+                        </group>
+                        <notebook>
+                            <page string="Journal">
+                                <field name="journal_ids"/>
+                            </page>
+                        </notebook>
+                    </sheet>
+                    <div class="oe_chatter">
+                    <field name="message_follower_ids" widget="mail_followers"/>
+                    <field name="message_ids" widget="mail_thread"/>
+                </div>
+                </form>
+            </field>
+        </record>
+
+        <record id="check_payment_form_statusbar_vendor" model="ir.ui.view">
+            <field name="name">check.payment.transaction.form</field>
+            <field name="model">check.payment.transaction</field>
+            <field name="arch" type="xml">
+                <form string="Check Payment">
+                    <header>
+                        <button type="object" name="action_issue" states="draft" string="Validate" class="oe_highlight"/>
+                        <button type="object" name="action_fund_debited" states="issued" string="Done" class="oe_highlight"/>
+                        <button type="object" name="action_return_issued_check" states="issued" string="Returned Check"/>
+                        <button type="object" name="action_cancel_issue" states="draft" string="Cancel"/>
+<!--                        <button type="object" name="rest_draft" states="cancelled" string="Rest To Draft"/>-->
+                        <button name="reset_draft" string="RESET TO  DRAFT" type="object" icon="fa-undo" class="btn-warning" />
+<!--                        <button name="make_notification" string=" TO  DRAFT" type="object" icon="fa-undo" class="btn-warning" />-->
+
+
+                        <field name="state" widget="statusbar"
+                               statusbar_visible="draft,issued,returned,posted,cancelled"/>
+                    </header>
+                    <sheet>
+
+                        <div class="oe_button_box" name="button_box">
+                            <button class="oe_stat_button" name="button_journal_entries"
+                                    string="Journal Items" type="object"
+                                    icon="fa-bars"/>
+                        </div>
+                        <group>
+                            <group>
+                                <field name="ref" readonly="1"/>
+<!--                                 <field name="book_id" options="{'no_open': True, 'no_create': True}" required="1"/>-->
+<!--                                <field name="serials_filter" invisible="1" />-->
+<!--                                <field name="book_serial" required="1" options="{'no_open': True, 'no_create': True}" domain="[('id','in',serials_filter)]"/>-->
+                                <field name="check_number" force_save="1" attrs="{'readonly':[('state','!=','draft')]}" />
+                                 <field name="check_name"/>
+                                <field name="check_payment_date" string="Payment Issued Date " required="1" attrs="{'readonly':[('state','!=','draft')]}"/>
+                                <label for="amount"/>
+                                <div class="o_row">
+                                    <field name="amount"/>
+                                    <field name="currency_id" options="{'no_open': True, 'no_create': True}"
+                                           groups="base.group_multi_currency"/>
+                                </div>
+                                <field name="issue_date" attrs="{'readonly': [('state', '!=', 'draft')]}"/>
+                                <field name="issue_refund_date" attrs="{'invisible': [('state', 'in', ['draft','posted'])],'readonly': [('state', '!=', 'issued')]}"/>
+                                <field name="paid_date" attrs="{'readonly':[('state','!=','issued')],'invisible':[('state','in',['draft','posted'])]}"/>
+
+                            </group>
+                            <group>
+                                <field name="check_issue_date" invisible="1"/>
+                                <field name="account_analytic_id" options="{'no_open': True, 'no_create': True,'no_edit': True,}"/>
+                                <field name="partner_bank" options="{'no_open': True, 'no_create': True,'no_edit': True,}"/>
+                                <field name="bank_id" options="{'no_open': True, 'no_create': True}" attrs="{'readonly':[('state','in',['posted','returned','deposited'])]}"/>
+                                <field name="bank_journal_id" options="{'no_open': True, 'no_create': True}" attrs="{'readonly':[('state','in',['posted','returned','deposited'])]}"/>
+                                <field name="journal_id" widget="selection"
+                                       attrs="{'readonly': [('state', '!=', 'draft')],'required': [('payment_type', '=', 'outbound')]}"/>
+
+                                <label for="partner_id" />
+                                <div>
+                                    <field name="partner_id" context="{'show_address': 1}"
+                                           options="{'always_reload': True,'no_open': True, 'no_create': True}" attrs="{'readonly': [('state', '!=', 'draft')]}"/>
+                                </div>
+                                 <field name="partner_code"/>
+
+                                <field name="company_id" groups="base.group_multi_company"/>
+                                <field name="payment_type" invisible="1"/>
+                                <field name="currency_id" invisible="1"/>
+                                <field name="check_amount_in_words" invisible="0"/>
+                            </group>
+                        </group>
+                         <notebook>
+                            <page string="Journal">
+                                <field name="journal_ids"/>
+                            </page>
+                        </notebook>
+                    </sheet>
+                    <div class="oe_chatter">
+                    <field name="message_follower_ids" widget="mail_followers"/>
+                    <field name="message_ids" widget="mail_thread"/>
+                </div>
+                </form>
+            </field>
+        </record>
+
+
+        <record id="check_payment_kanban" model="ir.ui.view">
+            <field name="name">check.payment.transaction.kanban</field>
+            <field name="model">check.payment.transaction</field>
+            <field name="arch" type="xml">
+                <kanban class="o_kanban_mobile">
+                    <templates>
+                        <t t-name="kanban-box">
+                            <div t-attf-class="oe_kanban_content oe_kanban_global_click">
+                                <div class="row">
+                                    <div class="col-xs-6">
+                                        <strong>
+                                            <field name="check_name"/>
+                                        </strong>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-xs-12">
+                                        <span>
+                                            <field name="check_number"/>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-xs-6">
+                                        <span>
+                                            <field name="check_payment_date"/>
+                                        </span>
+                                    </div>
+                                    <div class="col-xs-6">
+                                        <span class="pull-right">
+                                            <field name="amount" widget="monetary"/>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                    </templates>
+                </kanban>
+            </field>
+        </record>
+
+        <record id="check_payment_search" model="ir.ui.view">
+            <field name="name">check.payment.transaction.search</field>
+            <field name="model">check.payment.transaction</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="partner_id"/>
+                    <field name="check_name"/>
+                    <field name="ref"/>
+                    <field name="check_number"/>
+                    <field name="issue_date"/>
+                    <field name="check_payment_date"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="view_check_payment_graph" model="ir.ui.view">
+            <field name="name">check.payment.graph</field>
+            <field name="model">check.payment.transaction</field>
+            <field name="arch" type="xml">
+                <graph string="Payments" type="bar" stacked="1">
+                    <field name="partner_id"/>
+                    <field name="journal_id"/>
+                    <field name="rec_journal_id"/>
+                    <field name="amount" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="action_check_payments_receivable" model="ir.actions.act_window">
+            <field name="name">Checks Received</field>
+            <field name="res_model">check.payment.transaction</field>
+            <field name="view_mode">tree,kanban,form,graph</field>
+            <field name="context">{'default_payment_type': 'inbound'}</field>
+            <field name="domain">[('payment_type', '=', 'inbound')]</field>
+            <field name="view_ids"
+                   eval="[(5, 0, 0),
+                (0, 0, {'view_mode': 'tree', 'view_id': ref('check_payment_customer_list')}),
+                (0, 0, {'view_mode': 'form', 'view_id': ref('check_payment_form_statusbar_customer')}),
+                (0, 0, {'view_mode': 'kanban'}),
+                (0, 0, {'view_mode': 'graph'})]"/>
+            <field name="help" type="html">
+                <p class="oe_view_nocontent_create">
+                    Click to receive a check payment
+                </p>
+                <p>
+                    A check payment is a negotiable instrument drawn against deposited funds, to pay a specific entity a
+                    specific amount of funds on demand.
+                </p>
+            </field>
+        </record>
+
+        <record id="action_check_payments_payable" model="ir.actions.act_window">
+            <field name="name">Checks Issued</field>
+            <field name="res_model">check.payment.transaction</field>
+            <field name="view_mode">tree,kanban,form,graph</field>
+            <field name="context">{'default_payment_type': 'outbound'}</field>
+            <field name="domain">[('payment_type', '=', 'outbound')]</field>
+            <field name="view_ids"
+                   eval="[(5, 0, 0),
+                (0, 0, {'view_mode': 'tree', 'view_id': ref('check_payment_vendor_list')}),
+                (0, 0, {'view_mode': 'form', 'view_id': ref('check_payment_form_statusbar_vendor')}),
+                (0, 0, {'view_mode': 'kanban'}),
+                (0, 0, {'view_mode': 'graph'})]"/>
+            <field name="help" type="html">
+                <p class="oe_view_nocontent_create">
+                    Click to issue check to a payment document
+                </p>
+                <p>
+                    A check payment is a negotiable instrument drawn against deposited funds, to pay a specific entity a
+                    specific amount of funds on demand.
+                </p>
+            </field>
+        </record>
+
+        <menuitem action="action_check_payments_receivable" id="menu_action_check_payments_receivable"
+                  parent="account.menu_finance_receivables" sequence="200"/>
+        <menuitem action="action_check_payments_payable" id="menu_action_check_payments_payable"
+                  parent="account.menu_finance_payables" sequence="200"/>
+
+
+    </data>
+</odoo>

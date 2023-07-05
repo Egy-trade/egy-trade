@@ -16,7 +16,11 @@ class SaleOrder(models.Model):
         ('cancel', 'Cancelled'),
     ], string='Status', readonly=True, copy=False, index=True, tracking=3, default='draft')
     follower_user_ids = fields.Many2many('res.users', compute="_get_follower_user_ids", store=True)
-
+    mep_contractor = fields.Many2one('res.partner', string='MEP Contractor')
+    arch_consultant = fields.Many2one('res.partner', string='Architecture Consultant')
+    electrical_consultant = fields.Many2one('res.partner', string='Electrical Consultant')
+    project = fields.Char()
+    
     @api.depends('message_follower_ids')
     def _get_follower_user_ids(self):
         for rec in self:
@@ -71,6 +75,9 @@ class SaleOrderLine(models.Model):
     product_power = fields.Char(related='product_id.power')
     product_ip = fields.Char(related='product_id.ip')
     product_lumen = fields.Char(related='product_id.lumen')
+    manufacturer = fields.Char(related='product_id.manufacturer')
+    origin = fields.Char(related='product_id.origin')
+    sn = fields.Char('SN')
 
     @api.constrains('discount')
     def _check_discount(self):

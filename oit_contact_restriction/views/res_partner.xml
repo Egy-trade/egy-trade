@@ -1,0 +1,37 @@
+<data>
+    <record id="inherit_res_partner_form" model="ir.ui.view">
+        <field name="name">inherit.res.partner.form</field>
+        <field name="model">res.partner</field>
+        <!--<field name="groups_id" eval="[(4, ref(''))]"/>-->
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page name="owner_allowed_partner" string="Owner / Allowed Partner">
+                    <group>
+                        <group>
+                            <field name="allowed_users_ids" widget="many2many_tags"/>
+                        </group>
+                        <group>
+                            <field name="owner_users_ids" widget="many2many_tags"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+    
+    <record id="inherit_res_partner_search" model="ir.ui.view">
+        <field name="name">inherit.res.partner.search</field>
+        <field name="model">res.partner</field>
+        <!--<field name="groups_id" eval="[(4, ref(''))]"/>-->
+        <field name="inherit_id" ref="base.view_res_partner_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='type_company']" position="after">
+                <filter string="Is User" name="filter_is_user" domain="[('is_user','=',True)]"/>
+                <filter string="Not User" name="filter_not_user" domain="[('is_user','=',False)]"/>
+            </xpath>
+
+        </field>
+    </record>
+    
+</data>

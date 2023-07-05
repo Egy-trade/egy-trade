@@ -55,10 +55,10 @@
             <field name="partner_id" position="after">
                 <field name="partner_allow_ids" widget="many2many_tags" invisible="1"/>
             </field>
-            <field name="partner_id" position="attributes">
-                <attribute name="domain">[('customer_rank','>',0)]</attribute>
+<!--            <field name="partner_id" position="attributes">-->
+<!--                <attribute name="domain">[('customer_rank','>',0)]</attribute>-->
 <!--                <attribute name="domain">[('id', 'in', partner_allow_ids)]</attribute>-->
-            </field>
+<!--            </field>-->
             <xpath expr="//tree/field[@name='tax_id']" position="attributes">
                 <attribute name="attrs">{'readonly': [('state', 'not in', ['draft'])]}</attribute>
             </xpath>
@@ -68,13 +68,28 @@
             <xpath expr="//tree/field[@name='discount']" position="attributes">
                 <attribute name="attrs">{'readonly': [('state', 'not in', ['draft'])]}</attribute>
             </xpath>
-            <xpath expr="//tree/field[@name='name']" position="after">
-                <field name="product_vendor"/>
-                <field name="product_family_name"/>
-                <field name="product_power"/>
-                <field name="product_ip"/>
-                <field name="product_lumen"/>
+            <xpath expr="//tree/field[@name='product_id']" position="before">
+                <field name="sn"/>
             </xpath>
+            <xpath expr="//tree/field[@name='name']" position="after">
+                <field name="product_vendor" optional="hide"/>
+                <field name="product_family_name" optional="hide"/>
+                <field name="product_power" optional="hide"/>
+                <field name="product_ip" optional="hide"/>
+                <field name="product_lumen" optional="hide"/>
+                <field name="manufacturer" optional="show"/>
+                <field name="origin" optional="show"/>
+            </xpath>
+
+            <xpath expr="//group[@name='sales_person']" position="after">
+                <group string="Project Details">
+                    <field name="project" attrs="{'readonly':[('state','!=','draft')]}"/>
+                    <field name="mep_contractor" attrs="{'readonly':[('state','!=','draft')]}"/>
+                    <field name="arch_consultant" attrs="{'readonly':[('state','!=','draft')]}"/>
+                    <field name="electrical_consultant" attrs="{'readonly':[('state','!=','draft')]}"/>
+                </group>
+            </xpath>
+
         </field>
     </record>
 
@@ -85,15 +100,35 @@
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//field[@name='amount_total']" position="after">
+            <xpath expr="//group[@name='sale_total']" position="inside">
                 <label for="margin" groups="egy-trade_custom.group_product_logistics"/>
                 <div class="text-nowrap" groups="egy-trade_custom.group_product_logistics">
                     <field name="margin" class="oe_inline"/>
-                    <span class="oe_inline" attrs="{'invisible': [('amount_untaxed', '=', 0)]}">
+                    <span class="oe_inline" >
                         (<field name="margin_percent" nolabel="1" class="oe_inline" widget="percentage"/>)
                     </span>
                 </div>
             </xpath>
+        </field>
+    </record>
+
+    <record id="inherit_sale_order_search" model="ir.ui.view">
+        <field name="name">inherit.sale.order.search</field>
+        <field name="model">sale.order</field>
+        <!--<field name="groups_id" eval="[(4, ref(''))]"/>-->
+        <field name="inherit_id" ref="sale.view_sales_order_filter"/>
+        <field name="arch" type="xml">
+            <field name="name" position="after">
+                <field name="project"/>
+            </field>
+            <xpath expr="//filter[@name='order_month']" position="after">
+                <separator/>
+                <filter string="Project" name="group_by_project" context="{'group_by':'project'}"/>
+                <filter string="MEP Contractor" name="group_by_mep_contractor" context="{'group_by':'mep_contractor'}"/>
+                <filter string="Architecture Consultant" name="group_by_arch_consultant" context="{'group_by':'arch_consultant'}"/>
+                <filter string="Electrical Consultant" name="group_by_electrical_consultant" context="{'group_by':'electrical_consultant'}"/>
+            </xpath>
+
         </field>
     </record>
 

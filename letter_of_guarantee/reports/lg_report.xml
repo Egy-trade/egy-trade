@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <report
+                id="report_lg"
+                string="LG Summary "
+                model="letter.guarantee.report"
+                report_type="qweb-pdf"
+                file="letter_of_guarantee.template_lg"
+                name="letter_of_guarantee.template_lg"
+        />
+
+        <template id="template_lg">
+            <t t-call="web.html_container">
+                <t t-foreach="docs" t-as="o">
+                    <t t-call="web.external_layout">
+                        <div class="page">
+                            <br/>
+                            <h2>Letter Of Guarantee</h2>
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>
+                                            <strong>Type</strong>
+                                        </th>
+                                        <th>
+                                            <strong>Name</strong>
+                                        </th>
+                                        <th>
+                                            <strong>Project Name</strong>
+                                        </th>
+                                        <th>
+                                            <strong>Bank Name</strong>
+                                        </th>
+                                        <th>
+                                            <strong>Currency</strong>
+                                        </th>
+                                        <t t-if="o.type == 'initial'">
+                                            <th>
+                                                <strong>Bank Expense</strong>
+                                            </th>
+                                        </t>
+                                        <t t-if="o.type == 'final'">
+                                            <th>
+                                                <strong>Project Cost</strong>
+                                            </th>
+                                        </t>
+                                        <th>
+                                            <strong>Amount</strong>
+                                        </th>
+                                        <th>
+                                            <strong>Issue Date</strong>
+                                        </th>
+                                        <th>
+                                            <strong>Expiry Date</strong>
+                                        </th>
+
+                                    </tr>
+                                </thead>
+                                <t t-set="amount" t-value="0"/>
+                                <tbody>
+                                    <t t-foreach="o.line_ids" t-as="line">
+                                        <t t-set="amount" t-value="amount + line.amount"/>
+
+                                        <tr>
+                                            <td>
+                                                <span t-field="line.type"/>
+                                            </td>
+                                            <td>
+                                                <span t-field="line.name"/>
+                                            </td>
+                                            <td>
+                                                <span t-field="line.project"/>
+                                            </td>
+                                            <td>
+                                                <span t-field="line.bank_id.name"/>
+                                            </td>
+                                            <td>
+                                                <span t-field="line.currency_id"/>
+                                            </td>
+                                             <td>
+                                                <span t-field="line.cost"/>
+                                            </td>
+                                            <td>
+                                                <span t-field="line.amount"/>
+                                            </td>
+
+                                            <td>
+                                                <span t-field="line.date_issue"/>
+                                            </td>
+                                            <td>
+                                                <span t-field="line.expire_date"/>
+                                            </td>
+
+
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                            <table style="float:right;width:30%;" border="1">
+                                <tr>
+                                    <td style="font-size: 22px;">
+                                        <strong>
+                                            Total
+                                        </strong>
+
+                                    </td>
+                                    <td style="font-size: 20px;">
+                                        <span t-esc="amount"/>
+
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </t>
+                </t>
+            </t>
+        </template>
+    </data>
+</odoo>
