@@ -12,7 +12,9 @@ class PartnerDocument(models.Model):
     expiration_date = fields.Date(string='Expiration Date')
     document = fields.Binary(string='Document')
 
-    partner_id = fields.Many2one(string='Partner')
+    partner_id = fields.Many2one(
+        'res.partner',
+        string='Partner')
 
     @api.model
     def create(self, vals_list):
