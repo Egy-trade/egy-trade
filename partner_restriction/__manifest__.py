@@ -20,3 +20,4 @@
     'auto_install': False,
     'uninstall_hook': "restore_access_rules",
 }
+
