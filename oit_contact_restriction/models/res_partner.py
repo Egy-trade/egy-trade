@@ -36,6 +36,7 @@ class ResPartner(models.Model):
             raise ValidationError('You must have create contact group !')
         res._onchange_allowed_users_ids()
         res._onchange_owner_users_ids()
+        self.env['ir.rule'].clear_caches()
         return res
 
     @api.constrains('allowed_users_ids', 'write_date')
