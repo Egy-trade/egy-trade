@@ -1,0 +1,8 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_initial_letter_guarantee,initial.letter.guarantee,model_initial_letter_guarantee,account.group_account_user,1,1,1,1
+access_final_letter_guarantee,final.letter.guarantee,model_final_letter_guarantee,account.group_account_user,1,1,1,1
+access_initial_request_letter_guarantee,initial.request.letter.guarantee,model_initial_request_letter_guarantee,account.group_account_user,1,1,1,1
+access_final_request_letter_guarantee,final.request.letter.guarantee,model_final_request_letter_guarantee,account.group_account_user,1,1,1,1
+access_letter_guarantee_report,letter.guarantee.report,model_letter_guarantee_report,account.group_account_user,1,1,1,1
+access_letter_guarantee_report_line,letter.guarantee.report.line,model_letter_guarantee_report_line,account.group_account_user,1,1,1,1
+access_bank_facilities,bank.facilities,model_bank_facilities,account.group_account_user,1,1,1,1

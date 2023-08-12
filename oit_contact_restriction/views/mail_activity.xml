@@ -1,0 +1,13 @@
+<data>
+    <record id="inherit_mail_activity_type_form" model="ir.ui.view">
+        <field name="name">inherit.mail.activity.type.form</field>
+        <field name="model">mail.activity.type</field>
+        <!--<field name="groups_id" eval="[(4, ref(''))]"/>-->
+        <field name="inherit_id" ref="mail.mail_activity_type_view_form"/>
+        <field name="arch" type="xml">
+            <field name="icon" position="after">
+                <field name="add_allowed_partner"/>
+            </field>
+        </field>
+    </record>
+</data>

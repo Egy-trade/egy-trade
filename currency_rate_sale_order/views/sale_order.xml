@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="sale_order_currency_rate_form" model="ir.ui.view">
+            <field name="name">sale.order.currency.rate.form</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="sale.view_order_form"/>
+            <field name="arch" type="xml">
+                <field name="partner_shipping_id" position="after">
+                    <field name="currency_is_default" invisible="1"/>
+                    <field name="currency_rate_now" string="Latest Currency" attrs="{'invisible': [('currency_is_default','=',True)]}"/>
+                    <field name="currency_rate_confirm" string="Quotation Currency" readonly="1" attrs="{'invisible': [('currency_is_default','=',True)]}"/>
+                    <label for="currency_state" attrs="{'invisible': [('currency_is_default','=',True)]}"/>
+                    <div  class="o_row" attrs="{'invisible': [('currency_is_default','=',True)]}">
+                        <field name="currency_state" string="State" readonly="1" />
+                        <button name="action_update_prices" type="object" string=" Update Currency"
+                                help="Recompute all prices based on Current Price" class="btn-link mb-1 px-0"
+                                icon="fa-refresh"
+                                confirm="This will update all unit prices based on the currently Prices."
+                                attrs="{'invisible': ['|',('currency_state', '=', 'match'), ('state', 'in', ['sale', 'done', 'cancel'])]}"/>
+                    </div>
+
+                </field>
+            </field>
+        </record>
+
+    </data>
+</odoo>

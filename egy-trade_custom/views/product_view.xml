@@ -24,6 +24,8 @@
                         <field name="ip"/>
                         <field name="led_voltage"/>
                         <field name="lumen"/>
+                        <field name="manufacturer"/>
+                        <field name="origin"/>
                     </group>
                 </group>
                 <group name="internal_notes" string="Internal Notes">
@@ -69,9 +71,14 @@
                 <field name="ip"/>
                 <field name="led_voltage"/>
                 <field name="driver_manufacture"/>
+                <field name="manufacturer"/>
+                <field name="origin"/>
             </xpath>
             <xpath expr="//group" position="inside">
                 <separator/>
+
+                <filter string="Manufacturer" name="groupby_product_manufacturer" context="{'group_by':'manufacturer'}"/>
+                <filter string="Origin" name="groupby_product_origin" context="{'group_by':'origin'}"/>
                 <filter string="Manufacture" name="groupby_vendor_id" context="{'group_by':'vendor_id'}"/>
                 <filter string="Family Name" name="groupby_family_name" context="{'group_by':'family_name'}"/>
                 <filter string="Color" name="groupby_product_color" context="{'group_by':'color'}"/>

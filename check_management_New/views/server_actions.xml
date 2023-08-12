@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="check_action_reviewed_action_server" model="ir.actions.server">
+            <field name="name">Reviewed</field>
+            <field name="type">ir.actions.server</field>
+            <field name="model_id" ref="model_check_payment_transaction"/>
+            <field name="binding_model_id" ref="model_check_payment_transaction"/>
+            <field name="state">code</field>
+            <field name="code">
+if records:
+    for rec in records:
+        action = rec.action_reviewed()
+            </field>
+        </record>
+
+        <record id="check_action_receive_action_server" model="ir.actions.server">
+            <field name="name">Validate Receive</field>
+            <field name="type">ir.actions.server</field>
+            <field name="model_id" ref="model_check_payment_transaction"/>
+            <field name="binding_model_id" ref="model_check_payment_transaction"/>
+            <field name="state">code</field>
+            <field name="code">
+
+if records:
+    action = records.check_server_action(records,'receive')
+            </field>
+    </record>
+
+    <record id="check_payment_validate_action_server" model="ir.actions.server">
+            <field name="name">Validate Issue</field>
+            <field name="type">ir.actions.server</field>
+            <field name="model_id" ref="model_check_payment_transaction"/>
+            <field name="binding_model_id" ref="model_check_payment_transaction"/>
+            <field name="state">code</field>
+            <field name="code">
+
+if records:
+    action = records.check_server_action(records,'issue')
+
+            </field>
+    </record>
+
+
+        <record id="check_payment_done_issue_action_server" model="ir.actions.server">
+            <field name="name">Done Issue</field>
+            <field name="type">ir.actions.server</field>
+            <field name="model_id" ref="model_check_payment_transaction"/>
+            <field name="binding_model_id" ref="model_check_payment_transaction"/>
+            <field name="state">code</field>
+            <field name="code">
+
+if records:
+    action = records.check_server_action(records,'done_issue')
+            </field>
+    </record>
+
+    <record id="check_payment_deposit_action_server" model="ir.actions.server">
+            <field name="name">Make Deposited to Bank</field>
+            <field name="type">ir.actions.server</field>
+            <field name="model_id" ref="model_check_payment_transaction"/>
+            <field name="binding_model_id" ref="model_check_payment_transaction"/>
+            <field name="state">code</field>
+            <field name="code">
+if records:
+    action = records.check_server_action(records,'bank_deposit')
+
+            </field>
+        </record>
+    <record id="check_payment_done_action_server" model="ir.actions.server">
+            <field name="name">Make Done</field>
+            <field name="type">ir.actions.server</field>
+            <field name="model_id" ref="model_check_payment_transaction"/>
+            <field name="binding_model_id" ref="model_check_payment_transaction"/>
+            <field name="state">code</field>
+            <field name="code">
+if records:
+    action = records.check_server_action(records,'make_done')
+
+            </field>
+        </record>
+    </data>
+</odoo>

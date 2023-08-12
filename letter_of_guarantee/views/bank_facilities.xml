@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<odoo>
+    <data>
+        <record id="bank_facilities_view_form" model="ir.ui.view">
+            <field name="name">bank.facilities.form</field>
+            <field name="model">bank.facilities</field>
+            <field name="arch" type="xml">
+                <form string="Bank Facilities">
+                    <header>
+                        <button name="button_confirm" string="Confirm" type="object" states="draft"
+                                class="btn-primary"/>
+
+                        <field name="state" widget="statusbar"/>
+                    </header>
+                    <sheet>
+
+                        <group>
+                            <group>
+                                <field name="bank_account_id" options="{'no_create':True}"
+                                       attrs="{'readonly':[('state','!=','draft')]}"/>
+                                <field name="initial_balance" widget="monetary"
+                                       attrs="{'readonly':[('state','!=','draft')]}"
+                                       options="{'currency_field': 'currency_id'}"/>
+                                <field name="current_balance" widget="monetary"
+                                       attrs="{'readonly':[('state','!=','draft')]}"
+                                       options="{'currency_field': 'currency_id'}"/>
+                                <field name="remaining" widget="monetary" attrs="{'readonly':[('state','!=','draft')]}"
+                                       options="{'currency_field': 'currency_id'}"/>
+                            </group>
+                            <group>
+                                <field name="type" attrs="{'readonly':[('state','!=','draft')]}" widget="radio"/>
+                                <field name="start_date" attrs="{'readonly':[('state','!=','draft')]}"/>
+
+                                <field name="end_date" attrs="{'readonly':[('state','!=','draft')]}"/>
+                            </group>
+                        </group>
+                    </sheet>
+                    <div class="oe_chatter">
+                        <field name="message_follower_ids" widget="mail_followers"/>
+                        <field name="activity_ids" widget="mail_activity"/>
+                        <field name="message_ids" widget="mail_thread"/>
+                    </div>
+                </form>
+            </field>
+        </record>
+
+        <record id="bank_facilities_view_tree" model="ir.ui.view">
+            <field name="name">bank.facilities.tree</field>
+            <field name="model">bank.facilities</field>
+            <field name="arch" type="xml">
+                <tree string="Bank Facilities">
+                    <field name="type"/>
+                    <field name="bank_account_id"/>
+                    <field name="start_date"/>
+                    <field name="end_date"/>
+                    <field name="initial_balance"/>
+                    <field name="current_balance"/>
+                    <field name="remaining"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="bank_facilities_action" model="ir.actions.act_window">
+            <field name="name">Bank Facilities</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">bank.facilities</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+
+        <menuitem id="menu_bank_facilities"
+                  name="Bank Facilities"
+                  sequence="120"
+                  parent="account.account_account_menu"
+                  action="bank_facilities_action"/>
+
+
+    </data>
+</odoo>

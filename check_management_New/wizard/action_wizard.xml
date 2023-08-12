@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="action_check_wizard_form_id" model="ir.ui.view">
+            <field name="name">action.check.wizard.form</field>
+            <field name="model">action.check.wizard</field>
+            <field name="arch" type="xml">
+                <form string="Close">
+                    <sheet>
+                        <group>
+                          <group col="2">
+                            <field name="date"  />
+                            <field name="name"  />
+                          </group>
+                            <group col="1">
+                            <field name="check_ids" options="{'no_create': True, 'no_open': True}"  invisible="1"/>
+
+                        </group>
+                    </group>
+
+
+                    </sheet>
+                    <footer>
+                        <button name="action_close" string="Confirm" type="object" class="oe_highlight"/>
+                        or
+                        <button string="Cancel" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+        <record id="action_action_check_wizard" model="ir.actions.act_window">
+            <field name="name">Action Check</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">action.check.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+
+            <field name="help" type="html">
+              <p class="oe_view_nocontent_create">
+                <!-- Add Text Here -->
+              </p><p>
+                <!-- More details about what a user can do with this object will be OK -->
+              </p>
+            </field>
+        </record>
+
+
+    </data>
+</odoo>

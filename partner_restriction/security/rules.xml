@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<odoo>
+
+    <record id="group_owner_restrict" model="res.groups">
+        <field name="name">Partner Owner Restrict</field>
+    </record>
+    <!--    <record id="group_allow_restrict" model="res.groups">-->
+    <!--        <field name="name">Partner Allow Restrict</field>-->
+    <!--    </record>-->
+
+    <!--    <record id="rule_owner_restrict" model="ir.rule">-->
+    <!--        <field name="name">Partner Owner</field>-->
+    <!--        <field name="model_id" ref="base.model_res_partner"/>-->
+    <!--        <field name="domain_force">[('owner_user', '=', user.id)]</field>-->
+    <!--        <field name="groups" eval="[(4, ref('partner_restriction.group_owner_restrict'))]"/>-->
+    <!--        <field name="perm_read" eval="True"/>-->
+    <!--        <field name="perm_write" eval="True"/>-->
+    <!--        <field name="perm_create" eval="True"/>-->
+    <!--        <field name="perm_unlink" eval="True"/>-->
+    <!--    </record>-->
+
+    <record id="rule_crm_restrict" model="ir.rule">
+        <field name="name">Crm Owner</field>
+        <field name="model_id" ref="model_crm_lead"/>
+        <field name="domain_force">[('partner_id','in',user.partner_res_ids.ids)]</field>
+        <field name="groups" eval="[(4, ref('partner_restriction.group_owner_restrict'))]"/>
+    </record>
+    <record id="rule_sale_restrict" model="ir.rule">
+        <field name="name">Sale Owner</field>
+        <field name="model_id" ref="model_sale_order"/>
+        <field name="domain_force">[('partner_id','in',user.partner_res_ids.ids),('company_id', 'in', company_ids)]</field>
+        <field name="groups" eval="[(4, ref('partner_restriction.group_owner_restrict'))]"/>
+    </record>
+</odoo>

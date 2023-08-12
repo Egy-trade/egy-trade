@@ -1,0 +1,2 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_product_analysis,sale_order_product_pricing.product.analysis,model_product_analysis,,1,1,1,1

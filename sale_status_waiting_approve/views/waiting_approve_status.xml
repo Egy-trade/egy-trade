@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<odoo><record model="ir.ui.view" id="sale_order_waiting_approve">
+            <field name="name">Sale Order</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref = "sale.view_order_form"/>
+            <field name="arch" type="xml">
+                
+                <xpath expr="//form/header" position="inside">
+                    <button name="action_approve" id="action_approve"  string="Approve" class="btn-primary" type="object" attrs="{'invisible': [('state', 'not in', ['waiting_approve'])]}"/>
+
+
+                </xpath>
+
+                
+            </field>
+        </record>
+	
+
+    <record id="action_sale_order_waiting_approve" model="ir.actions.act_window">
+        <field name="name">Waiting Approve</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">sale.order</field>
+        <field name="view_id" ref="sale.view_quotation_tree_with_onboarding"/>
+        <field name="view_mode">tree,kanban,form,calendar,pivot,graph,activity</field>
+        <field name="domain">[('state', '=', 'waiting_approve')]</field>
+        <field name="context">{'default_state': 'waiting_approve'}</field>
+        
+    </record>
+	
+
+
+    <menuitem id="menu_sale_order_waiting_approve"
+        action="action_sale_order_waiting_approve"
+        parent="sale.sale_order_menu"
+        groups="group_sale_order_waiting_approve"
+        sequence="1"/>
+
+  
+</odoo>

@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="check_view_account_payment_form" model="ir.ui.view">
+            <field name="name">account.payment.check</field>
+            <field name="model">account.payment</field>
+            <field name="inherit_id" ref="account.view_account_payment_form"/>
+            <field name="arch" type="xml">
+<!--                <xpath expr="//field[@name='currency_id']" position="attributes">-->
+<!--                    <attribute name="groups"></attribute>-->
+<!--                </xpath>-->
+
+                <xpath expr="//field[@name='date']" position="before">
+                    <field name="mount_text"/>
+                    <field name="hide_check_payment" invisible="1"/>
+                </xpath>
+                <xpath expr="//form/sheet" position="inside">
+
+                    <notebook>
+                        <page string="Check Information" attrs="{'invisible': [('hide_check_payment', '=', True)]}">
+                            <field name="check_payment_transaction_ids" nolabel="1" widget="one2many_list" mode="tree,kanban"
+                                context="{'default_amount': amount,
+                                    'default_partner_id': partner_id, 'default_journal_id': journal_id,
+                                    'default_payment_type': payment_type}">
+                                <tree string="Check Information" editable="bottom">
+
+                                    <field name="check_name"/>
+<!--                                    <field name="book_id" attrs="{'column_invisible': [('parent.payment_type', '!=', 'outbound')]}" />-->
+<!--                                     <field name="serials_filter" invisible="1" />-->
+<!--                                <field name="book_serial" required="1" attrs="{'column_invisible': [('parent.payment_type', '!=', 'outbound')]}"-->
+<!--                                       options="{'no_open': True, 'no_create': True}" domain="[('id','in',serials_filter)]"/>-->
+                                <field name="check_number" force_save="1" />
+                                    <field name="check_number" force_save=""/>
+                                    <field name="check_payment_date"/>
+                                    <field name="amount"/>
+                                    <field name="check_issue_date"/>
+                                    <field name="bank_id" options="{'no_open': True, 'no_create': True}"/>
+                                    <field name="bank_journal_id" options="{'no_open': True, 'no_create': True}"/>
+                                    <field name="partner_bank" options="{'no_open': True, 'no_create': True}"/>
+
+                                    <field name="partner_id"  options="{'no_open': True, 'no_create': True}" invisible="1"/>
+                                    <field name="currency_id" options="{'no_open': True, 'no_create': True}"  />
+                                    <field name="journal_id"  options="{'no_open': True, 'no_create': True}" invisible="1"/>
+
+                                    <field name="check_type" invisible="0"/>
+                                    <field name="state" invisible="1"/>
+                                    <field name="payment_type" invisible="1"/>
+
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                </xpath>
+
+
+            </field>
+        </record>
+        <record id="check_view_account_payment_register_form" model="ir.ui.view">
+            <field name="name">account.payment.register.check</field>
+            <field name="model">account.payment.register</field>
+            <field name="inherit_id" ref="account.view_account_payment_register_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='journal_id']" position="after">
+                    <field name="hide_check_payment" invisible="1"/>
+                </xpath>
+                   <xpath expr="//form" position="inside">
+
+                    <notebook>
+                        <page string="Check Information">
+                            <field name="check_payment_transaction_ids" nolabel="1" widget="one2many_list" mode="tree,kanban"
+                                context="{'default_amount': amount,
+                                    'default_partner_id': partner_id, 'default_journal_id': journal_id,
+                                    'default_payment_type': payment_type}">
+                                <tree string="Check Information" editable="bottom">
+
+                                    <field name="check_name"/>
+                                    <field name="check_number"/>
+                                    <field name="check_payment_date"/>
+                                    <field name="amount"/>
+                                    <field name="check_issue_date"/>
+                                    <field name="bank_id" options="{'no_open': True, 'no_create': True}"/>
+                                    <field name="bank_journal_id" options="{'no_open': True, 'no_create': True}"/>
+                                    <field name="partner_bank" options="{'no_open': True, 'no_create': True}"/>
+
+                                    <field name="partner_id"  options="{'no_open': True, 'no_create': True}" invisible="1"/>
+                                    <field name="currency_id" options="{'no_open': True, 'no_create': True}"  groups="base.group_multi_currency"/>
+                                    <field name="journal_id"  options="{'no_open': True, 'no_create': True}" invisible="1"/>
+
+                                    <field name="check_type" invisible="0"/>
+                                    <field name="state" invisible="1"/>
+                                    <field name="payment_type" invisible="1"/>
+
+                                </tree>
+                            </field>
+
+
+
+
+<!--                            <field name="check_payment_transaction_ids" />-->
+<!--                                <tree string="Check Information" editable="bottom">-->
+
+<!--                                    <field name="check_name"/>-->
+<!--                                    <field name="check_number"/>-->
+<!--                                    <field name="check_payment_date"/>-->
+<!--                                    <field name="amount"/>-->
+<!--                                    <field name="check_issue_date"/>-->
+<!--                                    <field name="bank_journal_id" options="{'no_open': True, 'no_create': True}"/>-->
+
+<!--                                    <field name="partner_id"  options="{'no_open': True, 'no_create': True}" invisible="1"/>-->
+<!--                                    <field name="currency_id" options="{'no_open': True, 'no_create': True}"  groups="base.group_multi_currency"/>-->
+<!--                                    <field name="journal_id"  options="{'no_open': True, 'no_create': True}" invisible="1"/>-->
+
+<!--                                    <field name="state" invisible="1"/>-->
+<!--                                    <field name="payment_type" invisible="1"/>-->
+
+<!--                                </tree>-->
+<!--                            </field>-->
+                        </page>
+                    </notebook>
+                </xpath>
+
+            </field>
+        </record>
+
+    </data>
+</odoo>

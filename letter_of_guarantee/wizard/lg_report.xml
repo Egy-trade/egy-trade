@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<odoo>
+    <data>
+        <record id="request_letter_guarantee_report" model="ir.ui.view">
+            <field name="name">letter.guarantee.form</field>
+            <field name="model">letter.guarantee.report</field>
+            <field name="arch" type="xml">
+                <form string="LG Report">
+                    <group>
+                        <group>
+                            <field name="start_date"/>
+                            <field name="type"/>
+                        </group>
+                        <group>
+                            <field name="end_date"/>
+
+
+                        </group>
+                    </group>
+                    <field name="line_ids" readonly="True">
+                        <tree editable="top">
+                            <field name="type"/>
+                            <field name="name"/>
+                            <field name="project"/>
+                            <field name="bank_id"/>
+                            <field name="currency_id"/>
+                            <field name="amount" sum="Total Amount"/>
+                            <field name="date_issue"/>
+                            <field name="expire_date"/>
+                        </tree>
+                    </field>
+                    <footer>
+                        <button name="action_print_lg_report" string="Print" type="object" default_focus="1"
+                                class="oe_highlight"/>
+                        <button string="Cancel" class="btn btn-secondary" special="cancel"/>
+
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="request_letter_guarantee_report_action" model="ir.actions.act_window">
+            <field name="name">LG Report</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">letter.guarantee.report</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+
+        </record>
+
+        <menuitem id="menu_request_letter_guarantee_report"
+                  name="LG Report"
+                  groups="letter_of_guarantee.initial_lg,letter_of_guarantee.final_lg"
+                  parent="account.account_reports_management_menu"
+                  action="request_letter_guarantee_report_action"/>
+
+
+    </data>
+</odoo>

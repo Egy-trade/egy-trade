@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<odoo>
+    <record id="view_account_journal_form_inherit_lg" model="ir.ui.view">
+        <field name="name">account.journal.form.inherit.lg</field>
+        <field name="model">account.journal</field>
+        <field name="inherit_id" ref="account.view_account_journal_form"/>
+        <field name="arch" type="xml">
+            <field name="bank_id" position="after">
+                <field name="is_lg"/>
+            </field>
+            <xpath expr="//page[@name='bank_account']" position="inside">
+                <group string="خطابات الضمان" attrs="{'invisible': [('is_lg','=',False)]}">
+                    <group>
+                        <label for="cover_percentage" style="color:teal;" name="cover_percentage"/>
+                        <div>
+                            <field name="cover_percentage" attrs="{'required': [('is_lg','=',True)]}"/>
+                        </div>
+                    </group>
+                    <group></group>
+                    <group>
+                        <field name="lg_credit_account_id" attrs="{'required': [('is_lg','=',True)]}"/>
+                        <field name="bank_credit_account_id" attrs="{'required': [('is_lg','=',True)]}"/>
+                        <field name="tax_credit_account_id" attrs="{'required': [('is_lg','=',True)]}"/>
+                        <field name="lg_account_id" attrs="{'required': [('is_lg','=',True)]}"/>
+                    </group>
+                    <group>
+                        <field name="final_account_id" attrs="{'required': [('is_lg','=',True)]}"/>
+                        <field name="final_lg_account_id" attrs="{'required': [('is_lg','=',True)]}"/>
+                        <field name="project_account_id" attrs="{'required': [('is_lg','=',True)]}"/>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

@@ -1,0 +1,57 @@
+<odoo>
+    <record id="paper_format_settings" model="ir.ui.view">
+        <field name="name">Paper format ff</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="0"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[hasclass('settings')]//div[@ id = 'companies']" position="after">
+                <div data-key="check_notification">
+                <h2>Check Notification</h2>
+                <div class="row mt16 o_settings_container">
+                    <div class="col-12 col-lg-6 o_setting_box">
+                        <div class="o_setting_right_pane">
+                            <span class="o_form_label">Description for Check Received </span>
+                            <div class="text-muted">
+                                Please Enter Description for Check Received in  Notification
+                            </div>
+                            <div class="o_row">
+                                <div class="mt8">
+                                    <field name="description_check_received" placeholder="Description Check Received " widget="text"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-lg-6 o_setting_box " style="margin-top:65px">
+                        <div class="o_setting_right_pane">
+                            <span class="o_form_label">Reminders</span>
+                            <div class="text-muted">
+                                Choose Reminder
+                            </div>
+                            <div class="o_row">
+                                <div class="mt8">
+                                    <field name="reminder_ids" widget="many2many_tags" placeholder="Reminders"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-6 o_setting_box">
+                        <div class="o_setting_right_pane">
+                            <span class="o_form_label">Description for Check Issued</span>
+                            <div class="text-muted">
+                                Please Enter Description for Check Issued in  Notification
+                            </div>
+                            <div class="o_row">
+                                <div class="mt8">
+                                    <field name="description_check_issued" placeholder="Description Check Issued" widget="text"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>
