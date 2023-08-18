@@ -3,6 +3,7 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, UserError
 
+
 class LetterGuarantee(models.Model):
     _name = 'letter.guarantee'
     _inherit = ['portal.mixin', 'mail.thread', 'mail.activity.mixin']
