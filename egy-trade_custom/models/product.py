@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
 from datetime import date
-import pandas as pd
+# import pandas as pd
 
 
 class MountingType(models.Model):

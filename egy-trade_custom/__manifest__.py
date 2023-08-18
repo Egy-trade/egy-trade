@@ -35,5 +35,5 @@
 
     ],
     'application': True,
-    'external_dependencies': {'python': ['pandas']}
+    # 'external_dependencies': {'python': ['pandas']}
 }
