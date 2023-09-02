@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_product_only_form_view_inherit" model="ir.ui.view">
+        <field name="name">product.product.view.form.inherit</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//label[@for='standard_price']" position="attributes">
+               <attribute name="groups">product_customization.show_purchase_and_cost_product</attribute>
+            </xpath>
+            <xpath expr="//div[@name='standard_price_uom']" position="attributes">
+               <attribute name="groups">product_customization.show_purchase_and_cost_product</attribute>
+            </xpath>
+            <xpath expr="//page[@name='purchase']" position="attributes">
+               <attribute name="groups">product_customization.show_purchase_and_cost_product</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>
