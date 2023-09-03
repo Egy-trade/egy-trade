@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="revision_reason_view_form" model="ir.ui.view">
+            <field name="name">revision.reason.form</field>
+            <field name="model">revision.reason</field>
+            <field name="arch" type="xml">
+                <form string="">
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="sale_id" invisible="1"/>
+                        </group>
+                    </sheet>
+                    <footer>
+                        <button string="Confirm" name="action_confirm" class="btn-primary" type="object"/>
+                        <button string="Cancel" class="btn-default" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+
+    </data>
+</odoo>
