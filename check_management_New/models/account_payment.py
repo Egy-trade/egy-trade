@@ -15,13 +15,11 @@ class AccountRegisterPayments(models.TransientModel):
 
     check_payment_transaction_ids = fields.Many2many('check.payment.transaction.payment', string="Check Information",)
 
-
-    def _create_payment_vals_from_wizard(self):
+    def _create_payment_vals_from_wizard(self, batch_result):
         print("*** check_payment_transaction_ids ***")
-        payment = super(AccountRegisterPayments, self)._create_payment_vals_from_wizard()
+        payment = super(AccountRegisterPayments, self)._create_payment_vals_from_wizard(batch_result)
         payment['check_payment_transaction_ids'] =[(6,0,self.check_payment_transaction_ids.ids)]
         return payment
-
 
     @api.depends('journal_id')
     def _compute_hide_check_payment(self):
