@@ -11,7 +11,10 @@
                 <field name="technical_office_id" widget="many2one_avatar_user"/>
             </xpath>
             <xpath expr="//form/sheet/notebook/page/group" position="before">
-                <field name="terms_conditions_id"/>
+                <div class="ks_container">
+                    <label for="terms_conditions_id" string="Terms / Conditions:"/>
+                    <field name="terms_conditions_id"/>
+                </div>
             </xpath>
         </field>
     </record>
