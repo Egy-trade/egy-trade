@@ -17,7 +17,7 @@ class SaleOrder(models.Model):
     change_currency_rate = fields.Float()
     global_factor = fields.Float()
 
-    @api.onchange('global_factor')
+    @api.onchange('global_factor', 'order_line')
     def _onchange_global_factor(self):
         """ global_factor """
         for rec in self:
@@ -137,7 +137,7 @@ class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
     purchase_price_estimate = fields.Float(copy=False)
-    factor = fields.Float(default=1)
+    factor = fields.Float()
     qty_estimate = fields.Float(string='Quantity', default=1)
     estimate_unit_price = fields.Float(compute='_compute_estimate_unit_price', store=True)
     currency_estimate_id = fields.Many2one('res.currency', string='Currency', compute='_compute_currency_estimate')
@@ -179,10 +179,3 @@ class SaleOrderLine(models.Model):
                     else:
                         rec.currency_rate_estimate = rec.order_id.currency_rate_inverse
                 print(rec.currency_rate_estimate)
-
-    @api.onchange('product_id', 'order_id.global_factor')
-    def _onchange_product_id_factor(self):
-        """ product_id """
-        for rec in self:
-            if rec.order_id.global_factor:
-                rec.factor = rec.order_id.global_factor
