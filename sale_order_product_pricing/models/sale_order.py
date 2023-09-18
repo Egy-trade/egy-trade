@@ -15,6 +15,16 @@ class SaleOrder(models.Model):
     currency_rate_inverse = fields.Float(compute='_compute_currency_rate_inverse')
     change_currency_rate_type = fields.Selection([('amount', 'Amount'), ('percentage', 'Percentage')])
     change_currency_rate = fields.Float()
+    global_factor = fields.Float()
+
+    @api.onchange('global_factor')
+    def _onchange_global_factor(self):
+        """ global_factor """
+        for rec in self:
+            if rec.product_pricing_ids:
+                rec.product_pricing_ids.write({
+                    'factor': rec.global_factor
+                })
 
     def apply_estimate_product_price(self):
         for rec in self.order_line:
@@ -169,3 +179,10 @@ class SaleOrderLine(models.Model):
                     else:
                         rec.currency_rate_estimate = rec.order_id.currency_rate_inverse
                 print(rec.currency_rate_estimate)
+
+    @api.onchange('product_id', 'order_id.global_factor')
+    def _onchange_product_id_factor(self):
+        """ product_id """
+        for rec in self:
+            if rec.order_id.global_factor:
+                rec.factor = rec.order_id.global_factor
