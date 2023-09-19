@@ -1,0 +1,21 @@
+<data>
+    <record id="inherit_sale_order_form" model="ir.ui.view">
+        <field name="name">inherit.sale.order.form</field>
+        <field name="model">sale.order</field>
+        <!--<field name="groups_id" eval="[(4, ref(''))]"/>-->
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='user_id']" position="after">
+                <field name="lighting_designer_id" widget="many2one_avatar_user"/>
+                <field name="technical_sales_id" widget="many2one_avatar_user"/>
+                <field name="technical_office_id" widget="many2one_avatar_user"/>
+            </xpath>
+            <xpath expr="//form/sheet/notebook/page/group" position="before">
+                <div class="ks_container">
+                    <label for="terms_conditions_id" string="Terms / Conditions:"/>
+                    <field name="terms_conditions_id"/>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</data>

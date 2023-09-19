@@ -27,6 +27,7 @@
                                 <field name="change_currency_rate_type" string="Change Type"
                                        attrs="{'readonly':[('state', '=', 'sale')]}"/>
                                 <field name="change_currency_rate" attrs="{'readonly':[('state', '=', 'sale')]}"/>
+                                <field name="global_factor" attrs="{'readonly':[('state', '=', 'sale')]}"/>
                             </group>
                             <group>
                                 <field name="currency_id" invisible="1" attrs="{'readonly':[('state', '=', 'sale')]}"/>
