@@ -49,6 +49,11 @@
             <xpath expr="//group[@name='sales_person']//field[@name='team_id']" position="attributes">
                 <attribute name="groups">sales_team.group_sale_manager</attribute>
             </xpath>
+
+            <xpath expr="//field[@name='order_line']/form//field[@name='purchase_price']" position="attributes">
+                <attribute name="groups">egy-trade_custom.group_product_logistics</attribute>
+            </xpath>
+
             <xpath expr="//group[@name='sales_person']//field[@name='user_id']" position="attributes">
                 <attribute name="groups">sales_team.group_sale_manager</attribute>
             </xpath>

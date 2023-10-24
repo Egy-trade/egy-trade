@@ -68,7 +68,7 @@ class SaleOrderLine(models.Model):
     purchase_price = fields.Float(
         string='Cost', compute="_compute_purchase_price",
         digits='Product Price', store=True, readonly=False,
-        groups="egy-trade_custom.group_product_logistics")
+        )
 
     product_vendor = fields.Many2one(related='product_id.vendor_id')
     product_family_name = fields.Many2one(related='product_id.family_name')
