@@ -22,6 +22,16 @@ class KsGlobalDiscountSales(models.Model):
     ks_enable_discount = fields.Boolean(compute='ks_verify_discount')
     # apply_discount_on_tax_amount = fields.Boolean()
 
+    discount_amount = fields.Float(
+        compute='_compute_discount_amount'
+    )
+
+    @api.depends('amount_undiscounted', 'amount_untaxed')
+    def _compute_discount_amount(self):
+        """ Compute discount_amount value """
+        for rec in self:
+            rec.discount_amount = rec.amount_undiscounted - rec.amount_untaxed
+
     @api.depends('company_id.ks_enable_discount')
     def ks_verify_discount(self):
         for rec in self:

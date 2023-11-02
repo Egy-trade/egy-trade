@@ -1,0 +1,9 @@
+<data>
+    <menuitem id="sale_orders_menu"
+              name="Sale Order"
+              action="sale.action_orders"
+              sequence="80"
+              groups="oit_sale_access.group_sale_order_limit_access_for_designer_and_technical_sales_offices"
+              web_icon="oit_sale_access,static/description/menu_icon.png"/>
+
+</data>
