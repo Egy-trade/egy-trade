@@ -12,6 +12,7 @@
     'depends': [
         'base',
         'sale',
+        'egy-trade_custom',
         'oit_sale_customize',
     ],
     'data': [
