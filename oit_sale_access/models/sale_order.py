@@ -13,12 +13,12 @@ class SaleOrder(models.Model):
     """
     _inherit = 'sale.order'
 
-    lighting_designer_id = fields.Many2one(
+    mep_contractor = fields.Many2one(
         'res.users'
     )
-    technical_sales_id = fields.Many2one(
+    arch_consultant = fields.Many2one(
         'res.users'
     )
-    technical_office_id = fields.Many2one(
+    electrical_consultant = fields.Many2one(
         'res.users'
     )
