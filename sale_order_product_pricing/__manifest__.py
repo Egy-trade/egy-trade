@@ -16,7 +16,7 @@
     'version': '0.1',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'sale'],
+    'depends': ['base', 'sale', 'egy-trade_custom', 'universal_discount', 'sale_stock'],
 
     # always loaded
     'data': [

@@ -43,14 +43,33 @@
                                 <field name="product_uom_category_id" invisible="1"/>
                                 <field name="product_id"/>
                                 <field name="name"/>
-                                <field name="qty_estimate" optional="show"/>
+
+                                <field name="product_vendor" optional="hide"/>
+                                <field name="product_family_name" optional="hide"/>
+                                <field name="product_power" optional="hide"/>
+                                <field name="product_ip" optional="hide"/>
+                                <field name="product_lumen" optional="hide"/>
+                                <field name="manufacturer" optional="show"/>
+                                <field name="origin" optional="show"/>
+                                <field name="qty_estimate"
+                                       readonly="1"
+                                       force_save="1"
+                                       optional="show"/>
                                 <field name="product_uom" optional="show"/>
+                                <field name="route_id" optional="show"/>
                                 <field name="estimate_unit_price" sum="Total Estimate"/>
                                 <field name="purchase_price_estimate" optional="show" string="Purchase Price"
                                        sum="Total"/>
+                                <field name="discount" optional="show"/>
+                                <field name="discount_2" optional="show"/>
+                                <field name="discount_3" optional="show"/>
+                                <field name="purchase_price" optional="show"/>
+                                <field name="margin" optional="show"/>
+                                <field name="margin_percent" optional="show"/>
                                 <field name="currency_estimate_id" optional="show"/>
                                 <field name="currency_rate_estimate" optional="show"/>
                                 <field name="factor" optional="show" sum="Total Factor"/>
+                                <field name="line_factor" optional="show" />
                                 <field name="note" optional="show"/>
                             </tree>
                         </field>

@@ -13,12 +13,15 @@
         'base',
         'sale',
         'sales_team',
+        'sale_management',
     ],
     'data': [
         'security/ir.model.access.csv',
+        'security/security.xml',
         # 'report/',
         'views/sale_order.xml',
         'views/terms_and_conditions.xml',
+        'wizard/create_quotation_template.xml',
     ],
     'demo': [
         # 'demo/',

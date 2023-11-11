@@ -25,6 +25,20 @@ class SaleOrder(models.Model):
     terms_conditions_id = fields.Many2one(
         'terms.conditions'
     )
+    
+    def create_quotation_template(self):
+        """ Create Quotation Template """
+        self.ensure_one()
+        return {
+            'res_model': 'create.quotation.template',
+            'name': _('Create Quotation Template'),
+            'view_mode': 'form',
+            'context': {
+                'default_sale_id': self.id,
+            },
+            'target': 'new',
+            'type': 'ir.actions.act_window',
+        }
 
     @api.onchange('terms_conditions_id')
     def _onchange_terms_conditions_id(self):

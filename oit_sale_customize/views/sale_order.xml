@@ -10,6 +10,14 @@
                 <field name="technical_sales_id" widget="many2one_avatar_user"/>
                 <field name="technical_office_id" widget="many2one_avatar_user"/>
             </xpath>
+            <xpath expr="//header" position="inside">
+                <button name="create_quotation_template"
+                        string="Create Quotation Template" type="object"
+                        groups="oit_sale_customize.group_create_quotation_template"
+                        attrs="{'invisible':[('state','in',['sale','done', 'cancel'])]}"
+                        class="oe_highlight"/>
+            </xpath>
+
             <xpath expr="//form/sheet/notebook/page/group" position="before">
                 <div class="ks_container">
                     <label for="terms_conditions_id" string="Terms / Conditions:"/>
@@ -17,5 +25,9 @@
                 </div>
             </xpath>
         </field>
+    </record>
+
+    <record id="sale.action_quotations_with_onboarding" model="ir.actions.act_window">
+        <field name="domain">[]</field>
     </record>
 </data>
