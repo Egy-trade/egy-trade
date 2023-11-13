@@ -71,6 +71,7 @@
                                 <field name="factor" optional="show" sum="Total Factor"/>
                                 <field name="line_factor" optional="show" />
                                 <field name="note" optional="show"/>
+                                <field name="product_uom_qty" optional="hide"/>
                             </tree>
                         </field>
                         <group class="oe_subtotal_footer oe_right" name="estimate_sale_total">

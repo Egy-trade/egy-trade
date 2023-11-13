@@ -183,7 +183,6 @@ class SaleOrder(models.Model):
                 order.currency_rate_estimate = cache[key] if order.currency_estimate_id else False
 
 
-
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
@@ -199,10 +198,10 @@ class SaleOrderLine(models.Model):
     currency_rate_estimate = fields.Float(compute='change_currency_rate_func', store=True)
     note = fields.Char(string='Note')
 
-    @api.depends('factor', 'purchase_price_estimate', 'currency_id', 'product_uom_qty', 'currency_rate_estimate','currency_estimate_id')
+    @api.depends('factor', 'purchase_price_estimate', 'currency_id', 'product_uom_qty', 'currency_rate_estimate','currency_estimate_id', 'line_factor')
     def _compute_estimate_unit_price(self):
         for rec in self:
-            rec.estimate_unit_price = rec.purchase_price_estimate * rec.factor * rec.currency_rate_estimate
+            rec.estimate_unit_price = rec.purchase_price_estimate * rec.factor * rec.currency_rate_estimate * rec.line_factor
 
     @api.depends('purchase_price_estimate', 'currency_id', 'product_uom_qty','currency_estimate_id')
     def _compute_currency_estimate(self):
@@ -233,3 +232,10 @@ class SaleOrderLine(models.Model):
                     else:
                         rec.currency_rate_estimate = rec.order_id.currency_rate_inverse
                 print(rec.currency_rate_estimate)
+
+    @api.onchange('product_uom_qty')
+    @api.constrains('product_uom_qty')
+    def _onchange_product_uom_qty_estimate(self):
+        """ product_uom_qty """
+        for rec in self:
+            rec.qty_estimate = rec.product_uom_qty
