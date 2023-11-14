@@ -1,0 +1,93 @@
+<odoo>
+    <data>
+        <record id="attendance_modification_tree_view" model="ir.ui.view">
+            <field name="name">attendance.modification.tree</field>
+            <field name="model">attendance.modification</field>
+            <field name="arch" type="xml">
+                <tree multi_edit="1">
+                    <field name="employee_id"/>
+                    <field name="date"/>
+                    <field name="type"/>
+                    <field name="reason"/>
+                    <field name="action_to_do"/>
+                    <field name="attendance"/>
+                    <field name="updated_value_in"/>
+                    <field name="updated_value_out"/>
+                    <field name="state"
+                           decoration-success="state == 'approved'"
+                           decoration-info="state == 'draft'"
+                           decoration-danger="state == 'waiting'"
+                           widget="badge"/>
+                </tree>
+            </field>
+        </record>
+
+
+        <record id="view_attendance_modification_form" model="ir.ui.view">
+            <field name="name">attendance.modification.form</field>
+            <field name="model">attendance.modification</field>
+            <field name="arch" type="xml">
+                <form>
+                    <header>
+                        <button name="button_confirm" string="Confirm" class="oe_highlight"
+                                groups="attendance_modification_request.group_attendance_modification_employee"
+                                type="object" attrs="{'invisible':[('state','!=','draft')]}"/>
+                        <button name="action_confirm" string="Confirm" class="oe_highlight" type="object" states="waiting"
+                                groups="attendance_modification_request.group_attendance_modification_manager"/>
+                        <button name="action_reject" string="Reject" class="oe_highlight" type="object" states="waiting"
+                                groups="attendance_modification_request.group_attendance_modification_manager"/>
+                        <field name="state" widget="statusbar" nolabel="1"
+                               statusbar_visible="draft,waiting,approved"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_title">
+                            <h1>
+                                <field name="ref" string="Name" readonly="1"/>
+                            </h1>
+                        </div>
+                        <group>
+                            <group>
+                                <field name="employee_id"/>
+                                <field name="date"/>
+                                <field name="type"/>
+                                <field name="reason"/>
+                            </group>
+                            <group>
+                                <field name="action_to_do"/>
+                                <field name="attendance" attrs="{'invisible':[('action_to_do', '=', 'new')]}"/>
+                                <field name="updated_value_in" attrs="{'invisible':[('type', '=', 'checkout')]}"/>
+                                <field name="updated_value_out" attrs="{'invisible':[('type','=','checkin')]}"/>
+                            </group>
+                        </group>
+                    </sheet>
+                    <div class="oe_chatter">
+                        <field name="message_follower_ids"/>
+                        <field name="activity_ids"/>
+                        <field name="message_ids" options="{'post_refresh': 'recipients'}"/>
+                    </div>
+                </form>
+            </field>
+        </record>
+
+        <record id="attendance_modification_sequence" model="ir.sequence">
+            <field name="name">attendance.modification</field>
+            <field name="code">attendance.modification</field>
+            <field name="prefix">REC/</field>
+            <field name="padding">4</field>
+            <field name="company_id" eval="1"/>
+        </record>
+
+        <record id="action_attendance_modification" model="ir.actions.act_window">
+            <field name="name">Attendance Modification Request</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">attendance.modification</field>
+            <field name="view_mode">tree,form</field>
+            <field name="context">{}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Create your first Request !
+                </p>
+            </field>
+        </record>
+    </data>
+</odoo>

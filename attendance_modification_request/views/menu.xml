@@ -1,0 +1,9 @@
+<odoo>
+    <menuitem id="menu_attendance_modification"
+              name="Attendance Modification Request"
+              action="action_attendance_modification"
+              groups="attendance_modification_request.group_attendance_modification_employee"
+              />
+<!--    parent="hr_attendance.menu_hr_attendance_manage_attendances"-->
+
+</odoo>

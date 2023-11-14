@@ -14,7 +14,7 @@
                 <button name="create_quotation_template"
                         string="Create Quotation Template" type="object"
                         groups="oit_sale_customize.group_create_quotation_template"
-                        attrs="{'invisible':[('state','in',['sale','done', 'cancel'])]}"
+                        states="draft"
                         class="oe_highlight"/>
             </xpath>
 

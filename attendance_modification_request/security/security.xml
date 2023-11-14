@@ -1,0 +1,9 @@
+<odoo>
+    <record id="group_attendance_modification_employee" model="res.groups">
+        <field name="name">Employee</field>
+    </record>
+
+    <record id="group_attendance_modification_manager" model="res.groups">
+        <field name="name">Manager</field>
+    </record>
+</odoo>
