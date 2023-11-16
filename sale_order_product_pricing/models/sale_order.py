@@ -201,7 +201,10 @@ class SaleOrderLine(models.Model):
     @api.depends('factor', 'purchase_price_estimate', 'currency_id', 'product_uom_qty', 'currency_rate_estimate','currency_estimate_id', 'line_factor')
     def _compute_estimate_unit_price(self):
         for rec in self:
-            rec.estimate_unit_price = rec.purchase_price_estimate * rec.factor * rec.currency_rate_estimate * rec.line_factor
+            if rec.factor:
+                rec.estimate_unit_price = rec.purchase_price_estimate * rec.factor * rec.currency_rate_estimate * rec.line_factor
+            else:
+                rec.estimate_unit_price = rec.purchase_price_estimate * rec.currency_rate_estimate * rec.line_factor
 
     @api.depends('purchase_price_estimate', 'currency_id', 'product_uom_qty','currency_estimate_id')
     def _compute_currency_estimate(self):
