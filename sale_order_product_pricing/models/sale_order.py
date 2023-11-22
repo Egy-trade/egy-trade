@@ -186,10 +186,13 @@ class SaleOrder(models.Model):
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
-    purchase_price_estimate = fields.Float(copy=False)
-    factor = fields.Float()
+    purchase_price_estimate = fields.Float(copy=True)
+    factor = fields.Float(
+        copy=True
+    )
     line_factor = fields.Float(
-        default=1
+        default=1,
+        copy=True
     )
     qty_estimate = fields.Float(string='Quantity', default=1)
     estimate_unit_price = fields.Float(compute='_compute_estimate_unit_price', store=True)
