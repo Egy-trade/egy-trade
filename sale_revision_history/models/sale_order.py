@@ -40,6 +40,7 @@ class SaleOrder(models.Model):
         view_id = view_ref.id
         self.with_context(sale_revision_history=True, reason=reason).copy()
         self.write({'state': 'draft'})
+        self.name = '%s-%02d' % (self.name, self.revision_number + 1)
         self.order_line.write({'state': 'draft'})
         #         self.mapped('order_line').write(
         #             {'sale_line_id': False})
@@ -63,7 +64,7 @@ class SaleOrder(models.Model):
         if self.env.context.get('sale_revision_history'):
             reason = self.env.context.get('reason')
             defaults.update({
-                'name': '%s-%02d' % (self.name, self.revision_number + 1),
+                'name': self.name,
                 'revision_number': self.revision_number,
                 'revision_reason': reason,
                 'active': True,

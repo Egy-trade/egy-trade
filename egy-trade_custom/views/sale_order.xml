@@ -29,6 +29,7 @@
                             attrs="{'invisible': ['|', ('state', '!=', 'draft'), ('invoice_count','&gt;=',1)]}"
                             context="{'proforma': True}"/>
                     <button name="action_to_approve" type="object"
+                            groups="egy-trade_custom.group_approve_sale_order"
                             string="Approve Order" class="btn-primary"
                             attrs="{'invisible': [('state', 'not in', ['draft'])]}"/>
                     <button name="action_confirm"

@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access.attendance.modification,access_attendance_odification,attendance_modification_request.model_attendance_modification,attendance_modification_request.group_attendance_modification_employee,1,1,1,1
+access.cancellation.reason,access_cancellation_reason,attendance_modification_request.model_cancellation_reason,attendance_modification_request.group_attendance_modification_manager,1,1,1,1
