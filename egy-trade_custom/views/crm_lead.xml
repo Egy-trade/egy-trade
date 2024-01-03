@@ -13,9 +13,9 @@
                 <page name="project_details" string="Project Details">
                     <group>
                         <group>
-                            <field name="mep_contractors"/>
-                            <field name="arch_consultants"/>
-                            <field name="electrical_consultants"/>
+                            <field name="mep_contractor"/>
+                            <field name="arch_consultant"/>
+                            <field name="electrical_consultant"/>
                         </group>
                     </group>
                 </page>

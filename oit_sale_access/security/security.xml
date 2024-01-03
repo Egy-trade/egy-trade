@@ -7,7 +7,7 @@
     <record id="rule_sale_order" model="ir.rule">
         <field name="name">Limit Access For SO</field>
         <field name="model_id" ref="sale.model_sale_order"/>
-        <field name="domain_force">['|','|','|','|','|',('lighting_designer_id','=',user.id), ('technical_sales_id','=',user.id) ,('technical_office_id','=',user.id),('mep_contractor','=',user.id), ('arch_consultant','=',user.id) ,('electrical_consultant','=',user.id)]</field>
+        <field name="domain_force">['|','|','|','|','|',('lighting_designer_id','=',user.id), ('technical_sales_id','=',user.id) ,('technical_office_id','=',user.id),('mep_contractors','=',user.id), ('arch_consultants','=',user.id) ,('electrical_consultants','=',user.id)]</field>
         <field name="groups" eval="[(4, ref('oit_sale_access.group_sale_order_limit_access_for_designer_and_technical_sales_offices'))]"/>
         <field name="perm_write" eval="1"/>
         <field name="perm_create" eval="1"/>
