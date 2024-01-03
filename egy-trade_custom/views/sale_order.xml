@@ -90,9 +90,9 @@
             <xpath expr="//group[@name='sales_person']" position="after">
                 <group string="Project Details">
                     <field name="project" attrs="{'readonly':[('state','!=','draft')]}"/>
-                    <field name="mep_contractor" attrs="{'readonly':[('state','!=','draft')]}"/>
-                    <field name="arch_consultant" attrs="{'readonly':[('state','!=','draft')]}"/>
-                    <field name="electrical_consultant" attrs="{'readonly':[('state','!=','draft')]}"/>
+                    <field name="mep_contractors" attrs="{'readonly':[('state','!=','draft')]}"/>
+                    <field name="arch_consultants" attrs="{'readonly':[('state','!=','draft')]}"/>
+                    <field name="electrical_consultants" attrs="{'readonly':[('state','!=','draft')]}"/>
                 </group>
             </xpath>
 
@@ -130,9 +130,9 @@
             <xpath expr="//filter[@name='order_month']" position="after">
                 <separator/>
                 <filter string="Project" name="group_by_project" context="{'group_by':'project'}"/>
-                <filter string="MEP Contractor" name="group_by_mep_contractor" context="{'group_by':'mep_contractor'}"/>
-                <filter string="Architecture Consultant" name="group_by_arch_consultant" context="{'group_by':'arch_consultant'}"/>
-                <filter string="Electrical Consultant" name="group_by_electrical_consultant" context="{'group_by':'electrical_consultant'}"/>
+                <filter string="MEP Contractor" name="group_by_mep_contractor" context="{'group_by':'mep_contractors'}"/>
+                <filter string="Architecture Consultant" name="group_by_arch_consultant" context="{'group_by':'arch_consultants'}"/>
+                <filter string="Electrical Consultant" name="group_by_electrical_consultant" context="{'group_by':'electrical_consultants'}"/>
             </xpath>
 
         </field>

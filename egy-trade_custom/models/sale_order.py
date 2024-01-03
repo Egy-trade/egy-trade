@@ -16,9 +16,9 @@ class SaleOrder(models.Model):
         ('cancel', 'Cancelled'),
     ], string='Status', readonly=True, copy=False, index=True, tracking=3, default='draft')
     follower_user_ids = fields.Many2many('res.users', compute="_get_follower_user_ids", store=True)
-    mep_contractor = fields.Many2one('res.users', string='MEP Contractor')
-    arch_consultant = fields.Many2one('res.users', string='Architecture Consultant')
-    electrical_consultant = fields.Many2one('res.users', string='Electrical Consultant')
+    mep_contractors = fields.Many2one('res.users', string='MEP Contractor')
+    arch_consultants = fields.Many2one('res.users', string='Architecture Consultant')
+    electrical_consultants = fields.Many2one('res.users', string='Electrical Consultant')
     project = fields.Char()
     
     @api.depends('message_follower_ids')
