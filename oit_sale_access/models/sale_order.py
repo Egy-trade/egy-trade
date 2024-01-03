@@ -13,9 +13,9 @@ class SaleOrder(models.Model):
     """
     _inherit = 'sale.order'
 
-    mep_contractor = fields.Many2one(
-        'res.users'
-    )
+    # mep_contractor = fields.Many2one(
+    #     'res.users'
+    # )
     arch_consultant = fields.Many2one(
         'res.users'
     )
