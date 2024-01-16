@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+        <!--
+             defualt model group 
+        -->
+
+        <record id="clear_data_model_group_base" model='clear.data.model'>
+            <field name="name">Base data</field>
+            <field name="internal_model_list">['product.template','product.category']</field>
+            <field name="sequence">2</field>
+            <field name="auto_clear_ir_sequence">True</field>
+        </record>
+        
+        <record id="clear_data_model_group_business" model='clear.data.model'>
+            <field name="name">Business data</field>
+            <field name="internal_model_list">['purchase.order.line',
+            'purchase.order',
+            'sale.order.line',
+            'sale.order',
+            'pos.order.line',
+            'pos.order',
+            'purchase.inquiry.order',
+            'purchase.inquiry.order.line',
+            'sale.inquiry.order',
+            'sale.inquiry.order.line',
+           'mrp.production.workcenter.line',
+			'mrp.production',
+			'mrp.production.product.line',
+			'procurement.order',
+			'stock.quant',
+			'stock.move',
+			'stock.pack.operation',
+			'stock.picking',
+			'stock.inventory.line',
+			'stock.inventory',
+			'stock.quant.package',
+			'stock.quant.move.rel',
+			'stock.production.lot',
+			'stock.fixed.putaway.strat',
+			'account.voucher.line',
+			'account.voucher',
+			'account.bank.statement',
+			'account.bank.statement.line',
+			'account.payment',
+			'account.analytic.line',
+			'account.invoice.line',
+			'account.invoice',
+			'account.partial.reconcile',
+			'account.move.line',
+			'account.move',
+			'mail.message',
+			'wkf_workitem',
+			'wkf_instance',
+            ]</field>
+            <field name="sequence">1</field>
+            <field name="auto_clear_ir_sequence">True</field>
+        </record>
+        
+
+    </data>
+</odoo>

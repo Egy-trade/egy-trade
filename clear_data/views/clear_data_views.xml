@@ -1,0 +1,84 @@
+<odoo>
+  <data>
+   
+   
+    <record model="ir.ui.view" id="view_clear_data_tree">
+      <field name="name">Clear model group list</field>
+      <field name="model">clear.data.model</field>
+      <field name="arch" type="xml">
+        <tree>
+          <field name="name"/>
+          <field name="model_clear_ids"/>
+        </tree>
+      </field>
+    </record>
+    
+     <record model="ir.ui.view" id="view_clear_data_form">
+      <field name="name">Clear model group form</field>
+      <field name="model">clear.data.model</field>
+      <field name="arch" type="xml">
+        <form string="clear model group form">
+          <header>
+          		<button name="action_do_clear" string="do clear" type="object"  class="btn-primary"></button>
+          </header>
+          <sheet>
+         		<group>
+         			<group>
+         				<field name="name"></field>
+         				<field name="auto_clear_ir_sequence">True</field>
+                        <field name="date_from" />
+          			</group>
+         			<group>
+         				<field name="internal_model_list"></field>
+         				<field name="model_clear_ids" widget="many2many_tags"></field>
+                        <field name="date" />
+                    </group>
+         		</group>
+          </sheet>
+        </form>
+      </field>
+    </record>
+    
+
+    <!-- actions opening views on models -->
+   
+    <record model="ir.actions.act_window" id="action_clear_data_list">
+      <field name="name">Clear model group list</field>
+      <field name="res_model">clear.data.model</field>
+      <field name="view_mode">tree,form</field>
+    </record>
+   
+
+    <!-- server action to the one above -->
+    <!--
+    <record model="ir.actions.server" id="clear_data.action_server">
+      <field name="name">clear_data server</field>
+      <field name="model_id" ref="model_clear_data_clear_data"/>
+      <field name="code">
+        action = {
+          "type": "ir.actions.act_window",
+          "view_mode": "tree,form",
+          "res_model": self._name,
+        }
+      </field>
+    </record>
+    -->
+
+    <!-- Top menu item -->
+    
+    <menuitem name="Clear data" web_icon="clear_data,static/description/icon.png" id="clear_data.menu_root"/>
+   
+    
+    
+    <menuitem name="model group list" id="clear_data_model_list" parent="clear_data.menu_root" action="action_clear_data_list"/>
+   
+    
+    <!-- actions -->
+    <!--
+    <menuitem name="List" id="clear_data.menu_1_list" parent="clear_data.menu_1"
+              action="clear_data.action_window"/>
+    <menuitem name="Server to list" id="clear_data" parent="clear_data.menu_2"
+              action="clear_data.action_server"/>
+    -->
+  </data>
+</odoo>
