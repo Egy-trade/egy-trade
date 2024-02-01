@@ -50,12 +50,12 @@ class PurchaseOrder(models.Model):
             rec.follower_user_ids = [(6, 0, follower_users.ids)]
 
 
-    def read(self, records):
-        for rec in self:
-            if self.env.user.has_group('egy-trade_custom.group_egy_trade_user') and not self.env.user.has_group('purchase.group_purchase_manager') and self.env.uid not in rec.follower_user_ids.ids:
-                raise ValidationError("You are not allowed to access this document !")
-        res = super(PurchaseOrder, self).read(records)
-        return res
+    # def read(self, records):
+    #     for rec in self:
+    #         if self.env.user.has_group('egy-trade_custom.group_egy_trade_user') and not self.env.user.has_group('purchase.group_purchase_manager') and self.env.uid not in rec.follower_user_ids.ids:
+    #             raise ValidationError("You are not allowed to access this document !")
+    #     res = super(PurchaseOrder, self).read(records)
+    #     return res
 
 class PurchaseOrderLine(models.Model):
     _inherit = 'purchase.order.line'
