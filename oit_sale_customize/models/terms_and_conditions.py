@@ -33,3 +33,30 @@ class TermsConditions(models.Model):
         for rec in self:
             result.append((rec.id, '%s' % (rec.basic_name)))
         return result
+class PoTermsConditions(models.Model):
+    """
+        Initialize Terms Conditions:
+         -
+    """
+    _name = 'po.terms.conditions'
+    _description = 'Terms Conditions'
+    _sql_constraints = [
+        ('unique_name',
+         'UNIQUE(name)',
+         'Name must be unique'),
+    ]
+    basic_name = fields.Char(
+        string="Name",
+        required=True,
+    )
+    name = fields.Text(
+        string="Description",
+        required=True,
+        translate=True,
+    )
+
+    def name_get(self):
+        result = []
+        for rec in self:
+            result.append((rec.id, '%s' % (rec.basic_name)))
+        return result

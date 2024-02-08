@@ -14,6 +14,7 @@
         'sale',
         'sales_team',
         'sale_management',
+        'purchase',
     ],
     'data': [
         'security/ir.model.access.csv',
@@ -21,6 +22,7 @@
         # 'report/',
         'views/sale_order.xml',
         'views/terms_and_conditions.xml',
+        'views/purchase_order.xml',
         'wizard/create_quotation_template.xml',
     ],
     'demo': [
