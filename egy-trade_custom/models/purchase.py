@@ -57,7 +57,6 @@ class PurchaseOrder(models.Model):
     #     res = super(PurchaseOrder, self).read(records)
     #     return res
 
-
 class PurchaseOrderLine(models.Model):
     _inherit = 'purchase.order.line'
 
