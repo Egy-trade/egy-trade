@@ -32,42 +32,9 @@
         <field name="view_mode">tree,form</field>
     </record>
 
-    <record id="po_terms_conditions_form" model="ir.ui.view">
-        <field name="name">terms.conditions.form</field>
-        <field name="model">po.terms.conditions</field>
-        <field name="arch" type="xml">
-            <form>
-                <sheet>
-                    <group>
-                        <field name="basic_name"/>
-                        <field name="name"/>
-                    </group>
-                </sheet>
-            </form>
-        </field>
-    </record>
-
-    <record id="po_terms_conditions_tree" model="ir.ui.view">
-        <field name="name">terms.conditions.tree</field>
-        <field name="model">po.terms.conditions</field>
-        <!--<field name="field_parent">children_ids if_want_to_add_Childs</field>-->
-        <field name="arch" type="xml">
-            <tree>
-                <field name="basic_name"/>
-                <field name="name"/>
-            </tree>
-        </field>
-    </record>
-
-    <record id="po_terms_conditions_action" model="ir.actions.act_window">
-        <field name="name">Terms Conditions</field>
-        <field name="res_model">po.terms.conditions</field>
-        <field name="view_mode">tree,form</field>
-    </record>
-
     <menuitem id="terms_conditions_menu"
               name="Terms And Conditions"
-              action="po_terms_conditions_action"
+              action="terms_conditions_action"
               parent="purchase.menu_purchase_config"
               sequence="50"/>
 

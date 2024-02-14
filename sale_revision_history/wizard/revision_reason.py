@@ -11,7 +11,7 @@ class NewModule(models.TransientModel):
     _rec_name = 'name'
     _description = 'Revision Reason'
 
-    name = fields.Char("Reason Of Change", required=True)
+    name = fields.Char("Objective", required=True)
     sale_id = fields.Many2one(comodel_name="sale.order", string="Sale Order", required=False, )
 
     def action_confirm(self):

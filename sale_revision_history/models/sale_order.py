@@ -9,7 +9,7 @@ class SaleOrder(models.Model):
                                        context={'active_test': False})
     revision_number = fields.Integer('Revision', copy=False)
     unrevisioned_name = fields.Char('Order Reference', copy=False, readonly=True)
-    revision_reason = fields.Char('Reason Of Change', copy=False, readonly=True)
+    revision_reason = fields.Char('Objective', copy=False, readonly=True)
     active = fields.Boolean('Active', default=True, copy=True)
 
     @api.model

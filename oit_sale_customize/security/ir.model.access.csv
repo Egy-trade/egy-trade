@@ -1,4 +1,3 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 terms_conditions_id,terms_conditions_name,model_terms_conditions,,1,1,1,1
-po_terms_conditions_id,po_terms_conditions_name,model_po_terms_conditions,,1,1,1,1
 create_quotation_template_id,create_quotation_template_name,model_create_quotation_template,,1,1,1,1
