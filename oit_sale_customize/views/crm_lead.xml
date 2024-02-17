@@ -1,0 +1,18 @@
+<data>
+    <record id="inherit_crm_lead_form" model="ir.ui.view">
+        <field name="name">inherit.crm.lead.form</field>
+        <field name="model">crm.lead</field>
+        <!--<field name="groups_id" eval="[(4, ref(''))]"/>-->
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form[1]/sheet[1]/notebook[1]/page[@name='lead']/group[1]/group[1]" position="after">
+                <group string="Marketing">
+                    <field name="lighting_designer_id"/>
+                    <field name="technical_sales_id"/>
+                    <field name="technical_office_id"/>
+                </group>
+            </xpath>
+
+        </field>
+    </record>
+</data>
