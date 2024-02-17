@@ -31,6 +31,8 @@ class SaleOrder(models.Model):
     def action_to_approve(self):
         self.state = 'approve'
 
+    partner_allow_ids = fields.Many2many('res.partner', compute='_get_partner_allows')
+
     @api.depends('partner_id')
     def _get_partner_allows(self):
         user = self.env.user
@@ -47,14 +49,13 @@ class SaleOrder(models.Model):
             print("Partners", partners)
         self.partner_allow_ids = partners
 
-    partner_allow_ids = fields.Many2many('res.partner', compute='_get_partner_allows')
 
-    def read(self, records):
-        for rec in self:
-            if self.env.user.has_group('egy-trade_custom.group_egy_trade_user') and not self.env.user.has_group('sales_team.group_sale_manager') and self.env.uid not in rec.follower_user_ids.ids:
-                raise ValidationError("You are not allowed to access this document !")
-        res = super(SaleOrder, self).read(records)
-        return res
+    # def read(self, records):
+    #     for rec in self:
+    #         if self.env.user.has_group('egy-trade_custom.group_egy_trade_user') and not self.env.user.has_group('sales_team.group_sale_manager') and self.env.uid not in rec.follower_user_ids.ids:
+    #             raise ValidationError("You are not allowed to access this document !")
+    #     res = super(SaleOrder, self).read(records)
+    #     return res
 
 
 class SaleOrderLine(models.Model):
