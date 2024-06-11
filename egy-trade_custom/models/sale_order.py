@@ -31,8 +31,6 @@ class SaleOrder(models.Model):
     def action_to_approve(self):
         self.state = 'approve'
 
-    partner_allow_ids = fields.Many2many('res.partner', compute='_get_partner_allows')
-
     @api.depends('partner_id')
     def _get_partner_allows(self):
         user = self.env.user
@@ -49,6 +47,7 @@ class SaleOrder(models.Model):
             print("Partners", partners)
         self.partner_allow_ids = partners
 
+    partner_allow_ids = fields.Many2many('res.partner', compute='_get_partner_allows')
 
     # def read(self, records):
     #     for rec in self:

@@ -245,3 +245,4 @@ class SaleOrderLine(models.Model):
         """ product_uom_qty """
         for rec in self:
             rec.qty_estimate = rec.product_uom_qty
+            rec.order_id.apply_estimate_product_price()

@@ -16,6 +16,23 @@ class KSGlobalDiscountPurchases(models.Model):
                                          # compute='_amount_all',
                                          track_visibility='always', store=True)
     ks_enable_discount = fields.Boolean(compute='ks_verify_discount')
+    amount_undiscounted = fields.Float('Amount Before Discount', compute='_compute_amount_undiscounted', digits=0)
+    discount_amount = fields.Float(
+        compute='_compute_discount_amount'
+    )
+
+    def _compute_amount_undiscounted(self):
+        for order in self:
+            total = 0.0
+            for line in order.order_line:
+                total += (line.price_subtotal * 100)/(100-line.discount) if line.discount != 100 else (line.price_unit * line.product_qty)
+            order.amount_undiscounted = total
+
+    @api.depends('amount_undiscounted', 'amount_untaxed')
+    def _compute_discount_amount(self):
+        """ Compute discount_amount value """
+        for rec in self:
+            rec.discount_amount = rec.amount_undiscounted - rec.amount_untaxed
 
     @api.depends('company_id.ks_enable_discount')
     def ks_verify_discount(self):
