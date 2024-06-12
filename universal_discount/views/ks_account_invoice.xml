@@ -22,12 +22,6 @@
                                attrs="{'invisible':[('ks_enable_discount','!=',True)],'readonly':['|','|',('ks_enable_discount','!=',True),('state', 'in', ['posted', 'cancel']), ('ks_global_discount_type', 'in', [None, False])]}"/>
                     </div>
                 </xpath>
-
-                <xpath expr="//field[@name='tax_totals']" position="before">
-                    <field name="amount_undiscounted" attrs="{'invisible':[('ks_global_discount_rate','=',0)]}"/>
-                    <field name="discount_amount" attrs="{'invisible':[('ks_global_discount_rate','=',0)]}"/>
-                </xpath>
-
                 <xpath expr="//field[@name='invoice_line_ids']//tree//field[@name='discount']" position="before">
                     <field name="discount_1"/>
                     <field name="discount_2"/>

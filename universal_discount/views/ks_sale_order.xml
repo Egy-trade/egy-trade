@@ -21,10 +21,6 @@
                     <field name="discount_2"/>
                     <field name="discount_3"/>
                 </xpath>
-                <xpath expr="//field[@name='tax_totals']" position="before">
-                    <field name="amount_undiscounted" attrs="{'invisible':[('ks_global_discount_rate','=',0)]}"/>
-                    <field name="discount_amount" attrs="{'invisible':[('ks_global_discount_rate','=',0)]}"/>
-                </xpath>
 <!--                <xpath expr="//field[@name='payment_term_id']" position="after">-->
 <!--                    <field name="apply_discount_on_tax_amount"/>-->
 <!--                </xpath>-->
