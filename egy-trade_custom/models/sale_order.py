@@ -31,8 +31,6 @@ class SaleOrder(models.Model):
     def action_to_approve(self):
         self.state = 'approve'
 
-    partner_allow_ids = fields.Many2many('res.partner', compute='_get_partner_allows')
-
     @api.depends('partner_id')
     def _get_partner_allows(self):
         user = self.env.user
@@ -49,6 +47,7 @@ class SaleOrder(models.Model):
             print("Partners", partners)
         self.partner_allow_ids = partners
 
+    partner_allow_ids = fields.Many2many('res.partner', compute='_get_partner_allows')
 
     # def read(self, records):
     #     for rec in self:
@@ -86,3 +85,13 @@ class SaleOrderLine(models.Model):
             if rec.discount > self.env.user.max_discount:
                 raise ValidationError(_(f'Your maximum allowed discount per order line is {self.env.user.max_discount}'))
 
+    @api.constrains('name')
+    def _check_name_c(self):
+        """ Validate name_c """
+        for rec in self:
+            purchase_line_ids = self.env['purchase.order.line'].search([
+                ('sale_line_id','=', rec.id)
+            ])
+            if purchase_line_ids:
+                for line in purchase_line_ids:
+                    line.name = rec.name

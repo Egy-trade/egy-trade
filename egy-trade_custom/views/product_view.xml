@@ -1,14 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <record id="product_template_form_inherited" model="ir.ui.view">
-        <field name="name">product.template.form.inherited</field>
+<!--    <record id="product_template_form_inherited" model="ir.ui.view">-->
+<!--        <field name="name">product.template.form.inherited</field>-->
+<!--        <field name="model">product.template</field>-->
+<!--        <field name="inherit_id" ref="product.product_template_only_form_view"/>-->
+<!--        <field name="arch" type="xml">-->
+<!--            &lt;!&ndash;            <xpath expr="//field[@name='company_id']" position="before">&ndash;&gt;-->
+<!--            &lt;!&ndash;                <field name="change_date"/>&ndash;&gt;-->
+<!--            &lt;!&ndash;            </xpath>&ndash;&gt;-->
+<!--            <xpath expr="//group[field[@name='description']]" position="replace">-->
+<!--                <group>-->
+<!--                    <group>-->
+<!--                        <field name="vendor_id" readonly="1"/>-->
+<!--                        <field name="family_name"/>-->
+<!--                        <field name="color"/>-->
+<!--                        <field name="product_type_spec"/>-->
+<!--                        <field name="cct"/>-->
+<!--                        <field name="driver_manufacture"/>-->
+<!--                    </group>-->
+<!--                    <group>-->
+<!--                        <field name="power"/>-->
+<!--                        <field name="ip"/>-->
+<!--                        <field name="led_voltage"/>-->
+<!--                        <field name="lumen"/>-->
+<!--                        <field name="manufacturer"/>-->
+<!--                        <field name="origin"/>-->
+<!--                    </group>-->
+<!--                </group>-->
+<!--                <group name="internal_notes" string="Internal Notes">-->
+<!--                    <field name="description" nolabel="1" placeholder="This note is only for internal purposes."/>-->
+<!--                </group>-->
+<!--            </xpath>-->
+<!--        </field>-->
+<!--    </record>-->
+
+    <record id="product_template_form_view_inherited" model="ir.ui.view">
+        <field name="name">product.template.form.view.inherited</field>
         <field name="model">product.template</field>
-        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
         <field name="arch" type="xml">
-            <!--            <xpath expr="//field[@name='company_id']" position="before">-->
-            <!--                <field name="change_date"/>-->
-            <!--            </xpath>-->
+            <xpath expr="//field[@name='company_id']" position="before">
+                <field name="cost_change_date" groups="egy-trade_custom.group_product_logistics"/>
+                <field name="margin" groups="egy-trade_custom.group_product_logistics"/>
+            </xpath>
             <xpath expr="//group[field[@name='description']]" position="replace">
                 <group>
                     <group>
@@ -32,18 +67,6 @@
                     <field name="description" nolabel="1" placeholder="This note is only for internal purposes."/>
                 </group>
             </xpath>
-        </field>
-    </record>
-
-    <record id="product_template_form_view_inherited" model="ir.ui.view">
-        <field name="name">product.template.form.view.inherited</field>
-        <field name="model">product.template</field>
-        <field name="inherit_id" ref="product.product_template_form_view"/>
-        <field name="arch" type="xml">
-            <xpath expr="//field[@name='company_id']" position="before">
-                <field name="cost_change_date" groups="egy-trade_custom.group_product_logistics"/>
-                <field name="margin" groups="egy-trade_custom.group_product_logistics"/>
-            </xpath>
             <xpath expr="//field[@name='standard_price']" position="attributes">
                 <attribute name="groups">egy-trade_custom.group_product_logistics</attribute>
             </xpath>
@@ -55,7 +78,52 @@
         </field>
     </record>
 
+    
+    <record id="inherit_product_product_form" model="ir.ui.view">
+        <field name="name">inherit.product.product.form</field>
+        <field name="model">product.product</field>
+        <!--<field name="groups_id" eval="[(4, ref(''))]"/>-->
+        <field name="inherit_id" ref="product.product_normal_form_view"/>
+        <field name="arch" type="xml">
 
+            <xpath expr="//field[@name='company_id']" position="before">
+                <field name="cost_change_date" groups="egy-trade_custom.group_product_logistics"/>
+                <field name="margin" groups="egy-trade_custom.group_product_logistics"/>
+            </xpath>
+            <xpath expr="//group[field[@name='description']]" position="replace">
+                <group>
+                    <group>
+                        <field name="vendor_id" readonly="1"/>
+                        <field name="family_name"/>
+                        <field name="color"/>
+                        <field name="product_type_spec"/>
+                        <field name="cct"/>
+                        <field name="driver_manufacture"/>
+                    </group>
+                    <group>
+                        <field name="power"/>
+                        <field name="ip"/>
+                        <field name="led_voltage"/>
+                        <field name="lumen"/>
+                        <field name="manufacturer"/>
+                        <field name="origin"/>
+                    </group>
+                </group>
+                <group name="internal_notes" string="Internal Notes">
+                    <field name="description" nolabel="1" placeholder="This note is only for internal purposes."/>
+                </group>
+            </xpath>
+            <xpath expr="//field[@name='standard_price']" position="attributes">
+                <attribute name="groups">egy-trade_custom.group_product_logistics</attribute>
+            </xpath>
+            <notebook position="before">
+                <group>
+                    <field name="mounting_type"/>
+                </group>
+            </notebook>
+        </field>
+    </record>
+    
     <record id="product_template_search_inherited" model="ir.ui.view">
         <field name="name">product.template.search.inherited</field>
         <field name="model">product.template</field>

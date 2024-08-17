@@ -57,6 +57,7 @@ class PurchaseOrder(models.Model):
     #     res = super(PurchaseOrder, self).read(records)
     #     return res
 
+
 class PurchaseOrderLine(models.Model):
     _inherit = 'purchase.order.line'
 
@@ -65,3 +66,10 @@ class PurchaseOrderLine(models.Model):
     product_power = fields.Char(related='product_id.power')
     product_ip = fields.Char(related='product_id.ip')
     product_lumen = fields.Char(related='product_id.lumen')
+
+    @api.constrains('sale_line_id', 'sale_line_id.name')
+    def _check_sale_line_id(self):
+        """ Validate sale_line_id """
+        for rec in self:
+            if rec.sale_line_id:
+                rec.name = rec.sale_line_id.name
