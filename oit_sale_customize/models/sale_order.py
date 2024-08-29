@@ -26,9 +26,19 @@ class SaleOrder(models.Model):
         'terms.conditions'
     )
     amount_total = fields.Monetary(
-        tracking=True
+        tracking=False
     )
-    
+    total = fields.Monetary(
+        compute='_compute_total',
+        tracking=4
+    )
+
+    @api.depends('amount_tax', 'amount_untaxed')
+    def _compute_total(self):
+        """ Compute total value """
+        for rec in self:
+            rec.total = rec.amount_tax + rec.amount_untaxed
+
     def create_quotation_template(self):
         """ Create Quotation Template """
         self.ensure_one()
