@@ -25,6 +25,9 @@ class SaleOrder(models.Model):
     terms_conditions_id = fields.Many2one(
         'terms.conditions'
     )
+    amount_total = fields.Monetary(
+        tracking=True
+    )
     
     def create_quotation_template(self):
         """ Create Quotation Template """
