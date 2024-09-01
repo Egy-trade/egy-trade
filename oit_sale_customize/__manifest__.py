@@ -17,6 +17,7 @@
         'sale_crm',
         'sale_management',
         'purchase',
+        'universal_discount',
     ],
     'data': [
         'security/ir.model.access.csv',

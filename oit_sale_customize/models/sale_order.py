@@ -30,14 +30,23 @@ class SaleOrder(models.Model):
     )
     total = fields.Monetary(
         compute='_compute_total',
-        tracking=4
+        tracking=True
     )
 
-    @api.depends('amount_tax', 'amount_untaxed')
+    @api.depends('amount_tax', 'order_line', 'amount_undiscounted', 'discount_amount')
     def _compute_total(self):
         """ Compute total value """
         for rec in self:
-            rec.total = rec.amount_tax + rec.amount_untaxed
+            if rec.order_line:
+                tax_amount = 0
+                for line in rec.order_line:
+                    taxes = line.tax_id.compute_all(line.price_subtotal, rec.currency_id, 1,
+                                                     product=line.product_id, partner=rec.partner_id)
+                    price_tax = sum(t.get('amount', 0.0) for t in taxes.get('taxes', []))
+                    tax_amount += price_tax
+                rec.total = rec.amount_undiscounted - rec.discount_amount + tax_amount
+            else:
+                rec.total = 0
 
     def create_quotation_template(self):
         """ Create Quotation Template """

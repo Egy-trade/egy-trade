@@ -22,6 +22,16 @@ class KsGlobalDiscountSales(models.Model):
     ks_enable_discount = fields.Boolean(compute='ks_verify_discount')
     # apply_discount_on_tax_amount = fields.Boolean()
 
+    discount_amount = fields.Float(
+        compute='_compute_discount_amount'
+    )
+
+    @api.depends('amount_undiscounted', 'amount_untaxed')
+    def _compute_discount_amount(self):
+        """ Compute discount_amount value """
+        for rec in self:
+            rec.discount_amount = rec.amount_undiscounted - rec.amount_untaxed
+
     @api.depends('company_id.ks_enable_discount')
     def ks_verify_discount(self):
         for rec in self:
@@ -104,6 +114,7 @@ class SaleOrderLine(models.Model):
     discount_3 = fields.Float(
         'Discount 2'
     )
+    tx_amount = fields.Float()
 
     @api.depends('product_uom_qty', 'discount', 'price_unit',
                  'tax_id', 'discount_2', 'discount_3')
@@ -139,12 +150,13 @@ class SaleOrderLine(models.Model):
             if taxes:
                 for rec in taxes:
                     tax_amt += rec.get("amount")
-
-            line.update({
+            line.tx_amount = tax_amt
+            line.write({
                 'price_subtotal': amount_untaxed,
                 'price_tax': tax_amt,
                 'price_total': amount_untaxed + tax_amt,
             })
+
 
     def _prepare_invoice_line(self, **optional_values):
         result = super(SaleOrderLine, self)._prepare_invoice_line(**optional_values)
