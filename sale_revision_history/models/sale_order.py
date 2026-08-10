@@ -218,6 +218,9 @@ class SaleOrder(models.Model):
         self.ensure_one()
         current = self.current_revision_id or self
         family = current.with_context(active_test=False).old_revision_ids | current
+        search_view = self.env.ref(
+            "sale_revision_history.sale_order_revision_history_search"
+        )
         return {
             "type": "ir.actions.act_window",
             "name": _("Revision History - %s") % (current.unrevisioned_name or current.name),
@@ -227,9 +230,10 @@ class SaleOrder(models.Model):
                 (self.env.ref("sale_revision_history.sale_order_revision_history_tree").id, "tree"),
                 (self.env.ref("sale.view_order_form").id, "form"),
             ],
-            "search_view_id": self.env.ref(
-                "sale_revision_history.sale_order_revision_history_search"
-            ).id,
+            # Dynamic client actions expect the same [id, name] shape returned
+            # by ir.actions.act_window.read(); a bare integer is ignored and
+            # silently falls back to the standard Sales search view.
+            "search_view_id": [search_view.id, search_view.name],
             # This action is the comment history, not another quotation list.
             # Keep the current blank draft out even if the web client ignores
             # a search-default hint while opening a dynamic action.

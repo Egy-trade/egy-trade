@@ -178,6 +178,12 @@ class RevisionHistoryCase(SavepointCase):
         action = second.action_open_revision_history()
         self.assertEqual(set(action["domain"][0][2]), set((history | second).ids))
         self.assertEqual(action["domain"][1], ("revision_reason", "!=", False))
+        self.assertEqual(
+            action["search_view_id"][0],
+            self.env.ref(
+                "sale_revision_history.sale_order_revision_history_search"
+            ).id,
+        )
         self.assertFalse(action["context"]["active_test"])
         self.assertEqual(action["context"]["search_default_has_revision_comment"], 1)
 
