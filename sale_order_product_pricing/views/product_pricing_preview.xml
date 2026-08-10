@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="sale_order_pricing_preview_form" model="ir.ui.view">
+        <field name="name">sale.order.pricing.preview.form</field>
+        <field name="model">sale.order.pricing.preview</field>
+        <field name="arch" type="xml">
+            <form string="Product Pricing Preview" create="0" edit="0" delete="0">
+                <sheet>
+                    <field name="order_id" invisible="1"/>
+                    <field name="preview_hash" invisible="1"/>
+                    <field name="can_apply" invisible="1"/>
+                    <group string="Summary" col="4">
+                        <field name="ready_count"/>
+                        <field name="protected_count"/>
+                        <field name="skipped_count"/>
+                        <field name="blocked_count"/>
+                    </group>
+                    <field name="line_ids" nolabel="1">
+                        <tree create="0" edit="0" delete="0"
+                              decoration-success="status == 'ready'"
+                              decoration-warning="status == 'skipped'"
+                              decoration-danger="status == 'blocked'"
+                              decoration-muted="status == 'protected'">
+                            <field name="product_id"/>
+                            <field name="product_uom_id" optional="hide"/>
+                            <field name="quantity"/>
+                            <field name="purchase_cost"/>
+                            <field name="cost_currency_id" optional="hide"/>
+                            <field name="factor"/>
+                            <field name="line_factor"/>
+                            <field name="currency_rate" optional="hide"/>
+                            <field name="origin" widget="badge"/>
+                            <field name="status" widget="badge"/>
+                            <field name="current_price"/>
+                            <field name="current_currency_id"/>
+                            <field name="proposed_price"/>
+                            <field name="proposed_currency_id"/>
+                            <field name="conversion_required" optional="hide"/>
+                            <field name="reprice_required" optional="hide"/>
+                            <field name="reason"/>
+                        </tree>
+                    </field>
+                </sheet>
+                <footer>
+                    <button name="action_confirm_apply" type="object" string="Confirm Apply"
+                            class="btn-primary" attrs="{'invisible': [('can_apply', '=', False)]}"
+                            confirm="Apply this reviewed pricing proposal atomically?"/>
+                    <button string="Close" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

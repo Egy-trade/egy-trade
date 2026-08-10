@@ -1,247 +1,855 @@
-from odoo import models, fields, api
-from odoo.exceptions import UserError
+"""Controlled quotation pricing based on canonical ``sale.order.line`` records.
+
+The historical Product Pricing grid used a second writable representation of a
+quotation. It is retired: all pricing state and mutations live on canonical sale
+order lines.
+"""
+
+import hashlib
+import json
+
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError, ValidationError
+
+
+_PRICING_INTERNAL_TOKEN = object()
+_PRICING_DOWNPAYMENT_TOKEN = object()
+
+
+def _is_pricing_internal(env):
+    """Return true only for in-process calls carrying our unforgeable token."""
+    return env.context.get('_pricing_internal_token') is _PRICING_INTERNAL_TOKEN
+
+
+def _is_pricing_downpayment(env):
+    """Identify down-payment lines created by the standard Odoo wizard."""
+    return env.context.get('_pricing_downpayment_token') is _PRICING_DOWNPAYMENT_TOKEN
 
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
     product_pricing = fields.Boolean(
-        copy=True
-    )
-    total_estimate_unit_price = fields.Float(compute='_compute_estimate_unit_price')
-    product_pricing_ids = fields.One2many('sale.order.line', 'order_id',
-                                          copy=True,
-                                          store=False, compute='change_order_line',
-                                          readonly=False,precompute=True)
-    currency_estimate_id = fields.Many2one('res.currency', string='Currency',
-                                           copy=True,
-                                           default=lambda self: self.env.company.currency_id)
-    currency_estimate_id_symbol = fields.Char(related='currency_estimate_id.symbol')
-    currency_rate_estimate = fields.Float(compute='_compute_currency_rate',digits=(12, 6),
-                                          copy=True,
-                                          store=True, precompute=True)
-    currency_rate_inverse = fields.Float(compute='_compute_currency_rate_inverse')
-    change_currency_rate_type = fields.Selection([('amount', 'Amount'), ('percentage', 'Percentage')], copy=True)
-    change_currency_rate = fields.Float(copy=True)
-    global_factor = fields.Float(copy=True)
-    analysis_created = fields.Boolean(
-        copy=False
-    )
+        copy=True, groups='sale_order_product_pricing.product_pricing_group')
+    total_estimate_unit_price = fields.Float(
+        compute='_compute_estimate_unit_price',
+        groups='sale_order_product_pricing.product_pricing_group')
+    currency_estimate_id = fields.Many2one(
+        'res.currency', string='Cost Currency', copy=True,
+        default=lambda self: self.env.company.currency_id,
+        groups='sale_order_product_pricing.product_pricing_group')
+    currency_estimate_id_symbol = fields.Char(
+        related='currency_estimate_id.symbol',
+        groups='sale_order_product_pricing.product_pricing_group')
+    currency_rate_estimate = fields.Float(
+        compute='_compute_currency_rate', digits=(12, 6), copy=True, store=True,
+        groups='sale_order_product_pricing.product_pricing_group')
+    currency_rate_inverse = fields.Float(
+        compute='_compute_currency_rate_inverse', digits=(12, 6), store=True,
+        groups='sale_order_product_pricing.product_pricing_group')
+    change_currency_rate_type = fields.Selection(
+        [('amount', 'Amount'), ('percentage', 'Percentage')], copy=True,
+        groups='sale_order_product_pricing.product_pricing_group')
+    change_currency_rate = fields.Float(
+        copy=True, groups='sale_order_product_pricing.product_pricing_group')
+    global_factor = fields.Float(
+        default=1.0, copy=True,
+        groups='sale_order_product_pricing.product_pricing_group')
+    analysis_created = fields.Boolean(copy=False)
+    product_pricing_preview_hash = fields.Char(
+        copy=False, readonly=True,
+        groups='sale_order_product_pricing.product_pricing_group')
+    product_pricing_previewed_at = fields.Datetime(
+        copy=False, readonly=True,
+        groups='sale_order_product_pricing.product_pricing_group')
+    pricing_audit_log_ids = fields.One2many(
+        'sale.order.pricing.audit', 'order_id', string='Pricing Log', readonly=True,
+        copy=False, groups='sale_order_product_pricing.product_pricing_group')
 
-    @api.onchange('global_factor', 'order_line')
+    @api.onchange('global_factor')
     def _onchange_global_factor(self):
-        """ global_factor """
-        for rec in self:
-            if rec.product_pricing_ids:
-                rec.product_pricing_ids.write({
-                    'factor': rec.global_factor
-                })
+        """Stage factor changes only; selling prices change exclusively on Apply."""
+        for order in self:
+            order._pricing_lines().factor = order.global_factor
 
-    def apply_estimate_product_price(self):
-        for rec in self.order_line:
-            if rec.estimate_unit_price:
-                print(rec.estimate_unit_price)
-                rec.product_uom_qty = rec.qty_estimate
-                rec.price_unit = rec.estimate_unit_price
+    def write(self, vals):
+        currency_changed = bool({'currency_id', 'pricelist_id'} & set(vals))
+        previous_currencies = {}
+        previous_prices = {}
+        if currency_changed:
+            previous_currencies = {order.id: order.currency_id.display_name for order in self}
+            previous_prices = {
+                line.id: (
+                    line.price_unit,
+                    line.sudo().price_origin,
+                    line.sudo().price_currency_id,
+                )
+                for order in self for line in order._pricing_lines()
+            }
+        result = super().write(vals)
+        if 'global_factor' in vals and not _is_pricing_internal(self.env):
+            for order in self:
+                order._pricing_lines().with_context(
+                    _pricing_internal_token=_PRICING_INTERNAL_TOKEN
+                ).write({'factor': order.global_factor})
+        if currency_changed and not _is_pricing_internal(self.env):
+            for order in self:
+                for line in order._pricing_lines():
+                    old_price, old_origin, old_currency = previous_prices[line.id]
+                    protected_line = line.sudo()
+                    if protected_line.price_origin == 'pricelist':
+                        pricelist_price = line._pricing_pricelist_price()
+                        protected_line.with_context(
+                            _pricing_internal_token=_PRICING_INTERNAL_TOKEN
+                        ).write({
+                            'price_unit': pricelist_price,
+                            'price_reference': pricelist_price,
+                            'price_origin': 'pricelist',
+                            'price_currency_id': order.currency_id.id,
+                        })
+                        reason = _('Currency/pricelist changed from %(old)s [%(old_id)s] to %(new)s [%(new_id)s]; '
+                                   'Odoo Price List refreshed.') % {
+                            'old': previous_currencies[order.id], 'old_id': old_currency.id,
+                            'new': order.currency_id.display_name, 'new_id': order.currency_id.id,
+                        }
+                    elif protected_line.pricing_reprice_pending:
+                        reason = _('Currency/pricelist changed from %(old)s [%(old_id)s] to %(new)s [%(new_id)s]; '
+                                   'the pending product/UoM replacement will be repriced by confirmed Apply.') % {
+                            'old': old_currency.display_name or previous_currencies[order.id],
+                            'old_id': old_currency.id, 'new': order.currency_id.display_name,
+                            'new_id': order.currency_id.id,
+                        }
+                    elif protected_line.price_origin == 'edited':
+                        reason = _('Currency/pricelist changed from %(old)s [%(old_id)s] to %(new)s [%(new_id)s]; '
+                                   'Edited amount remains '
+                                   'unchanged until the confirmed conversion preview is applied.') % {
+                            'old': old_currency.display_name or previous_currencies[order.id],
+                            'old_id': old_currency.id, 'new': order.currency_id.display_name,
+                            'new_id': order.currency_id.id,
+                        }
+                    else:
+                        reason = _('Currency/pricelist changed from %(old)s [%(old_id)s] to %(new)s [%(new_id)s]; '
+                                   'Product Pricing remains '
+                                   'unchanged until the confirmed preview is applied.') % {
+                            'old': old_currency.display_name or previous_currencies[order.id],
+                            'old_id': old_currency.id, 'new': order.currency_id.display_name,
+                            'new_id': order.currency_id.id,
+                        }
+                    order._pricing_log_line(
+                        line, reason, old_price=old_price, old_origin=old_origin,
+                        old_currency=old_currency)
+        return result
 
-    # @api.depends('order_line')
-    def change_order_line(self):
-        self.product_pricing_ids = self.order_line
-
-    @api.depends('product_pricing_ids.estimate_unit_price')
+    @api.depends('order_line.estimate_unit_price')
     def _compute_estimate_unit_price(self):
-        for line in self:
-            total = 0
-            for rec in line.product_pricing_ids:
-                total += rec.estimate_unit_price
-            line.total_estimate_unit_price = total
+        for order in self:
+            order.total_estimate_unit_price = sum(order.order_line.mapped('estimate_unit_price'))
 
     @api.onchange('change_currency_rate_type', 'change_currency_rate')
     @api.constrains('change_currency_rate')
     def check_currency_rate_type(self):
-        if self.change_currency_rate_type == 'percentage' and self.change_currency_rate > 100:
-            raise UserError('The change currency rate amount more then 100%')
-
-    @api.onchange('change_currency_rate_type', 'change_currency_rate', 'currency_id','currency_estimate_id')
-    def change_currency_rate_func(self):
-        for rec in self.product_pricing_ids:
-            if self.currency_estimate_id.rate == 1 or  rec.order_id.pricelist_id.currency_id == rec.order_id.currency_estimate_id:
-                rec.currency_rate_estimate = 1
-            else:
-                if self.change_currency_rate_type == 'percentage':
-                    rec.currency_rate_estimate = self.currency_rate_inverse + self.currency_rate_inverse * (
-                            self.change_currency_rate / 100)
-                elif self.change_currency_rate_type == 'amount':
-                    rec.currency_rate_estimate = self.currency_rate_inverse + self.change_currency_rate
-                else:
-                    rec.currency_rate_estimate = self.currency_rate_inverse
-
-    @api.depends('currency_id','currency_estimate_id')
-    def _compute_currency_rate_inverse(self):
-        for rec in self:
-            rate = rec.currency_estimate_id.rate_ids.filtered(
-                lambda l: l.name == max([x.name for x in rec.currency_estimate_id.rate_ids]))
-            rec.currency_rate_inverse = rate.inverse_company_rate
-
-    @api.constrains('state')
-    def _check_state(self):
-        """ Validate state """
-        for rec in self:
-            if rec.state == 'sent' and rec.order_line:
-                lines = []
-                for record in rec.order_line:
-                    if record.estimate_unit_price:
-                        lines += [{
-                            'product_id': record.product_id.id,
-                            'sale_id': record.order_id.id,
-                            'quantity': record.product_uom_qty,
-                            'purchase_price_estimate': record.purchase_price_estimate,
-                            'factor': record.factor,
-                            'currency_rate_estimate': record.currency_rate_estimate,
-                            'note': record.note,
-                        }]
-                if lines:
-                    self.env['product.analysis'].create(lines)
-                    rec.analysis_created = True
-
-    def action_quotation_send(self):
-        """ Override action_quotation_send """
-        lines = []
-        for rec in self:
-            if rec.order_line and not rec.analysis_created:
-                for record in rec.order_line:
-                    if record.estimate_unit_price:
-                        lines += [{
-                            'product_id': record.product_id.id,
-                            'sale_id': record.order_id.id,
-                            'quantity': record.product_uom_qty,
-                            'purchase_price_estimate': record.purchase_price_estimate,
-                            'factor': record.factor,
-                            'currency_rate_estimate': record.currency_rate_estimate,
-                            'note': record.note,
-                        }]
-                if lines:
-                    self.env['product.analysis'].create(lines)
-                    rec.analysis_created = True
-        return super(SaleOrder, self).action_quotation_send()
-
-    def action_confirm(self):
-        res = super(SaleOrder, self).action_confirm()
-        lines = []
-        for rec in self:
-            if rec.order_line and not rec.analysis_created:
-                for record in rec.order_line:
-                    if record.estimate_unit_price:
-                        lines += [{
-                            'product_id': record.product_id.id,
-                            'sale_id': record.order_id.id,
-                            'quantity': record.product_uom_qty,
-                            'purchase_price_estimate': record.purchase_price_estimate,
-                            'factor': record.factor,
-                            'currency_rate_estimate': record.currency_rate_estimate,
-                            'note': record.note,
-                        }]
-
-        rec.env['product.analysis'].create(lines)
-
-        return res
-
-    @api.depends('currency_id', 'date_order', 'company_id','currency_estimate_id')
-    def _compute_currency_rate(self):
-        cache = {}
         for order in self:
-            order_date = order.date_order.date()
-            if not order.company_id:
-                order.currency_rate = order.currency_id.with_context(date=order_date).rate or 1.0
-                order.currency_rate_estimate = order.currency_estimate_id.with_context(date=order_date).rate or 1.0
+            if order.change_currency_rate_type == 'percentage' and order.change_currency_rate > 100:
+                raise ValidationError(_('The currency-rate adjustment cannot exceed 100%.'))
+
+    @api.depends('currency_id', 'currency_estimate_id', 'date_order', 'company_id')
+    def _compute_currency_rate(self):
+        for order in self:
+            date = fields.Date.to_date(order.date_order) or fields.Date.context_today(order)
+            company_currency = order.company_id.currency_id
+            if not company_currency or not order.currency_estimate_id:
+                order.currency_rate_estimate = 1.0
                 continue
-            elif not order.currency_id:
-                order.currency_rate = 1.0
-                if not order.currency_estimate_id:
-                    order.currency_rate_estimate = 1.0
+            order.currency_rate_estimate = self.env['res.currency']._get_conversion_rate(
+                company_currency, order.currency_estimate_id, order.company_id, date)
+
+    @api.depends('currency_id', 'currency_estimate_id', 'date_order', 'company_id')
+    def _compute_currency_rate_inverse(self):
+        for order in self:
+            date = fields.Date.to_date(order.date_order) or fields.Date.context_today(order)
+            if not order.currency_estimate_id or not order.currency_id:
+                order.currency_rate_inverse = 1.0
             else:
-                key = (order.company_id.id, order_date, order.currency_id.id)
-                if key not in cache:
-                    cache[key] = self.env['res.currency']._get_conversion_rate(
-                        from_currency=order.company_id.currency_id,
-                        to_currency=order.currency_id,
-                        company=order.company_id,
-                        date=order_date,
-                    )
-                order.currency_rate = cache[key]
-                print(cache[key])
-                key = (order.company_id.id, order_date, order.currency_estimate_id.id)
-                if key not in cache:
-                    print(key)
-                    if order.currency_estimate_id:
-                        cache[key] = self.env['res.currency']._get_conversion_rate(
-                            from_currency=order.company_id.currency_id,
-                            to_currency=order.currency_estimate_id,
-                            company=order.company_id,
-                            date=order_date,
-                        )
-                order.currency_rate_estimate = cache[key] if order.currency_estimate_id else False
+                order.currency_rate_inverse = self.env['res.currency']._get_conversion_rate(
+                    order.currency_estimate_id, order.currency_id, order.company_id, date)
+
+    def _pricing_lines(self):
+        self.ensure_one()
+        return self.order_line.filtered(
+            lambda line: not line.display_type and not line.is_downpayment)
+
+    def _pricing_preview_payload(self):
+        """Return a serializable preview without changing quotation prices."""
+        self.ensure_one()
+        lines = []
+        for line in self._pricing_lines():
+            item = {
+                'line_id': line.id,
+                'product_id': line.product_id.id,
+                'product_name': line.product_id.display_name,
+                'product_uom_id': line.product_uom.id,
+                'quantity': line.product_uom_qty,
+                'purchase_cost': line.purchase_price_estimate,
+                'cost_currency_id': line.currency_estimate_id.id,
+                'factor': line.factor,
+                'line_factor': line.line_factor,
+                'currency_rate': line.currency_rate_estimate,
+                'partner_id': self.partner_id.id,
+                'pricelist_id': self.pricelist_id.id,
+                'current_price': line.price_unit,
+                'reference_price': line.price_reference,
+                'origin': line.price_origin,
+                'reprice_pending': line.pricing_reprice_pending,
+                'price_currency_id': line.price_currency_id.id,
+                'proposed_currency_id': self.currency_id.id,
+            }
+            if not line.product_id:
+                item.update(status='blocked', reason=_('A product is required.'))
+            elif line.purchase_price_estimate < 0:
+                item.update(status='blocked', reason=_('Purchasing cost cannot be negative.'))
+            elif not line.purchase_price_estimate:
+                proposed_price = line._pricing_pricelist_price()
+                item.update(
+                    status='skipped', origin='pricelist',
+                    proposed_price=proposed_price,
+                    reprice_required=(
+                        line.pricing_reprice_pending
+                        or line.price_unit != proposed_price
+                        or line.price_reference != proposed_price
+                        or line.price_currency_id != self.currency_id
+                    ),
+                    reason=_('No purchasing cost: Product Pricing is skipped and Odoo Price List remains in use.'))
+            elif line.factor <= 0 or line.line_factor <= 0 or line.currency_rate_estimate <= 0:
+                item.update(status='blocked', reason=_('Factor, line factor, and currency rate must all be positive.'))
+            elif line.pricing_reprice_pending:
+                item.update(
+                    status='ready', proposed_price=line._pricing_target_price(),
+                    reason=_('Product, UoM, or quantity changed: the line will be repriced by the confirmed Apply.'))
+            elif line.price_origin == 'edited':
+                proposed_price = line._pricing_convert_price(
+                    line.price_unit, line.price_currency_id, self.currency_id)
+                item.update(
+                    status='protected', proposed_price=proposed_price,
+                    conversion_required=line.price_currency_id != self.currency_id,
+                    reason=_('Edited selling price is protected; preview shows conversion only when its stored '
+                             'price currency differs from the quotation currency.'))
+            else:
+                item.update(status='ready', proposed_price=line._pricing_target_price())
+            lines.append(item)
+        return lines
+
+    def _pricing_preview_hash(self, preview):
+        """Bind Apply to the exact reviewed pricing inputs, not merely a timestamp."""
+        payload = [
+            (item['line_id'], item['product_id'], item.get('product_uom_id'), item.get('quantity'),
+             item.get('purchase_cost'), item.get('cost_currency_id'), item.get('factor'),
+             item.get('line_factor'), item.get('currency_rate'), item.get('partner_id'),
+             item.get('pricelist_id'), item['current_price'], item['reference_price'], item['origin'],
+             item.get('reprice_pending'), item.get('price_currency_id'),
+             item.get('proposed_currency_id'),
+             item.get('proposed_price'), item.get('conversion_required'),
+             item.get('reprice_required'), item['status'])
+            for item in preview
+        ]
+        return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
+
+    def get_product_pricing_preview(self):
+        """RPC-safe detailed preview for a future wizard/client action."""
+        self.ensure_one()
+        preview = self._pricing_preview_payload()
+        return {'lines': preview, 'hash': self._pricing_preview_hash(preview)}
+
+    def action_preview_product_pricing(self):
+        """Open a line-by-line review dialog without changing quotation prices."""
+        self.ensure_one()
+        if self.state != 'draft':
+            raise UserError(_('Product Pricing is available only on a draft quotation.'))
+        if not self.product_pricing:
+            raise UserError(_('Enable Product Pricing before previewing this quotation.'))
+        preview = self._pricing_preview_payload()
+        if not preview:
+            raise UserError(_('Add at least one quotation line before previewing Product Pricing.'))
+        preview_hash = self._pricing_preview_hash(preview)
+        self.with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN).write({
+            'product_pricing_preview_hash': preview_hash,
+            'product_pricing_previewed_at': fields.Datetime.now(),
+        })
+        counts = {}
+        for item in preview:
+            counts[item['status']] = counts.get(item['status'], 0) + 1
+        wizard_lines = []
+        for item in preview:
+            line = self.env['sale.order.line'].browse(item['line_id'])
+            wizard_lines.append((0, 0, {
+                'sale_line_id': line.id,
+                'product_id': line.product_id.id,
+                'product_uom_id': line.product_uom.id,
+                'quantity': item['quantity'],
+                'purchase_cost': item['purchase_cost'],
+                'cost_currency_id': item['cost_currency_id'],
+                'factor': item['factor'],
+                'line_factor': item['line_factor'],
+                'currency_rate': item['currency_rate'],
+                'status': item['status'],
+                'origin': item['origin'],
+                'current_price': item['current_price'],
+                'proposed_price': item.get('proposed_price', item['current_price']),
+                'current_currency_id': (line.price_currency_id or self.currency_id).id,
+                'proposed_currency_id': self.currency_id.id,
+                'reason': item.get('reason'),
+                'conversion_required': item.get('conversion_required', False),
+                'reprice_required': item.get('reprice_required', False),
+            }))
+        wizard = self.env['sale.order.pricing.preview'].create({
+            'order_id': self.id,
+            'preview_hash': preview_hash,
+            'ready_count': counts.get('ready', 0),
+            'protected_count': counts.get('protected', 0),
+            'skipped_count': counts.get('skipped', 0),
+            'blocked_count': counts.get('blocked', 0),
+            'can_apply': not counts.get('blocked', 0),
+            'line_ids': wizard_lines,
+        })
+        self._pricing_log(_(
+            'Product Pricing preview created: %(ready)s ready, %(protected)s Edited protected, '
+            '%(skipped)s skipped, %(blocked)s blocked.') % {
+                'ready': counts.get('ready', 0),
+                'protected': counts.get('protected', 0),
+                'skipped': counts.get('skipped', 0),
+                'blocked': counts.get('blocked', 0),
+            })
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Product Pricing Preview'),
+            'res_model': 'sale.order.pricing.preview',
+            'res_id': wizard.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
+    def action_apply_product_pricing(self):
+        """Apply a previously reviewed, unchanged, complete pricing proposal atomically.
+
+        A view/wizard must explicitly pass ``pricing_apply_confirmed`` after the
+        user has reviewed :meth:`action_preview_product_pricing`.
+        """
+        for order in self:
+            if order.state != 'draft':
+                raise UserError(_('Product Pricing is available only on a draft quotation.'))
+            if not order.product_pricing:
+                raise UserError(_('Enable Product Pricing before applying this quotation.'))
+            if not self.env.context.get('pricing_apply_confirmed'):
+                raise UserError(_('Preview Product Pricing first, then confirm Apply.'))
+            preview = order._pricing_preview_payload()
+            if not order.product_pricing_previewed_at or (
+                    order.product_pricing_preview_hash != order._pricing_preview_hash(preview)):
+                raise UserError(_('Pricing inputs changed since the last preview. Preview again before applying.'))
+            blocked = [item for item in preview if item['status'] == 'blocked']
+            if blocked:
+                raise UserError(_('Product Pricing cannot be applied while an eligible line is incomplete.'))
+            # All validation is complete before the first line is written. Odoo's
+            # transaction then makes the multi-line operation atomic on errors.
+            for item in preview:
+                line = self.env['sale.order.line'].browse(item['line_id'])
+                if item['status'] == 'ready':
+                    line.with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN).write({
+                        'price_unit': item['proposed_price'],
+                        'price_reference': item['proposed_price'],
+                        'price_origin': 'product_pricing',
+                        'price_currency_id': order.currency_id.id,
+                        'pricing_reprice_pending': False,
+                    })
+                    order._pricing_log_line(
+                        line, _(
+                            'Applied confirmed Product Pricing preview: cost %(cost)s, factor %(factor)s, '
+                            'line factor %(line_factor)s, currency rate %(rate)s.'
+                        ) % {
+                            'cost': item['purchase_cost'], 'factor': item['factor'],
+                            'line_factor': item['line_factor'], 'rate': item['currency_rate'],
+                        },
+                        old_price=item['current_price'], old_origin=item['origin'])
+                elif item['status'] == 'protected' and item.get('conversion_required'):
+                    source_currency = line.price_currency_id
+                    converted_reference = line._pricing_convert_price(
+                        line.price_reference, line.price_currency_id, order.currency_id)
+                    line.with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN).write({
+                        'price_unit': item['proposed_price'],
+                        'price_reference': converted_reference,
+                        'price_origin': 'edited',
+                        'price_currency_id': order.currency_id.id,
+                        'pricing_reprice_pending': False,
+                    })
+                    order._pricing_log_line(
+                        line,
+                        _('Applied confirmed currency conversion of protected Edited price '
+                          '[%(old_id)s to %(new_id)s].') % {
+                            'old_id': source_currency.id, 'new_id': order.currency_id.id,
+                        },
+                        old_price=item['current_price'], old_origin=item['origin'],
+                        old_currency=source_currency)
+                elif item['status'] == 'skipped' and item.get('reprice_required'):
+                    source_currency = line.price_currency_id
+                    line.with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN).write({
+                        'price_unit': item['proposed_price'],
+                        'price_reference': item['proposed_price'],
+                        'price_origin': 'pricelist',
+                        'price_currency_id': order.currency_id.id,
+                        'pricing_reprice_pending': False,
+                    })
+                    order._pricing_log_line(
+                        line,
+                        _('Product Pricing skipped; confirmed Odoo Price List reprice applied.'),
+                        old_price=item['current_price'], old_origin=item['origin'],
+                        old_currency=source_currency)
+            order._pricing_log(_(
+                'Confirmed Product Pricing Apply completed; ordinary Edited prices remained protected.'
+            ))
+            order.with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN).write({
+                'product_pricing_preview_hash': False,
+                'product_pricing_previewed_at': False,
+            })
+        return True
+
+    def apply_estimate_product_price(self):
+        """Backward-compatible action name; still enforces preview + confirmation."""
+        return self.action_apply_product_pricing()
+
+    def _pricing_log(self, body):
+        """Create a protected pricing audit entry without exposing it in chatter."""
+        for order in self:
+            self.env['sale.order.pricing.audit'].sudo().create({
+                'order_id': order.id,
+                'reason': body,
+                'user_id': self.env.user.id,
+                'old_currency_id': order.currency_id.id,
+                'new_currency_id': order.currency_id.id,
+            })
+
+    def _pricing_log_line(
+            self, line, reason, old_price=None, old_origin=None, old_currency=None):
+        """Append a protected, line-level pricing audit event."""
+        self.ensure_one()
+        protected_line = line.sudo()
+        old_price = line.price_unit if old_price is None else old_price
+        old_origin = protected_line.price_origin if old_origin is None else old_origin
+        old_currency = old_currency or protected_line.price_currency_id or self.currency_id
+        self.env['sale.order.pricing.audit'].sudo().create({
+            'order_id': self.id,
+            'line_id': line.id,
+            'product_id': line.product_id.id,
+            'old_price': old_price,
+            'new_price': line.price_unit,
+            'old_origin': old_origin or False,
+            'new_origin': protected_line.price_origin,
+            'old_currency_id': old_currency.id,
+            'new_currency_id': (protected_line.price_currency_id or self.currency_id).id,
+            'reason': reason,
+            'user_id': self.env.user.id,
+        })
 
 
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
-    purchase_price_estimate = fields.Float(copy=True)
-    factor = fields.Float(
-        copy=True
-    )
-    line_factor = fields.Float(
-        default=1,
-        copy=True
-    )
-    qty_estimate = fields.Float(string='Quantity', default=1)
-    estimate_unit_price = fields.Float(compute='_compute_estimate_unit_price', store=True)
-    currency_estimate_id = fields.Many2one('res.currency', string='Currency', compute='_compute_currency_estimate')
+    purchase_price_estimate = fields.Float(
+        copy=True, groups='sale_order_product_pricing.product_pricing_group')
+    factor = fields.Float(copy=True, groups='sale_order_product_pricing.product_pricing_group')
+    line_factor = fields.Float(default=1.0, copy=True, groups='sale_order_product_pricing.product_pricing_group')
+    qty_estimate = fields.Float(string='Quantity', default=1.0)
+    estimate_unit_price = fields.Float(
+        compute='_compute_estimate_unit_price', store=True,
+        groups='sale_order_product_pricing.product_pricing_group')
+    currency_estimate_id = fields.Many2one(
+        'res.currency', compute='_compute_currency_estimate',
+        groups='sale_order_product_pricing.product_pricing_group')
+    currency_rate_estimate = fields.Float(
+        compute='_compute_currency_rate_estimate', store=True,
+        groups='sale_order_product_pricing.product_pricing_group')
+    note = fields.Char()
+    price_origin = fields.Selection(
+        [('product_pricing', 'Product Pricing'), ('pricelist', 'Odoo Price List'), ('edited', 'Edited')],
+        default='pricelist', required=True, copy=True, index=True,
+        groups='sale_order_product_pricing.product_pricing_group')
+    price_reference = fields.Float(
+        string='Reference Price', digits='Product Price', copy=True,
+        help='Last automatic price baseline. Edited selling prices do not overwrite it.',
+        groups='sale_order_product_pricing.product_pricing_group')
+    price_currency_id = fields.Many2one(
+        'res.currency', string='Selling Price Currency', copy=True, readonly=True,
+        help='Currency of the numeric selling price and reference baseline.',
+        groups='sale_order_product_pricing.product_pricing_group')
+    pricing_eligible = fields.Boolean(
+        compute='_compute_pricing_eligible', store=True,
+        groups='sale_order_product_pricing.product_pricing_group')
+    pricing_warning = fields.Char(
+        copy=False, readonly=True,
+        groups='sale_order_product_pricing.product_pricing_group')
+    pricing_reprice_pending = fields.Boolean(
+        copy=False, readonly=True,
+        help='Set when a product, UoM, or quantity change must be repriced by confirmed Apply.',
+        groups='sale_order_product_pricing.product_pricing_group')
 
-    currency_rate_estimate = fields.Float(compute='change_currency_rate_func', store=True)
-    note = fields.Char(string='Note')
+    @api.model_create_multi
+    def create(self, vals_list):
+        prepared_vals = []
+        pricing_defaults = []
+        can_manage_pricing = self.env.is_superuser() or self.env.user.has_group(
+            'sale_order_product_pricing.product_pricing_group')
+        for values in vals_list:
+            values = dict(values)
+            if values.get('is_downpayment') and not _is_pricing_downpayment(self.env):
+                values['is_downpayment'] = False
+            order = self.env['sale.order'].browse(values.get('order_id'))
+            protected_order = order.sudo()
+            requested_factor = values.pop('factor', None)
+            factor = protected_order.global_factor
+            if can_manage_pricing and requested_factor is not None:
+                factor = requested_factor
+            # New lines retain the normal sale module's pricelist result.  The
+            # baseline is set after standard create/onchange defaults are present.
+            values.pop('price_origin', None)
+            values.pop('price_reference', None)
+            values.pop('price_currency_id', None)
+            values.pop('pricing_warning', None)
+            values.pop('pricing_eligible', None)
+            values.pop('pricing_reprice_pending', None)
+            prepared_vals.append(values)
+            pricing_defaults.append((factor, protected_order.currency_id.id))
+        lines = super(SaleOrderLine, self.with_context(pricing_initializing=True)).create(
+            prepared_vals)
+        for line, (factor, currency_id) in zip(lines, pricing_defaults):
+            if line.display_type or (line.is_downpayment and _is_pricing_downpayment(self.env)):
+                continue
+            protected_line = line.sudo()
+            pricelist_price = line._pricing_pricelist_price() if line.product_id else 0.0
+            warning = False
+            if not protected_line.purchase_price_estimate:
+                warning = _('No purchasing cost: Product Pricing is ineligible; Odoo Price List is used.')
+            protected_line.with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN).write({
+                'factor': factor,
+                'price_unit': pricelist_price,
+                'price_reference': pricelist_price,
+                'price_origin': 'pricelist',
+                'price_currency_id': currency_id,
+                'pricing_warning': warning,
+                'pricing_reprice_pending': False,
+            })
+            line.order_id._pricing_log_line(
+                line, _('New quotation line uses Odoo Price List.'),
+                old_price=0.0, old_origin=False)
+        return lines
 
-    @api.depends('factor', 'purchase_price_estimate', 'currency_id', 'product_uom_qty', 'currency_rate_estimate','currency_estimate_id', 'line_factor')
-    def _compute_estimate_unit_price(self):
-        for rec in self:
-            if rec.factor:
-                rec.estimate_unit_price = rec.purchase_price_estimate * rec.factor * rec.currency_rate_estimate * rec.line_factor
-            else:
-                rec.estimate_unit_price = rec.purchase_price_estimate * rec.currency_rate_estimate * rec.line_factor
+    def write(self, vals):
+        if _is_pricing_internal(self.env):
+            return super().write(vals)
 
-    @api.depends('purchase_price_estimate', 'currency_id', 'product_uom_qty','currency_estimate_id')
-    def _compute_currency_estimate(self):
-        for rec in self:
-            rec.currency_estimate_id = rec.order_id.currency_estimate_id
-            # rec.currency_rate_estimate = rec.order_id.currency_rate_inverse
+        vals = dict(vals)
+        if vals.get('is_downpayment') and not _is_pricing_downpayment(self.env):
+            raise UserError(_('The down-payment marker is managed by the standard invoice wizard.'))
+        # Origins and baselines are system-managed. A direct selling-price write
+        # is tracked below as Edited, while a direct metadata write cannot forge
+        # a pricing source or erase the audit baseline.
+        vals.pop('price_origin', None)
+        vals.pop('price_reference', None)
+        vals.pop('price_currency_id', None)
+        vals.pop('pricing_warning', None)
+        vals.pop('pricing_reprice_pending', None)
+        if not vals:
+            return True
+        if vals.get('purchase_price_estimate', 0) < 0:
+            raise ValidationError(_('Purchasing cost cannot be negative.'))
+        pricing_input_change = bool(
+            {'product_id', 'product_uom', 'product_uom_qty'} & set(vals)
+        )
+        cost_change = 'purchase_price_estimate' in vals
+        price_change = 'price_unit' in vals
+        if price_change and not pricing_input_change and not self._pricing_manual_price_authorized():
+            raise UserError(_(
+                'Only Product Pricing users or Sales Managers may manually edit a selling price.'))
+        previous_costs = {line.id: line.sudo().purchase_price_estimate for line in self}
+        previous_prices = {line.id: line.price_unit for line in self}
+        previous_origins = {line.id: line.sudo().price_origin for line in self}
+        previous_products = {line.id: line.product_id.display_name for line in self}
+        previous_uoms = {line.id: line.product_uom.display_name for line in self}
+        previous_quantities = {line.id: line.product_uom_qty for line in self}
 
-    @api.depends('purchase_price_estimate', 'currency_id', 'product_uom_qty', 'order_id.change_currency_rate_type',
-                 'order_id.change_currency_rate','order_id.currency_estimate_id')
-    def change_currency_rate_func(self):
-        for rec in self:
-            if rec.order_id.pricelist_id.currency_id == rec.order_id.currency_estimate_id:
-                print('kkkkkkkk')
-                rec.currency_rate_estimate = 1
-                print(rec.currency_rate_estimate)
-            else:
-                print('nnnnnnnnnnn')
-                if rec.order_id.currency_estimate_id.rate == 1:
-                    print('jjjjjjjj')
-                    rec.currency_rate_estimate = 1
-                else:
-                    if rec.order_id.change_currency_rate_type == 'percentage':
-                        rec.currency_rate_estimate = rec.order_id.currency_rate_inverse + rec.order_id.currency_rate_inverse * (
-                                rec.order_id.change_currency_rate / 100)
-                    elif rec.order_id.change_currency_rate_type == 'amount':
-                        rec.currency_rate_estimate = rec.order_id.currency_rate_inverse + rec.order_id.change_currency_rate
-
+        # An existing product/UoM replacement never silently accepts the client
+        # onchange price. It is held at the current selling price until preview.
+        if pricing_input_change:
+            for line in self:
+                line_vals = dict(vals)
+                line_vals.pop('price_origin', None)
+                line_vals.pop('price_reference', None)
+                line_vals.pop('price_currency_id', None)
+                if price_change:
+                    line_vals['price_unit'] = line.price_unit
+                super(SaleOrderLine, line).write(line_vals)
+                if not line.display_type and not line.is_downpayment:
+                    protected_line = line.sudo()
+                    reference = line._pricing_pricelist_price()
+                    if (cost_change and previous_costs[line.id] > 0
+                            and not protected_line.purchase_price_estimate):
+                        protected_line.with_context(
+                            _pricing_internal_token=_PRICING_INTERNAL_TOKEN
+                        ).write({
+                            'price_unit': reference,
+                            'price_reference': reference,
+                            'price_origin': 'pricelist',
+                            'price_currency_id': line.order_id.currency_id.id,
+                            'pricing_warning': _(
+                                'Purchasing cost changed to zero; Odoo Price List is used.'),
+                            'pricing_reprice_pending': False,
+                        })
+                        line.order_id._pricing_log_line(
+                            line, _('Purchasing cost changed to zero; Odoo Price List is now required.'),
+                            old_price=previous_prices[line.id], old_origin=previous_origins[line.id])
                     else:
-                        rec.currency_rate_estimate = rec.order_id.currency_rate_inverse
-                print(rec.currency_rate_estimate)
+                        protected_line.with_context(
+                            _pricing_internal_token=_PRICING_INTERNAL_TOKEN
+                        ).write({
+                            'price_reference': reference,
+                            'pricing_reprice_pending': True,
+                            'pricing_warning': (
+                                False if protected_line.purchase_price_estimate else _(
+                                    'No purchasing cost: replacement will use Odoo Price List on Apply.')),
+                        })
+                        line.order_id._pricing_log_line(
+                            line, _('Product, UoM, or quantity changed from %(old_product)s / %(old_uom)s / '
+                                    '%(old_qty)s; selling price is unchanged until '
+                                    'Product Pricing is previewed and applied.') % {
+                                'old_product': previous_products[line.id],
+                                'old_uom': previous_uoms[line.id],
+                                'old_qty': previous_quantities[line.id],
+                            }, old_price=previous_prices[line.id], old_origin=previous_origins[line.id])
+            return True
+
+        result = super().write(vals)
+        if price_change:
+            # Core ACL and record rules have already authorized this write.  Any
+            # non-automatic selling-price edit is explicitly protected from Apply.
+            self.sudo().with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN).write({
+                'price_origin': 'edited',
+                'pricing_reprice_pending': False,
+            })
+            for line in self:
+                line.sudo().with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN).write({
+                    'price_currency_id': line.order_id.currency_id.id,
+                })
+                line.order_id._pricing_log_line(
+                    line, _('Authorized manual selling-price edit.'),
+                    old_price=previous_prices[line.id], old_origin=previous_origins[line.id])
+        if cost_change:
+            for line in self:
+                protected_line = line.sudo()
+                if previous_costs[line.id] > 0 and not protected_line.purchase_price_estimate:
+                    pricelist_price = line._pricing_pricelist_price()
+                    protected_line.with_context(
+                        _pricing_internal_token=_PRICING_INTERNAL_TOKEN
+                    ).write({
+                        'price_unit': pricelist_price,
+                        'price_reference': pricelist_price,
+                        'price_origin': 'pricelist',
+                        'price_currency_id': line.order_id.currency_id.id,
+                        'pricing_warning': _(
+                            'Purchasing cost changed to zero; Odoo Price List is used.'),
+                        'pricing_reprice_pending': False,
+                    })
+                    line.order_id._pricing_log_line(
+                        line, _('Purchasing cost changed to zero; Odoo Price List is now required.'),
+                        old_price=previous_prices[line.id], old_origin=previous_origins[line.id])
+                elif previous_costs[line.id] <= 0 < protected_line.purchase_price_estimate:
+                    protected_line.with_context(
+                        _pricing_internal_token=_PRICING_INTERNAL_TOKEN
+                    ).write({
+                        'pricing_warning': False,
+                    })
+        return result
+
+    @api.depends('purchase_price_estimate')
+    def _compute_pricing_eligible(self):
+        for line in self:
+            line.pricing_eligible = line.purchase_price_estimate > 0
+
+    @api.constrains('purchase_price_estimate', 'factor', 'line_factor', 'currency_rate_estimate')
+    def _check_purchase_price_estimate(self):
+        if self.env.context.get('pricing_initializing'):
+            return
+        protected_lines = self.sudo()
+        if any(line.purchase_price_estimate < 0 for line in protected_lines):
+            raise ValidationError(_('Purchasing cost cannot be negative.'))
+        if any(
+                line.purchase_price_estimate > 0
+                and (line.factor <= 0 or line.line_factor <= 0 or line.currency_rate_estimate <= 0)
+                for line in protected_lines):
+            raise ValidationError(_('Factor, line factor, and currency rate must all be positive.'))
+
+    @api.onchange('order_id')
+    def _onchange_order_id_pricing_factor(self):
+        for line in self:
+            if line.order_id and not line.factor:
+                line.factor = line.order_id.sudo().global_factor
 
     @api.onchange('product_uom_qty')
-    @api.constrains('product_uom_qty')
     def _onchange_product_uom_qty_estimate(self):
-        """ product_uom_qty """
-        for rec in self:
-            rec.qty_estimate = rec.product_uom_qty
+        for line in self:
+            line.qty_estimate = line.product_uom_qty
+
+    @api.depends('factor', 'purchase_price_estimate', 'currency_rate_estimate', 'line_factor')
+    def _compute_estimate_unit_price(self):
+        for line in self:
+            line.estimate_unit_price = line._pricing_target_price()
+
+    @api.depends('order_id.currency_estimate_id')
+    def _compute_currency_estimate(self):
+        for line in self:
+            line.currency_estimate_id = line.order_id.currency_estimate_id
+
+    @api.depends('order_id.currency_rate_inverse', 'order_id.change_currency_rate_type',
+                 'order_id.change_currency_rate', 'order_id.currency_estimate_id', 'order_id.currency_id')
+    def _compute_currency_rate_estimate(self):
+        for line in self:
+            order = line.order_id
+            rate = order.currency_rate_inverse or 1.0
+            if not order.currency_estimate_id or order.currency_estimate_id == order.currency_id:
+                rate = 1.0
+            elif order.change_currency_rate_type == 'percentage':
+                rate += rate * (order.change_currency_rate / 100.0)
+            elif order.change_currency_rate_type == 'amount':
+                rate += order.change_currency_rate
+            line.currency_rate_estimate = rate
+
+    def _pricing_target_price(self):
+        self.ensure_one()
+        factor = self.factor or 1.0
+        return self.purchase_price_estimate * factor * (self.currency_rate_estimate or 1.0) * (self.line_factor or 1.0)
+
+    def _pricing_pricelist_price(self):
+        self.ensure_one()
+        if not self.product_id or not self.order_id.pricelist_id:
+            return self.price_unit
+        return self._get_display_price()
+
+    def _pricing_convert_price(self, amount, from_currency, to_currency):
+        self.ensure_one()
+        if not from_currency or not to_currency or from_currency == to_currency:
+            return amount
+        date = fields.Date.to_date(self.order_id.date_order) or fields.Date.context_today(self)
+        return from_currency._convert(amount, to_currency, self.order_id.company_id, date)
+
+    def _pricing_manual_price_authorized(self):
+        user = self.env.user
+        return self.env.is_superuser() or user.has_group(
+            'sale_order_product_pricing.product_pricing_group') or user.has_group(
+            'sales_team.group_sale_manager')
+
+
+class SaleOrderPricingAudit(models.Model):
+    _name = 'sale.order.pricing.audit'
+    _description = 'Quotation Pricing Audit'
+    _order = 'event_date desc, id desc'
+    _check_company_auto = True
+
+    order_id = fields.Many2one(
+        'sale.order', required=True, ondelete='cascade', index=True,
+        check_company=True, readonly=True)
+    line_id = fields.Many2one(
+        'sale.order.line', ondelete='set null', index=True, readonly=True)
+    product_id = fields.Many2one('product.product', readonly=True)
+    company_id = fields.Many2one(
+        related='order_id.company_id', store=True, index=True, readonly=True)
+    old_price = fields.Monetary(currency_field='old_currency_id', readonly=True)
+    new_price = fields.Monetary(currency_field='new_currency_id', readonly=True)
+    old_currency_id = fields.Many2one('res.currency', readonly=True)
+    new_currency_id = fields.Many2one('res.currency', readonly=True)
+    old_origin = fields.Selection(
+        [('product_pricing', 'Product Pricing'),
+         ('pricelist', 'Odoo Price List'),
+         ('edited', 'Edited')],
+        readonly=True)
+    new_origin = fields.Selection(
+        [('product_pricing', 'Product Pricing'),
+         ('pricelist', 'Odoo Price List'),
+         ('edited', 'Edited')],
+        readonly=True)
+    reason = fields.Text(required=True, readonly=True)
+    user_id = fields.Many2one('res.users', required=True, readonly=True)
+    event_date = fields.Datetime(
+        default=fields.Datetime.now, required=True, readonly=True)
+
+
+class SaleOrderPricingPreview(models.TransientModel):
+    _name = 'sale.order.pricing.preview'
+    _description = 'Product Pricing Preview'
+
+    order_id = fields.Many2one('sale.order', required=True, readonly=True)
+    preview_hash = fields.Char(required=True, readonly=True)
+    line_ids = fields.One2many(
+        'sale.order.pricing.preview.line', 'wizard_id', readonly=True)
+    ready_count = fields.Integer(readonly=True)
+    protected_count = fields.Integer(readonly=True)
+    skipped_count = fields.Integer(readonly=True)
+    blocked_count = fields.Integer(readonly=True)
+    can_apply = fields.Boolean(readonly=True)
+
+    def action_confirm_apply(self):
+        self.ensure_one()
+        if not self.can_apply:
+            raise UserError(_(
+                'Resolve every blocked Product Pricing line and preview again before Apply.'
+            ))
+        current_preview = self.order_id._pricing_preview_payload()
+        if self.preview_hash != self.order_id._pricing_preview_hash(current_preview):
+            raise UserError(_(
+                'Pricing inputs changed after this dialog opened. Close it and preview again.'
+            ))
+        self.order_id.with_context(
+            pricing_apply_confirmed=True
+        ).action_apply_product_pricing()
+        return {'type': 'ir.actions.act_window_close'}
+
+
+class SaleOrderPricingPreviewLine(models.TransientModel):
+    _name = 'sale.order.pricing.preview.line'
+    _description = 'Product Pricing Preview Line'
+    _order = 'id'
+
+    wizard_id = fields.Many2one(
+        'sale.order.pricing.preview', required=True, ondelete='cascade', readonly=True)
+    sale_line_id = fields.Many2one('sale.order.line', required=True, readonly=True)
+    product_id = fields.Many2one('product.product', readonly=True)
+    product_uom_id = fields.Many2one('uom.uom', readonly=True)
+    quantity = fields.Float(readonly=True)
+    purchase_cost = fields.Monetary(
+        currency_field='cost_currency_id', readonly=True)
+    cost_currency_id = fields.Many2one('res.currency', readonly=True)
+    factor = fields.Float(readonly=True)
+    line_factor = fields.Float(readonly=True)
+    currency_rate = fields.Float(readonly=True)
+    status = fields.Selection(
+        [('ready', 'Ready'), ('protected', 'Edited - Protected'),
+         ('skipped', 'Skipped'), ('blocked', 'Blocked')],
+        required=True, readonly=True)
+    origin = fields.Selection(
+        [('product_pricing', 'Product Pricing'),
+         ('pricelist', 'Odoo Price List'),
+         ('edited', 'Edited')],
+        required=True, readonly=True)
+    current_price = fields.Monetary(
+        currency_field='current_currency_id', readonly=True)
+    proposed_price = fields.Monetary(
+        currency_field='proposed_currency_id', readonly=True)
+    current_currency_id = fields.Many2one('res.currency', readonly=True)
+    proposed_currency_id = fields.Many2one('res.currency', readonly=True)
+    reason = fields.Text(readonly=True)
+    conversion_required = fields.Boolean(readonly=True)
+    reprice_required = fields.Boolean(readonly=True)
+
+
+class SaleAdvancePaymentInv(models.TransientModel):
+    _inherit = 'sale.advance.payment.inv'
+
+    def _create_invoices(self, sale_orders):
+        """Authorize only the standard wizard's genuine down-payment line create."""
+        return super(SaleAdvancePaymentInv, self.with_context(
+            _pricing_downpayment_token=_PRICING_DOWNPAYMENT_TOKEN
+        ))._create_invoices(sale_orders)

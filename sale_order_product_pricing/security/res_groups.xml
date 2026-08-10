@@ -4,6 +4,72 @@
         <record id="product_pricing_group" model="res.groups">
             <field name="name">Product Pricing</field>
             <field name="category_id" ref="base.module_category_sales_sales"/>
+            <field name="implied_ids" eval="[(4, ref('sales_team.group_sale_salesman'))]"/>
+        </record>
+        <record id="quotation_specialist_group" model="res.groups">
+            <field name="name">Quotation Specialist</field>
+            <field name="category_id" ref="base.module_category_sales_sales"/>
+            <field name="implied_ids" eval="[(4, ref('sales_team.group_sale_salesman'))]"/>
+        </record>
+        <record id="quotation_specialist_order_rule" model="ir.rule">
+            <field name="name">Quotation Specialists: assigned quotations</field>
+            <field name="model_id" ref="sale.model_sale_order"/>
+            <field name="groups" eval="[(4, ref('quotation_specialist_group'))]"/>
+            <field name="domain_force">[('quotation_specialist_id', '=', user.id)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+        <record id="quotation_specialist_order_line_rule" model="ir.rule">
+            <field name="name">Quotation Specialists: assigned quotation lines</field>
+            <field name="model_id" ref="sale.model_sale_order_line"/>
+            <field name="groups" eval="[(4, ref('quotation_specialist_group'))]"/>
+            <field name="domain_force">[('order_id.quotation_specialist_id', '=', user.id)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+        <record id="product_pricing_audit_rule" model="ir.rule">
+            <field name="name">Product Pricing Users: assigned pricing logs</field>
+            <field name="model_id" ref="model_sale_order_pricing_audit"/>
+            <field name="groups" eval="[(4, ref('product_pricing_group'))]"/>
+            <field name="domain_force">['&amp;', ('company_id', 'in', company_ids), '|', ('order_id.user_id', '=', user.id), ('order_id.quotation_specialist_id', '=', user.id)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+        <record id="sale_manager_pricing_audit_rule" model="ir.rule">
+            <field name="name">Sales Managers: all pricing logs</field>
+            <field name="model_id" ref="model_sale_order_pricing_audit"/>
+            <field name="groups" eval="[(4, ref('sales_team.group_sale_manager'))]"/>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+        <record id="product_pricing_analysis_rule" model="ir.rule">
+            <field name="name">Product Pricing Users: assigned product analysis</field>
+            <field name="model_id" ref="model_product_analysis"/>
+            <field name="groups" eval="[(4, ref('product_pricing_group'))]"/>
+            <field name="domain_force">['&amp;', ('sale_id.company_id', 'in', company_ids), '|', ('sale_id.user_id', '=', user.id), ('sale_id.quotation_specialist_id', '=', user.id)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+        <record id="sale_manager_product_pricing_analysis_rule" model="ir.rule">
+            <field name="name">Sales Managers: company product analysis</field>
+            <field name="model_id" ref="model_product_analysis"/>
+            <field name="groups" eval="[(4, ref('sales_team.group_sale_manager'))]"/>
+            <field name="domain_force">[('sale_id.company_id', 'in', company_ids)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
         </record>
     </data>
 </odoo>

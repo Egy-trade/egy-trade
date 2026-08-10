@@ -1,2 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_product_analysis,sale_order_product_pricing.product.analysis,model_product_analysis,,1,1,1,1
+access_product_analysis,sale_order_product_pricing.product.analysis,model_product_analysis,sale_order_product_pricing.product_pricing_group,1,0,0,0
+access_sale_order_pricing_audit,sale.order.pricing.audit,model_sale_order_pricing_audit,sale_order_product_pricing.product_pricing_group,1,0,0,0
+access_sale_order_pricing_preview,sale.order.pricing.preview,model_sale_order_pricing_preview,sale_order_product_pricing.product_pricing_group,1,1,1,1
+access_sale_order_pricing_preview_line,sale.order.pricing.preview.line,model_sale_order_pricing_preview_line,sale_order_product_pricing.product_pricing_group,1,1,1,1
