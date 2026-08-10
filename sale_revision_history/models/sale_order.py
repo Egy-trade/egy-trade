@@ -230,7 +230,13 @@ class SaleOrder(models.Model):
             "search_view_id": self.env.ref(
                 "sale_revision_history.sale_order_revision_history_search"
             ).id,
-            "domain": [("id", "in", family.ids)],
+            # This action is the comment history, not another quotation list.
+            # Keep the current blank draft out even if the web client ignores
+            # a search-default hint while opening a dynamic action.
+            "domain": [
+                ("id", "in", family.ids),
+                ("revision_reason", "!=", False),
+            ],
             "context": {
                 "active_test": False,
                 "search_default_has_revision_comment": 1,
