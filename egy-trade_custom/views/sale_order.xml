@@ -76,7 +76,7 @@
                 <attribute name="attrs">{'readonly': [('state', 'not in', ['draft'])]}</attribute>
             </xpath>
             <xpath expr="//tree/field[@name='product_id']" position="before">
-                <field name="sn"/>
+                <field name="sn" optional="hide"/>
             </xpath>
             <xpath expr="//tree/field[@name='name']" position="after">
                 <field name="product_vendor" optional="hide"/>
@@ -105,6 +105,7 @@
     <record model="ir.ui.view" id="sale_margin.sale_margin_sale_order">
         <field name="name">sale.order.margin.view.form</field>
         <field name="model">sale.order</field>
+        <field name="active" eval="False"/>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
             <xpath expr="//group[@name='sale_total']" position="inside">

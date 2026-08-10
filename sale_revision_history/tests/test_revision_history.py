@@ -77,6 +77,8 @@ class RevisionHistoryCase(SavepointCase):
             "price_unit": 145.0,
             "price_reference": 140.0,
             "price_origin": "edited",
+            "price_origin_verified": True,
+            "price_origin_evidence": "manual_edit",
             "price_currency_id": order.currency_id.id,
             "purchase_price_estimate": 55.0,
             "factor": 1.35,
@@ -332,3 +334,125 @@ class RevisionHistoryCase(SavepointCase):
         self.assertIn("'group_by': 'revision_number'", search_arch)
         self.assertIn("button[@name='action_cancel'])[1]", form_arch)
         self.assertNotIn("action_quotations_with_onboarding", form_arch)
+    def test_11_restore_sent_history_creates_next_revision_and_preserves_snapshot(self):
+        original = self._sent_order()
+        original_line = original.order_line
+        first = self._revision_from_action(
+            self.env,
+            original.with_user(self.owner).action_view_revision_wizard('First alternative'),
+        )
+        first.write({'state': 'sent'})
+
+        action = first.with_user(self.owner).action_restore_revision(
+            original,
+            'Client returned to the original commercial offer.',
+            expected_current_id=first.id,
+        )
+        restored = self._revision_from_action(self.env, action)
+        restored_line = restored.order_line
+
+        self.assertEqual(restored.revision_number, 2)
+        self.assertEqual(restored.name, '%s-02' % original.unrevisioned_name)
+        self.assertEqual(restored.state, 'draft')
+        self.assertEqual(restored.restored_from_revision_id, original)
+        self.assertEqual(restored.restoration_author_id, self.owner)
+        self.assertTrue(restored.restoration_date)
+        self.assertIn('Client returned', restored.restoration_reason)
+        self.assertFalse(first.active)
+        self.assertEqual(first.current_revision_id, restored)
+        self.assertEqual(original.current_revision_id, restored)
+        self.assertEqual(original.state, 'sent')
+        for field_name in (
+            'product_id', 'name', 'product_uom_qty', 'product_uom',
+            'price_unit', 'discount', 'tax_id', 'price_reference',
+            'price_origin', 'price_origin_verified', 'price_origin_evidence',
+            'price_currency_id', 'purchase_price_estimate', 'factor', 'line_factor',
+        ):
+            self.assertEqual(restored_line[field_name], original_line[field_name], field_name)
+
+    def test_12_restore_archives_existing_draft_without_overwriting_it(self):
+        original = self._sent_order()
+        current_draft = self._revision_from_action(
+            self.env,
+            original.with_user(self.owner).action_view_revision_wizard('Draft alternative'),
+        )
+        current_draft.order_line.with_user(self.owner).write({
+            'name': 'Same total, different commercial description',
+        })
+
+        action = current_draft.with_user(self.owner).action_restore_revision(
+            original,
+            'Return to the initial offer after reviewing the draft alternative.',
+            expected_current_id=current_draft.id,
+        )
+        restored = self._revision_from_action(self.env, action)
+
+        self.assertEqual(restored.revision_number, 2)
+        self.assertFalse(current_draft.active)
+        self.assertEqual(current_draft.current_revision_id, restored)
+        self.assertEqual(
+            current_draft.order_line.name,
+            'Same total, different commercial description',
+        )
+        self.assertEqual(restored.order_line.name, original.order_line.name)
+        self.assertIn(
+            'Customer-commercial snapshots differ.',
+            restored.restoration_difference_summary,
+        )
+
+    def test_13_restore_rejects_missing_reason_source_cross_family_and_stale_dialog(self):
+        original = self._sent_order()
+        current = self._revision_from_action(
+            self.env,
+            original.with_user(self.owner).action_view_revision_wizard('Current draft'),
+        )
+        unrelated = self._sent_order()
+
+        with self.assertRaises(UserError):
+            current.with_user(self.owner).action_restore_revision(
+                original, '   ', expected_current_id=current.id,
+            )
+        with self.assertRaises(UserError):
+            current.with_user(self.owner).action_restore_revision(
+                original, 'Missing expected current', expected_current_id=False,
+            )
+        with self.assertRaises(UserError):
+            current.with_user(self.owner).action_restore_revision(
+                unrelated, 'Forged other-family source', expected_current_id=current.id,
+            )
+
+        action = current.with_user(self.owner).action_restore_revision(
+            original, 'Legitimate restoration', expected_current_id=current.id,
+        )
+        restored = self._revision_from_action(self.env, action)
+        with self.assertRaises(UserError):
+            current.with_context(active_test=False).with_user(
+                self.owner
+            ).action_restore_revision(
+                original, 'Stale dialog replay', expected_current_id=current.id,
+            )
+        self.assertEqual(restored.revision_number, 2)
+
+        wizard = self.env['revision.reason'].with_user(self.owner).create({
+            'sale_id': restored.id,
+            'is_restoration': True,
+            'expected_current_revision_id': restored.id,
+            'name': 'No source selected',
+        })
+        with self.assertRaises(UserError):
+            wizard.action_confirm()
+
+    def test_14_restore_controls_and_audit_fields_are_visible_in_history_views(self):
+        form_arch = self.env.ref('sale_revision_history.sale_order_view_form').arch_db
+        wizard_arch = self.env.ref('sale_revision_history.revision_reason_view_form').arch_db
+        for token in (
+            'action_restore_historical_revision',
+            'restored_from_revision_id',
+            'restoration_reason',
+            'restoration_difference_summary',
+            'Create Next Revision from This Version',
+        ):
+            self.assertIn(token, form_arch)
+        self.assertIn('restore_source_id', wizard_arch)
+        self.assertIn('expected_current_revision_id', wizard_arch)
+        self.assertIn('Restore as Next Revision', wizard_arch)

@@ -8,12 +8,24 @@
                 <sheet>
                     <group>
                         <field name="sale_id" invisible="1"/>
-                        <field name="name" placeholder="Explain what changed and why this revision is needed."/>
+                        <field name="is_restoration" invisible="1"/>
+                        <field name="expected_current_revision_id" invisible="1"/>
+                        <field name="restore_candidate_ids" invisible="1"/>
+                        <field name="restore_source_id"
+                               attrs="{'invisible': [('is_restoration', '=', False)], 'required': [('is_restoration', '=', True)]}"
+                               domain="[('id', 'in', restore_candidate_ids)]"
+                               context="{'active_test': False}"
+                               options="{'no_create': True, 'no_open': True}"
+                               help="Choose a previously sent quotation in this family. The system creates a new revision; it never reopens the selected offer."/>
+                        <field name="name" placeholder="Explain what changed and why this revision is needed. For restoration, explain why the client returned to this offer."
+                               help="Required audit reason. It records why the new revision or historical restoration was created."/>
                     </group>
                 </sheet>
                 <footer>
-                    <button string="Create Revision" name="action_confirm"
-                            class="btn-primary" type="object"/>
+                    <button string="Create Revision" name="action_confirm" class="btn-primary"
+                            type="object" attrs="{'invisible': [('is_restoration', '=', True)]}"/>
+                    <button string="Restore as Next Revision" name="action_confirm" class="btn-primary"
+                            type="object" attrs="{'invisible': [('is_restoration', '=', False)]}"/>
                     <button string="Cancel" class="btn-secondary" special="cancel"/>
                 </footer>
             </form>

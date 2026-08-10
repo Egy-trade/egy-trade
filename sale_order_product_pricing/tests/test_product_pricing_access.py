@@ -3,7 +3,9 @@
 from lxml import etree
 
 from odoo import fields
-from odoo.exceptions import AccessError, UserError
+from odoo.exceptions import AccessError, UserError, ValidationError
+
+from ..models.sale_order import _PRICING_INTERNAL_TOKEN
 from odoo.tests.common import SavepointCase
 
 
@@ -17,12 +19,15 @@ class TestProductPricingAccess(SavepointCase):
         })
         sales_group = cls.env.ref('sales_team.group_sale_salesman')
         base_group = cls.env.ref('base.group_user')
+        manager = cls.env.ref('sales_team.group_sale_manager')
+        purchase_group = cls.env.ref('purchase.group_purchase_user')
         cls.quotation_specialist = cls.env['res.users'].create({
             'name': 'Quotation Specialist', 'login': 'quotation.specialist@example.test',
             'groups_id': [(6, 0, [
                 base_group.id, sales_group.id,
                 cls.env.ref('sale_order_product_pricing.quotation_specialist_group').id,
             ])],
+            'max_discount': 30.0,
         })
         cls.pricing_user = cls.env['res.users'].create({
             'name': 'Product Pricing User', 'login': 'pricing.user@example.test',
@@ -30,10 +35,34 @@ class TestProductPricingAccess(SavepointCase):
                 base_group.id, sales_group.id,
                 cls.env.ref('sale_order_product_pricing.product_pricing_group').id,
             ])],
+            'max_discount': 0.0,
         })
         cls.basic_user = cls.env['res.users'].create({
             'name': 'Basic Sales User', 'login': 'basic.sales@example.test',
             'groups_id': [(6, 0, [base_group.id, sales_group.id])],
+            'max_discount': 30.0,
+        })
+        cls.sales_manager = cls.env['res.users'].create({
+            'name': 'Pricing Sales Manager',
+            'login': 'pricing.manager@example.test',
+            'groups_id': [(6, 0, [base_group.id, manager.id])],
+            'max_discount': 0.0,
+        })
+        cls.other_sales_user = cls.env['res.users'].create({
+            'name': 'Unassigned Sales User',
+            'login': 'unassigned.sales@example.test',
+            'groups_id': [(6, 0, [base_group.id, sales_group.id])],
+            'max_discount': 30.0,
+        })
+        cls.ordinary_reader = cls.env['res.users'].create({
+            'name': 'Ordinary Internal Reader',
+            'login': 'ordinary.reader@example.test',
+            'groups_id': [(6, 0, [base_group.id])],
+        })
+        cls.purchase_user = cls.env['res.users'].create({
+            'name': 'Purchase Only User',
+            'login': 'purchase.only@example.test',
+            'groups_id': [(6, 0, [base_group.id, purchase_group.id])],
         })
 
     def _order(self, owner=None):
@@ -325,3 +354,188 @@ class TestProductPricingAccess(SavepointCase):
         self.assertEqual(len(attrs), 1)
         self.assertIn("('state', '!=', 'draft')", attrs[0])
         self.assertIn("('can_edit_quotation_price', '=', False)", attrs[0])
+    def test_assigned_specialist_can_delete_draft_line(self):
+        order = self._order(owner=self.quotation_specialist)
+        line = self._line(order)
+        line.with_user(self.quotation_specialist).unlink()
+        self.assertFalse(line.exists())
+
+    def test_standard_discount_requires_verified_pricelist_and_uses_30_percent_cap(self):
+        order = self._order(owner=self.basic_user)
+        line = self._line(order)
+        self.assertTrue(line.price_origin_verified)
+        self.assertEqual(line.price_origin_evidence, 'new_pricelist')
+
+        line.with_user(self.basic_user).write({'discount': 30.0})
+        self.assertEqual(line.discount, 30.0)
+        with self.assertRaises(ValidationError):
+            line.with_user(self.basic_user).write({'discount': 30.01})
+
+        line.sudo().with_context(
+            _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+        ).write({
+            'price_origin': 'product_pricing',
+            'price_origin_verified': True,
+            'price_origin_evidence': 'product_pricing_apply',
+        })
+        with self.assertRaises(AccessError):
+            line.with_user(self.basic_user).write({'discount': 5.0})
+
+        line.sudo().with_context(
+            _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+        ).write({
+            'price_origin': 'historical_unverified',
+            'price_origin_verified': False,
+            'price_origin_evidence': 'legacy_unverified',
+        })
+        with self.assertRaises(AccessError):
+            line.with_user(self.basic_user).write({'discount': 5.0})
+
+    def test_pricing_user_and_manager_have_full_draft_pricing_authority(self):
+        pricing_order = self._order(owner=self.pricing_user)
+        pricing_line = self._line(pricing_order)
+        pricing_line.sudo().with_context(
+            _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+        ).write({
+            'price_origin': 'product_pricing',
+            'price_origin_verified': True,
+            'price_origin_evidence': 'product_pricing_apply',
+        })
+        self.assertTrue(
+            pricing_line.with_user(self.pricing_user).can_edit_pricelist_discount
+        )
+        pricing_line.with_user(self.pricing_user).write({'discount': 45.0})
+        self.assertEqual(pricing_line.discount, 45.0)
+
+        manager_order = self._order(owner=self.sales_manager)
+        manager_line = self._line(manager_order)
+        manager_order.with_user(self.sales_manager).action_preview_product_pricing()
+        manager_line.with_user(self.sales_manager).write({
+            'price_unit': 88.0,
+            'discount': 60.0,
+        })
+        self.assertEqual(manager_line.price_origin, 'edited')
+        self.assertTrue(
+            manager_line.with_user(self.sales_manager).can_edit_pricelist_discount
+        )
+        self.assertTrue(manager_line.price_origin_verified)
+        self.assertEqual(manager_line.price_origin_evidence, 'manual_edit')
+
+    def test_manager_can_certify_locked_historical_origin_without_changing_price(self):
+        order = self._order(owner=self.basic_user)
+        line = self._line(order)
+        original_price = line.price_unit
+        line.sudo().with_context(
+            _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+        ).write({
+            'price_origin': 'historical_unverified',
+            'price_origin_verified': False,
+            'price_origin_evidence': 'legacy_unverified',
+            'pricing_warning': 'Manager review required.',
+        })
+        order.write({'state': 'sent'})
+
+        with self.assertRaises(UserError):
+            line.with_user(self.basic_user).action_reclassify_historical_origin()
+        action = line.with_user(self.sales_manager).action_reclassify_historical_origin()
+        self.assertEqual(action['res_model'], 'sale.order.price.origin.reclassify')
+        wizard = self.env[action['res_model']].with_user(self.sales_manager).create({
+            'line_id': line.id,
+            'new_origin': 'product_pricing',
+            'reason': 'Signed pricing worksheet PP-001 matches this line.',
+        })
+        wizard.action_confirm()
+
+        self.assertEqual(line.price_unit, original_price)
+        self.assertEqual(line.price_origin, 'product_pricing')
+        self.assertTrue(line.price_origin_verified)
+        self.assertEqual(line.price_origin_evidence, 'manager_reclassified')
+        with self.assertRaises(UserError):
+            line.with_user(self.sales_manager).write({'name': 'Sent mutation'})
+
+    def test_standard_and_pricing_views_use_separate_line_fields(self):
+        view = self.env.ref('sale_order_product_pricing.sale_order_product_pricing_form')
+        root = etree.fromstring(view.arch_db.encode())
+        pricing_page = root.xpath("//page[@name='product_pricing']")
+        self.assertEqual(len(pricing_page), 1)
+        self.assertEqual(
+            len(pricing_page[0].xpath(".//field[@name='pricing_line_ids']")), 1
+        )
+        self.assertFalse(pricing_page[0].xpath(".//field[@name='order_line']"))
+        self.assertTrue(
+            root.xpath("//field[@name='price_origin_label'][@optional='show']")
+        )
+        self.assertTrue(
+            root.xpath("//field[@name='quotation_item_number'][@optional='show']")
+        )
+        for action_name in (
+            'action_preview_product_pricing',
+            'action_apply_product_pricing',
+        ):
+            button = root.xpath("//button[@name=$name]", name=action_name)
+            self.assertEqual(len(button), 1)
+            self.assertTrue(button[0].get('help'))
+    def test_assigned_salesperson_can_crud_draft_lines_but_unassigned_cannot(self):
+        order = self.env['sale.order'].with_user(self.basic_user).create({
+            'partner_id': self.partner.id,
+            'user_id': self.basic_user.id,
+        })
+        line = self.env['sale.order.line'].with_user(self.basic_user).create({
+            'order_id': order.id,
+            'product_id': self.product.id,
+            'name': self.product.display_name,
+            'product_uom_qty': 1.0,
+        })
+        line.with_user(self.basic_user).write({'name': 'Assigned edit'})
+        self.assertEqual(line.name, 'Assigned edit')
+
+        with self.assertRaises(AccessError):
+            line.with_user(self.other_sales_user).write({'name': 'Unassigned edit'})
+        with self.assertRaises(AccessError):
+            line.with_user(self.other_sales_user).write({'discount': 5.0})
+
+        line.with_user(self.basic_user).unlink()
+        self.assertFalse(line.exists())
+
+    def test_ordinary_reader_and_purchase_user_cannot_access_pricing_internals(self):
+        for user in (self.ordinary_reader, self.purchase_user):
+            available = self.env['sale.order.line'].with_user(user).fields_get([
+                'purchase_price_estimate',
+                'factor',
+                'line_factor',
+                'price_reference',
+                'price_origin',
+                'price_origin_evidence',
+            ])
+            self.assertFalse(available)
+            with self.assertRaises(AccessError):
+                self.env['sale.order.line'].with_user(user).check_access_rights(
+                    'write', raise_exception=True,
+                )
+
+    def test_assigned_specialist_can_use_canonical_one2many_commands(self):
+        order = self.env['sale.order'].with_user(self.quotation_specialist).create({
+            'partner_id': self.partner.id,
+            'user_id': self.quotation_specialist.id,
+            'quotation_specialist_id': self.quotation_specialist.id,
+        })
+        order.with_user(self.quotation_specialist).write({
+            'order_line': [(0, 0, {
+                'product_id': self.product.id,
+                'name': self.product.display_name,
+                'product_uom_qty': 1.0,
+                'price_unit': 999.0,
+            })],
+        })
+        line = order.order_line
+        self.assertEqual(line.price_unit, self.product.list_price)
+
+        order.with_user(self.quotation_specialist).write({
+            'order_line': [(1, line.id, {'name': 'Updated through canonical commands'})],
+        })
+        self.assertEqual(line.name, 'Updated through canonical commands')
+
+        order.with_user(self.quotation_specialist).write({
+            'order_line': [(2, line.id, 0)],
+        })
+        self.assertFalse(line.exists())

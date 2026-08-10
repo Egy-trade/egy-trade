@@ -66,7 +66,7 @@ class SaleOrderLine(models.Model):
     margin_percent = fields.Float(
         "Margin (%)", compute='_compute_margin', store=True, groups="egy-trade_custom.group_product_logistics")
     purchase_price = fields.Float(
-        string='Cost', compute="_compute_purchase_price",
+        string='Accounting Cost', compute="_compute_purchase_price",
         digits='Product Price', store=True, readonly=False,
         )
 
@@ -81,9 +81,24 @@ class SaleOrderLine(models.Model):
 
     @api.constrains('discount')
     def _check_discount(self):
+        user = self.env.user
+        pricing_group = self.env.ref(
+            'sale_order_product_pricing.product_pricing_group',
+            raise_if_not_found=False,
+        )
+        has_full_pricing = (
+            self.env.is_superuser()
+            or user.has_group('sales_team.group_sale_manager')
+            or (pricing_group and pricing_group in user.groups_id)
+        )
+        if has_full_pricing:
+            return
+        limit = min(max(user.max_discount or 0.0, 0.0), 30.0)
         for rec in self:
-            if rec.discount > self.env.user.max_discount:
-                raise ValidationError(_(f'Your maximum allowed discount per order line is {self.env.user.max_discount}'))
+            if rec.discount < 0 or rec.discount > limit:
+                raise ValidationError(_(
+                    'Your maximum allowed standard discount per order line is %(limit).2f%%.'
+                ) % {'limit': limit})
 
     @api.constrains('name')
     def _check_name_c(self):

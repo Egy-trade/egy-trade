@@ -14,6 +14,7 @@ from odoo.exceptions import UserError, ValidationError
 
 _PRICING_INTERNAL_TOKEN = object()
 _PRICING_DOWNPAYMENT_TOKEN = object()
+_PRICING_RECLASSIFY_TOKEN = object()
 
 
 def _is_pricing_internal(env):
@@ -26,17 +27,34 @@ def _is_pricing_downpayment(env):
     return env.context.get('_pricing_downpayment_token') is _PRICING_DOWNPAYMENT_TOKEN
 
 
+def _is_pricing_reclassification(env):
+    """Identify the narrowly scoped manager provenance-certification operation."""
+    return env.context.get('_pricing_reclassify_token') is _PRICING_RECLASSIFY_TOKEN
+
+
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
+    # A UI alias only: order_line remains the single source of truth for
+    # pricing, revisions and reporting. This separate field name prevents
+    # the restricted pricing tree from colliding with live Order Lines.
+    pricing_line_ids = fields.One2many(
+        'sale.order.line', 'order_id', string='Pricing Lines',
+        domain=[('display_type', '=', False), ('is_downpayment', '=', False)],
+        copy=False,
+        groups='sale_order_product_pricing.product_pricing_group',
+        help='Restricted workspace over the same quotation lines shown on Order Lines.',
+    )
     product_pricing = fields.Boolean(
-        copy=True, groups='sale_order_product_pricing.product_pricing_group')
+        copy=True, groups='sale_order_product_pricing.product_pricing_group',
+        help='Enable the controlled Purchase Price Estimate preview and Apply workflow.')
     total_estimate_unit_price = fields.Float(
         compute='_compute_estimate_unit_price',
         groups='sale_order_product_pricing.product_pricing_group')
     currency_estimate_id = fields.Many2one(
-        'res.currency', string='Cost Currency', copy=True,
+        'res.currency', string='Purchase Currency', copy=True,
         default=lambda self: self.env.company.currency_id,
+        help='Currency used for Purchase Price Estimates before conversion to the quotation currency.',
         groups='sale_order_product_pricing.product_pricing_group')
     currency_estimate_id_symbol = fields.Char(
         related='currency_estimate_id.symbol',
@@ -54,6 +72,7 @@ class SaleOrder(models.Model):
         copy=True, groups='sale_order_product_pricing.product_pricing_group')
     global_factor = fields.Float(
         default=1.0, copy=True,
+        help='Default multiplier applied to eligible lines in the Product Pricing preview.',
         groups='sale_order_product_pricing.product_pricing_group')
     analysis_created = fields.Boolean(copy=False)
     product_pricing_preview_hash = fields.Char(
@@ -105,6 +124,8 @@ class SaleOrder(models.Model):
                             'price_unit': pricelist_price,
                             'price_reference': pricelist_price,
                             'price_origin': 'pricelist',
+                            'price_origin_verified': True,
+                            'price_origin_evidence': 'new_pricelist',
                             'price_currency_id': order.currency_id.id,
                         })
                         reason = _('Currency/pricelist changed from %(old)s [%(old_id)s] to %(new)s [%(new_id)s]; '
@@ -356,6 +377,8 @@ class SaleOrder(models.Model):
                         'price_unit': item['proposed_price'],
                         'price_reference': item['proposed_price'],
                         'price_origin': 'product_pricing',
+                        'price_origin_verified': True,
+                        'price_origin_evidence': 'product_pricing_apply',
                         'price_currency_id': order.currency_id.id,
                         'pricing_reprice_pending': False,
                     })
@@ -376,6 +399,8 @@ class SaleOrder(models.Model):
                         'price_unit': item['proposed_price'],
                         'price_reference': converted_reference,
                         'price_origin': 'edited',
+                        'price_origin_verified': True,
+                        'price_origin_evidence': 'manual_edit',
                         'price_currency_id': order.currency_id.id,
                         'pricing_reprice_pending': False,
                     })
@@ -393,6 +418,8 @@ class SaleOrder(models.Model):
                         'price_unit': item['proposed_price'],
                         'price_reference': item['proposed_price'],
                         'price_origin': 'pricelist',
+                        'price_origin_verified': True,
+                        'price_origin_evidence': 'new_pricelist',
                         'price_currency_id': order.currency_id.id,
                         'pricing_reprice_pending': False,
                     })
@@ -451,28 +478,59 @@ class SaleOrder(models.Model):
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
+    quotation_item_number = fields.Integer(
+        string='Item #', compute='_compute_quotation_item_number',
+        help='Sequential commercial item number. Sections and notes are excluded.')
     purchase_price_estimate = fields.Float(
-        copy=True, groups='sale_order_product_pricing.product_pricing_group')
-    factor = fields.Float(copy=True, groups='sale_order_product_pricing.product_pricing_group')
-    line_factor = fields.Float(default=1.0, copy=True, groups='sale_order_product_pricing.product_pricing_group')
+        string='Purchase Price Estimate', copy=True,
+        help='Estimated supplier purchase price used only for quotation pricing. It is not the Accounting Cost.',
+        groups='sale_order_product_pricing.product_pricing_group')
+    factor = fields.Float(
+        copy=True, groups='sale_order_product_pricing.product_pricing_group',
+        help='Order-level multiplier copied to this line for the pricing formula.')
+    line_factor = fields.Float(
+        default=1.0, copy=True,
+        groups='sale_order_product_pricing.product_pricing_group',
+        help='Additional line-specific multiplier used by the pricing formula.')
     qty_estimate = fields.Float(string='Quantity', default=1.0)
     estimate_unit_price = fields.Float(
-        compute='_compute_estimate_unit_price', store=True,
+        string='Estimated Unit Price', compute='_compute_estimate_unit_price', store=True,
+        help='Preview formula result before it is applied to Unit Price.',
         groups='sale_order_product_pricing.product_pricing_group')
     currency_estimate_id = fields.Many2one(
         'res.currency', compute='_compute_currency_estimate',
         groups='sale_order_product_pricing.product_pricing_group')
     currency_rate_estimate = fields.Float(
         compute='_compute_currency_rate_estimate', store=True,
+        help='Conversion rate used by the Product Pricing formula.',
         groups='sale_order_product_pricing.product_pricing_group')
     note = fields.Char()
     price_origin = fields.Selection(
-        [('product_pricing', 'Product Pricing'), ('pricelist', 'Odoo Price List'), ('edited', 'Edited')],
+        [('product_pricing', 'Product Pricing'),
+         ('pricelist', 'Odoo Pricelist'),
+         ('edited', 'Manual Price'),
+         ('historical_unverified', 'Historical—Unverified')],
         default='pricelist', required=True, copy=True, index=True,
         groups='sale_order_product_pricing.product_pricing_group')
+    price_origin_verified = fields.Boolean(
+        string='Price Origin Verified', default=False, copy=True, index=True,
+        help='True only when system evidence proves the displayed price origin.',
+        groups='sale_order_product_pricing.product_pricing_group')
+    price_origin_evidence = fields.Selection(
+        [('new_pricelist', 'New Odoo Pricelist Line'),
+         ('product_pricing_apply', 'Confirmed Product Pricing Apply'),
+         ('manual_edit', 'Authorized Manual Price Edit'),
+         ('legacy_formula', 'Legacy Formula Match'),
+         ('manager_reclassified', 'Manager Reclassification'),
+         ('legacy_unverified', 'Legacy Origin Unverified')],
+        string='Origin Evidence', copy=True, index=True,
+        groups='sale_order_product_pricing.product_pricing_group')
+    price_origin_label = fields.Char(
+        string='Price Origin', compute='_compute_price_origin_label', compute_sudo=True,
+        help='How Unit Price was established. Historical—Unverified means the old data did not prove its source.')
     price_reference = fields.Float(
         string='Reference Price', digits='Product Price', copy=True,
-        help='Last automatic price baseline. Edited selling prices do not overwrite it.',
+        help='Last verified automatic price baseline. Manual selling prices do not overwrite it.',
         groups='sale_order_product_pricing.product_pricing_group')
     price_currency_id = fields.Many2one(
         'res.currency', string='Selling Price Currency', copy=True, readonly=True,
@@ -480,14 +538,42 @@ class SaleOrderLine(models.Model):
         groups='sale_order_product_pricing.product_pricing_group')
     pricing_eligible = fields.Boolean(
         compute='_compute_pricing_eligible', store=True,
+        help='Eligible when Purchase Price Estimate is positive and pricing inputs are complete.',
         groups='sale_order_product_pricing.product_pricing_group')
     pricing_warning = fields.Char(
         copy=False, readonly=True,
+        help='Explains the current pricing problem and the action required to resolve it.',
         groups='sale_order_product_pricing.product_pricing_group')
     pricing_reprice_pending = fields.Boolean(
         copy=False, readonly=True,
         help='Set when a product, UoM, or quantity change must be repriced by confirmed Apply.',
         groups='sale_order_product_pricing.product_pricing_group')
+
+    @api.depends('order_id.order_line.sequence', 'order_id.order_line.display_type')
+    def _compute_quotation_item_number(self):
+        for line in self:
+            line.quotation_item_number = 0
+        for order in self.mapped('order_id'):
+            number = 0
+            for line in order.order_line:
+                if line.display_type:
+                    continue
+                number += 1
+                line.quotation_item_number = number
+
+    @api.depends('price_origin', 'price_origin_verified')
+    def _compute_price_origin_label(self):
+        labels = {
+            'product_pricing': _('Product Pricing'),
+            'pricelist': _('Odoo Pricelist'),
+            'edited': _('Manual Price'),
+            'historical_unverified': _('Historical—Unverified'),
+        }
+        for line in self:
+            line.price_origin_label = (
+                labels.get(line.price_origin, _('Historical—Unverified'))
+                if line.price_origin_verified else _('Historical—Unverified')
+            )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -517,6 +603,8 @@ class SaleOrderLine(models.Model):
             # New lines retain the normal sale module's pricelist result.  The
             # baseline is set after standard create/onchange defaults are present.
             values.pop('price_origin', None)
+            values.pop('price_origin_verified', None)
+            values.pop('price_origin_evidence', None)
             values.pop('price_reference', None)
             values.pop('price_currency_id', None)
             values.pop('pricing_warning', None)
@@ -541,6 +629,8 @@ class SaleOrderLine(models.Model):
                 'price_unit': pricelist_price,
                 'price_reference': pricelist_price,
                 'price_origin': 'pricelist',
+                'price_origin_verified': True,
+                'price_origin_evidence': 'new_pricelist',
                 'price_currency_id': currency_id,
                 'pricing_warning': warning,
                 'pricing_reprice_pending': False,
@@ -565,6 +655,8 @@ class SaleOrderLine(models.Model):
         # is tracked below as Edited, while a direct metadata write cannot forge
         # a pricing source or erase the audit baseline.
         vals.pop('price_origin', None)
+        vals.pop('price_origin_verified', None)
+        vals.pop('price_origin_evidence', None)
         vals.pop('price_reference', None)
         vals.pop('price_currency_id', None)
         vals.pop('pricing_warning', None)
@@ -594,6 +686,8 @@ class SaleOrderLine(models.Model):
             for line in self:
                 line_vals = dict(vals)
                 line_vals.pop('price_origin', None)
+                line_vals.pop('price_origin_verified', None)
+                line_vals.pop('price_origin_evidence', None)
                 line_vals.pop('price_reference', None)
                 line_vals.pop('price_currency_id', None)
                 # Odoo's standard product/UoM onchange may include or derive a
@@ -613,6 +707,8 @@ class SaleOrderLine(models.Model):
                             'price_unit': reference,
                             'price_reference': reference,
                             'price_origin': 'pricelist',
+                            'price_origin_verified': True,
+                            'price_origin_evidence': 'new_pricelist',
                             'price_currency_id': line.order_id.currency_id.id,
                             'pricing_warning': _(
                                 'Purchasing cost changed to zero; Odoo Price List is used.'),
@@ -647,6 +743,8 @@ class SaleOrderLine(models.Model):
             # non-automatic selling-price edit is explicitly protected from Apply.
             self.sudo().with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN).write({
                 'price_origin': 'edited',
+                'price_origin_verified': True,
+                'price_origin_evidence': 'manual_edit',
                 'pricing_reprice_pending': False,
             })
             for line in self:
@@ -667,6 +765,8 @@ class SaleOrderLine(models.Model):
                         'price_unit': pricelist_price,
                         'price_reference': pricelist_price,
                         'price_origin': 'pricelist',
+                        'price_origin_verified': True,
+                        'price_origin_evidence': 'new_pricelist',
                         'price_currency_id': line.order_id.currency_id.id,
                         'pricing_warning': _(
                             'Purchasing cost changed to zero; Odoo Price List is used.'),
@@ -760,6 +860,24 @@ class SaleOrderLine(models.Model):
             'sale_order_product_pricing.product_pricing_group') or user.has_group(
             'sales_team.group_sale_manager')
 
+    def action_reclassify_historical_origin(self):
+        self.ensure_one()
+        user = self.env.user
+        if not self.env.is_superuser() and not user.has_group('sales_team.group_sale_manager'):
+            raise UserError(_('Only a Sales Manager may certify a historical Price Origin.'))
+        if self.price_origin != 'historical_unverified' or self.price_origin_verified:
+            raise UserError(_('This line no longer requires historical origin review.'))
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Reclassify Historical Price Origin'),
+            'res_model': 'sale.order.price.origin.reclassify',
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'sale_order_product_pricing.sale_order_price_origin_reclassify_form'
+            ).id,
+            'target': 'new',
+            'context': {'default_line_id': self.id},
+        }
 
 class SaleOrderPricingAudit(models.Model):
     _name = 'sale.order.pricing.audit'
@@ -781,13 +899,15 @@ class SaleOrderPricingAudit(models.Model):
     new_currency_id = fields.Many2one('res.currency', readonly=True)
     old_origin = fields.Selection(
         [('product_pricing', 'Product Pricing'),
-         ('pricelist', 'Odoo Price List'),
-         ('edited', 'Edited')],
+         ('pricelist', 'Odoo Pricelist'),
+         ('edited', 'Manual Price'),
+         ('historical_unverified', 'Historical—Unverified')],
         readonly=True)
     new_origin = fields.Selection(
         [('product_pricing', 'Product Pricing'),
-         ('pricelist', 'Odoo Price List'),
-         ('edited', 'Edited')],
+         ('pricelist', 'Odoo Pricelist'),
+         ('edited', 'Manual Price'),
+         ('historical_unverified', 'Historical—Unverified')],
         readonly=True)
     reason = fields.Text(required=True, readonly=True)
     user_id = fields.Many2one('res.users', required=True, readonly=True)
@@ -795,6 +915,54 @@ class SaleOrderPricingAudit(models.Model):
         default=fields.Datetime.now, required=True, readonly=True)
 
 
+class SaleOrderPriceOriginReclassify(models.TransientModel):
+    _name = 'sale.order.price.origin.reclassify'
+    _description = 'Historical Price Origin Reclassification'
+
+    line_id = fields.Many2one(
+        'sale.order.line', string='Quotation Line', required=True, readonly=True)
+    current_origin = fields.Char(
+        string='Current Origin', related='line_id.price_origin_label', readonly=True)
+    new_origin = fields.Selection(
+        [('product_pricing', 'Product Pricing'),
+         ('pricelist', 'Odoo Pricelist'),
+         ('edited', 'Manual Price')],
+        string='Certified Origin', required=True,
+        help='Select the price source supported by the recorded evidence.')
+    reason = fields.Text(
+        string='Evidence and Reason', required=True,
+        help='State the document, calculation, or business evidence used to certify this historical price.')
+
+    def action_confirm(self):
+        self.ensure_one()
+        user = self.env.user
+        if not self.env.is_superuser() and not user.has_group('sales_team.group_sale_manager'):
+            raise UserError(_('Only a Sales Manager may certify a historical Price Origin.'))
+        line = self.line_id
+        if not line.exists() or line.price_origin != 'historical_unverified' or line.price_origin_verified:
+            raise UserError(_('This historical line changed while the dialog was open. Reopen it and try again.'))
+        reason = (self.reason or '').strip()
+        if not reason:
+            raise UserError(_('Evidence and Reason are required.'))
+        order = line.order_id
+        old_price = line.price_unit
+        old_origin = line.price_origin
+        line.sudo().with_context(
+            _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+            _pricing_reclassify_token=_PRICING_RECLASSIFY_TOKEN,
+        ).write({
+            'price_origin': self.new_origin,
+            'price_origin_verified': True,
+            'price_origin_evidence': 'manager_reclassified',
+            'pricing_warning': False,
+        })
+        order._pricing_log_line(
+            line,
+            _('Historical Price Origin certified by Sales Manager. Evidence: %s') % reason,
+            old_price=old_price,
+            old_origin=old_origin,
+        )
+        return {'type': 'ir.actions.act_window_close'}
 class SaleOrderPricingPreview(models.TransientModel):
     _name = 'sale.order.pricing.preview'
     _description = 'Product Pricing Preview'
@@ -849,8 +1017,9 @@ class SaleOrderPricingPreviewLine(models.TransientModel):
         required=True, readonly=True)
     origin = fields.Selection(
         [('product_pricing', 'Product Pricing'),
-         ('pricelist', 'Odoo Price List'),
-         ('edited', 'Edited')],
+         ('pricelist', 'Odoo Pricelist'),
+         ('edited', 'Manual Price'),
+         ('historical_unverified', 'Historical—Unverified')],
         required=True, readonly=True)
     current_price = fields.Monetary(
         currency_field='current_currency_id', readonly=True)

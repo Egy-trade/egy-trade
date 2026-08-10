@@ -10,9 +10,6 @@
                     <field name="can_edit_quotation_price" invisible="1"/>
                     <field name="can_assign_salesperson" invisible="1"/>
                     <field name="can_assign_quotation_specialist" invisible="1"/>
-                    <field name="product_pricing"
-                           groups="sale_order_product_pricing.product_pricing_group"
-                           attrs="{'invisible': [('partner_id', '=', False)], 'readonly': [('state', '!=', 'draft')]}"/>
                 </field>
 
                 <!-- A sent quotation is an immutable client version.  These are
@@ -68,13 +65,14 @@
                 </xpath>
 
                 <xpath expr="//field[@name='order_line']/tree/field[@name='name']" position="attributes">
-                    <attribute name="optional">hide</attribute>
+                    <attribute name="optional">show</attribute>
                 </xpath>
 
-                <!-- Text plus icon and colour make the source intelligible without relying on colour. -->
-                <xpath expr="//field[@name='order_line']/tree/field[@name='price_unit']" position="after">
-                    <field name="price_origin_display" string="Price Origin" widget="html" readonly="1"
-                           optional="show" groups="sale_order_product_pricing.product_pricing_group"/>
+                <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='product_id']" position="before">
+                    <field name="quotation_item_number" string="Item #" readonly="1" optional="show"/>
+                </xpath>
+                <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='discount']" position="after">
+                    <field name="price_origin_label" string="Price Origin" readonly="1" optional="show"/>
                 </xpath>
 
                 <xpath expr="//field[@name='order_line']/tree/field[@name='price_unit']" position="before">
@@ -85,14 +83,38 @@
                     <attribute name="attrs">{'readonly': ['|', ('parent.state', '!=', 'draft'), ('can_edit_quoted_price', '=', False)]}</attribute>
                 </xpath>
 
-                <xpath expr="//field[@name='order_line']/tree/field[@name='discount']" position="attributes">
-                    <attribute name="attrs">{'readonly': ['|', ('parent.state', '!=', 'draft'), ('can_edit_quoted_price', '=', False)]}</attribute>
+                <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='discount']" position="before">
+                    <field name="can_edit_pricelist_discount" invisible="1"/>
+                </xpath>
+                <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='discount']" position="attributes">
+                    <attribute name="attrs">{'readonly': ['|', ('parent.state', '!=', 'draft'), ('can_edit_pricelist_discount', '=', False)]}</attribute>
+                </xpath>
+                <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='product_uom_qty']" position="attributes">
+                    <attribute name="optional">show</attribute>
+                </xpath>
+                <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='product_uom']" position="attributes">
+                    <attribute name="optional">show</attribute>
+                </xpath>
+                <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='price_unit']" position="attributes">
+                    <attribute name="optional">show</attribute>
+                </xpath>
+                <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='tax_id']" position="attributes">
+                    <attribute name="optional">show</attribute>
+                </xpath>
+                <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='discount']" position="attributes">
+                    <attribute name="optional">show</attribute>
+                </xpath>
+                <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='price_subtotal']" position="attributes">
+                    <attribute name="optional">show</attribute>
                 </xpath>
 
                 <xpath expr="//notebook/page[@name='customer_signature']" position="after">
                     <page string="Product Pricing" name="product_pricing"
-                          groups="sale_order_product_pricing.product_pricing_group"
-                          attrs="{'invisible': [('product_pricing', '=', False)]}">
+                          groups="sale_order_product_pricing.product_pricing_group">
+                        <group>
+                            <field name="product_pricing"
+                                   attrs="{'readonly': [('state', '!=', 'draft')]}"/>
+                        </group>
                         <group>
                             <group>
                                 <field name="change_currency_rate_type" attrs="{'readonly': [('state', '!=', 'draft')]}"/>
@@ -107,21 +129,22 @@
                         </group>
                         <group>
                             <button name="action_preview_product_pricing" type="object" string="Preview Product Pricing"
-                                    class="btn-secondary" attrs="{'invisible': [('state', '!=', 'draft')]}"/>
+                                    class="btn-secondary" attrs="{'invisible': [('state', '!=', 'draft')]}"
+                                    help="Calculate and explain every proposed line price without changing the quotation."/>
                             <button name="action_apply_product_pricing" type="object" string="Apply Product Pricing"
                                     class="btn-primary" confirm="Apply the reviewed Product Pricing proposal to this quotation?"
                                     context="{'pricing_apply_confirmed': True}"
-                                    attrs="{'invisible': [('state', '!=', 'draft')]}"/>
+                                    attrs="{'invisible': [('state', '!=', 'draft')]}"
+                                    help="Apply the last unchanged preview. Blocked lines must be resolved first."/>
                         </group>
-                        <field name="order_line" nolabel="1"
-                               domain="[('display_type', '=', False), ('is_downpayment', '=', False)]"
+                        <field name="pricing_line_ids" nolabel="1"
                                attrs="{'readonly': [('state', '!=', 'draft')]}">
                             <tree editable="bottom" create="0" delete="0">
                                 <field name="product_id" readonly="1"/>
                                 <field name="name" optional="hide"/>
                                 <field name="product_uom_qty" string="Quantity" readonly="1"/>
                                 <field name="product_uom" readonly="1" optional="hide"/>
-                                <field name="purchase_price_estimate" string="Cost"/>
+                                <field name="purchase_price_estimate" string="Purchase Price Estimate"/>
                                 <field name="pricing_eligible" readonly="1"/>
                                 <field name="pricing_warning" readonly="1" optional="show"/>
                                 <field name="factor"/>
@@ -129,13 +152,28 @@
                                 <field name="estimate_unit_price" string="Estimate" readonly="1"/>
                                 <field name="price_reference" string="Reference" readonly="1"/>
                                 <field name="price_unit" string="Quoted Price" readonly="1"/>
+                                <field name="price_origin" invisible="1"/>
                                 <field name="price_origin_display" string="Price Origin" widget="html" readonly="1"/>
+                                <button name="action_reclassify_historical_origin" type="object"
+                                        string="Certify Origin" icon="fa-shield"
+                                        groups="sales_team.group_sale_manager"
+                                        attrs="{'invisible': [('price_origin', '!=', 'historical_unverified')]}"/>
                             </tree>
                         </field>
                         <group string="Price Origin Summary">
                             <field name="product_pricing_line_count" readonly="1"/>
                             <field name="odoo_pricelist_line_count" readonly="1"/>
                             <field name="edited_price_line_count" readonly="1"/>
+                        </group>
+                        <group string="Internal Margin">
+                            <label for="margin"/>
+                            <div class="text-nowrap">
+                                <field name="margin" class="oe_inline" readonly="1"/>
+                                <span class="oe_inline">
+                                    (<field name="margin_percent" nolabel="1" class="oe_inline"
+                                            widget="percentage" readonly="1"/>)
+                                </span>
+                            </div>
                         </group>
                         <field name="pricing_audit_log_ids" nolabel="1" readonly="1">
                             <tree create="0" edit="0" delete="0">
@@ -207,6 +245,28 @@
                 <field name="sale_order_option_ids" position="attributes">
                     <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
                 </field>
+            </field>
+        </record>
+        <record id="sale_order_price_origin_reclassify_form" model="ir.ui.view">
+            <field name="name">sale.order.price.origin.reclassify.form</field>
+            <field name="model">sale.order.price.origin.reclassify</field>
+            <field name="arch" type="xml">
+                <form string="Certify Historical Price Origin">
+                    <sheet>
+                        <group>
+                            <field name="line_id"/>
+                            <field name="current_origin"/>
+                            <field name="new_origin"/>
+                            <field name="reason"
+                                   placeholder="State the document, calculation, or business evidence used for this certification."/>
+                        </group>
+                    </sheet>
+                    <footer>
+                        <button name="action_confirm" string="Certify Origin"
+                                type="object" class="btn-primary"/>
+                        <button string="Cancel" special="cancel" class="btn-secondary"/>
+                    </footer>
+                </form>
             </field>
         </record>
     </data>

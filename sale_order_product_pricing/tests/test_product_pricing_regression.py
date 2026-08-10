@@ -71,11 +71,13 @@ class ProductPricingCase(SavepointCase):
             lambda event: fragment.lower() in (event.reason or '').lower()
         ))
 
-    def test_01_order_line_is_canonical_and_duplicate_pricing_collection_is_removed(self):
+    def test_01_order_line_is_canonical_and_pricing_alias_stays_synchronized(self):
         order = self._order()
-        self._line(order)
+        line = self._line(order)
         self.assertIn('order_line', order._fields)
-        self.assertNotIn('product_pricing_ids', order._fields)
+        self.assertIn('pricing_line_ids', order._fields)
+        self.assertEqual(order.order_line, line)
+        self.assertEqual(order.pricing_line_ids, line)
 
     def test_02_bulk_delete_edit_create_uses_only_surviving_order_lines(self):
         order = self._order()
@@ -98,6 +100,9 @@ class ProductPricingCase(SavepointCase):
         line = self._line(order)
         self.assertAlmostEqual(line.factor, 1.35)
         self.assertEqual(line.price_origin, 'pricelist')
+        self.assertTrue(line.price_origin_verified)
+        self.assertEqual(line.price_origin_evidence, 'new_pricelist')
+        self.assertEqual(line.price_origin_label, 'Odoo Pricelist')
         self.assertIn('price_reference', line._fields)
 
     def test_04_zero_cost_is_ineligible_and_apply_skips_with_explanation(self):
@@ -351,3 +356,23 @@ class ProductPricingCase(SavepointCase):
 
         self.assertEqual(line.price_unit, old_price)
         self.assertTrue(line.pricing_reprice_pending)
+    def test_20_item_numbers_are_sequential_and_exclude_sections_and_notes(self):
+        order = self._order()
+        section = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'display_type': 'line_section',
+            'name': 'Section',
+        })
+        first = self._line(order)
+        note = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'display_type': 'line_note',
+            'name': 'Note',
+        })
+        second = self._line(order, self.other_product)
+
+        self.assertEqual(section.quotation_item_number, 0)
+        self.assertEqual(first.quotation_item_number, 1)
+        self.assertEqual(note.quotation_item_number, 0)
+        self.assertEqual(second.quotation_item_number, 2)
+        self.assertEqual(order.pricing_line_ids, first | second)

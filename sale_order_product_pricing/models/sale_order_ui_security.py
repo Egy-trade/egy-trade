@@ -2,13 +2,18 @@
 """Quotation pricing presentation counters and post-send write protection."""
 
 from odoo import _, api, fields, models
-from odoo.exceptions import AccessError, UserError
+from odoo.exceptions import AccessError, UserError, ValidationError
 
-from .sale_order import _is_pricing_downpayment, _is_pricing_internal
+from .sale_order import (
+    _is_pricing_downpayment,
+    _is_pricing_internal,
+    _is_pricing_reclassification,
+)
 
 
 _ORDER_PRICING_FIELDS = {
     "order_line",
+    "pricing_line_ids",
     "pricelist_id",
     "currency_id",
     "product_pricing",
@@ -47,6 +52,8 @@ _LINE_PRICING_FIELDS = {
     "discount_2",
     "discount_3",
     "price_origin",
+    "price_origin_verified",
+    "price_origin_evidence",
     "price_reference",
     "price_currency_id",
     "pricing_warning",
@@ -90,11 +97,11 @@ class SaleOrder(models.Model):
         groups="sale_order_product_pricing.product_pricing_group"
     )
     odoo_pricelist_line_count = fields.Integer(
-        string="Odoo Price List", compute="_compute_price_origin_counts",
+        string="Odoo Pricelist", compute="_compute_price_origin_counts",
         groups="sale_order_product_pricing.product_pricing_group"
     )
     edited_price_line_count = fields.Integer(
-        string="Edited", compute="_compute_price_origin_counts",
+        string="Manual Price", compute="_compute_price_origin_counts",
         groups="sale_order_product_pricing.product_pricing_group"
     )
 
@@ -147,7 +154,8 @@ class SaleOrder(models.Model):
 
     def _ensure_product_pricing_access(self):
         if not self.env.is_superuser() and not self.env.user.has_group(
-                "sale_order_product_pricing.product_pricing_group"):
+                "sale_order_product_pricing.product_pricing_group") and not self.env.user.has_group(
+                "sales_team.group_sale_manager"):
             raise AccessError(_("Product Pricing access is required for this action."))
 
     def write(self, vals):
@@ -218,6 +226,9 @@ class SaleOrderLine(models.Model):
     _inherit = "sale.order.line"
 
     can_edit_quoted_price = fields.Boolean(compute="_compute_can_edit_quoted_price")
+    can_edit_pricelist_discount = fields.Boolean(
+        compute="_compute_can_edit_pricelist_discount"
+    )
     price_origin_display = fields.Html(
         string="Price Origin", compute="_compute_price_origin_display", readonly=True,
         sanitize=False, groups="sale_order_product_pricing.product_pricing_group"
@@ -231,20 +242,78 @@ class SaleOrderLine(models.Model):
         for line in self:
             line.can_edit_quoted_price = can_edit
 
-    @api.depends("price_origin")
+    @api.depends(
+        "price_origin", "price_origin_verified", "order_id.state",
+        "order_id.user_id", "order_id.quotation_specialist_id",
+    )
+    @api.depends_context("uid")
+    def _compute_can_edit_pricelist_discount(self):
+        user = self.env.user
+        full_access = self.env.is_superuser() or user.has_group(
+            "sale_order_product_pricing.product_pricing_group"
+        ) or user.has_group("sales_team.group_sale_manager")
+        for line in self:
+            order = line.order_id
+            protected_line = line.sudo()
+            assigned = user == order.user_id or user == order.quotation_specialist_id
+            line.can_edit_pricelist_discount = (
+                order.state == "draft"
+                and (
+                    full_access
+                    or (
+                        assigned
+                        and protected_line.price_origin == "pricelist"
+                        and protected_line.price_origin_verified
+                    )
+                )
+            )
+
+    @api.depends("price_origin", "price_origin_verified")
     def _compute_price_origin_display(self):
         origin_markup = {
             "product_pricing": '<span class="text-success"><i class="fa fa-calculator"></i> <i class="fa fa-check"></i> Product Pricing</span>',
-            "pricelist": '<span class="text-warning"><i class="fa fa-tag"></i> Odoo Price List</span>',
-            "edited": '<span><i class="fa fa-pencil"></i> Edited</span>',
+            "pricelist": '<span class="text-warning"><i class="fa fa-tag"></i> <i class="fa fa-check"></i> Odoo Pricelist</span>',
+            "edited": '<span><i class="fa fa-pencil"></i> Manual Price</span>',
+            "historical_unverified": '<span class="text-danger"><i class="fa fa-question-circle"></i> Historical—Unverified</span>',
         }
         for line in self:
-            line.price_origin_display = origin_markup.get(
-                line.price_origin, '<span class="text-muted">Unknown</span>'
+            line.price_origin_display = (
+                origin_markup.get(line.price_origin)
+                if line.price_origin_verified
+                else origin_markup["historical_unverified"]
             )
 
+    def _ensure_standard_discount_access(self, discount):
+        user = self.env.user
+        full_access = self.env.is_superuser() or user.has_group(
+            "sale_order_product_pricing.product_pricing_group"
+        ) or user.has_group("sales_team.group_sale_manager")
+        if full_access:
+            return
+        ceiling = min(max(user.max_discount or 0.0, 0.0), 30.0)
+        for line in self:
+            order = line.order_id
+            protected_line = line.sudo()
+            if user != order.user_id and user != order.quotation_specialist_id:
+                raise AccessError(_("Only the assigned Salesperson or Quotation Specialist may discount this line."))
+            if protected_line.price_origin != "pricelist" or not protected_line.price_origin_verified:
+                raise AccessError(_("Standard Discount is allowed only on a verified Odoo Pricelist line."))
+            if discount < 0 or discount > ceiling:
+                raise ValidationError(_(
+                    "Your maximum standard discount on this line is %(limit).2f%%."
+                ) % {"limit": ceiling})
+
     def write(self, vals):
-        if _LINE_PRICING_FIELDS.intersection(vals):
+        metadata_reclassification = (
+            _is_pricing_reclassification(self.env)
+            and set(vals).issubset({
+                "price_origin",
+                "price_origin_verified",
+                "price_origin_evidence",
+                "pricing_warning",
+            })
+        )
+        if _LINE_PRICING_FIELDS.intersection(vals) and not metadata_reclassification:
             locked_lines = self.filtered(
                 lambda line: line.order_id.state != "draft"
             )
@@ -252,8 +321,10 @@ class SaleOrderLine(models.Model):
                 raise UserError(
                     _("Pricing is locked after the related quotation has been sent or confirmed.")
                 )
-        if {"discount", "discount_2", "discount_3"}.intersection(vals):
-            if not _is_pricing_internal(self.env):
+        if not _is_pricing_internal(self.env):
+            if "discount" in vals:
+                self._ensure_standard_discount_access(vals["discount"])
+            if {"discount_2", "discount_3"}.intersection(vals):
                 self.order_id._ensure_price_editor_access()
         return super().write(vals)
 
