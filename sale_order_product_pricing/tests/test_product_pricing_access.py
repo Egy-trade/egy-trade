@@ -354,6 +354,32 @@ class TestProductPricingAccess(SavepointCase):
         self.assertEqual(len(attrs), 1)
         self.assertIn("('state', '!=', 'draft')", attrs[0])
         self.assertIn("('can_edit_quotation_price', '=', False)", attrs[0])
+
+    def test_standard_order_lines_hide_extra_discounts(self):
+        view = self.env.ref('sale_order_product_pricing.sale_order_universal_discount_security')
+        root = etree.fromstring(view.arch_db.encode())
+        standard_tree = "//page[@name='order_lines']/field[@name='order_line']/tree"
+        for field_name in ('discount_2', 'discount_3'):
+            node = root.xpath(
+                "//xpath[@expr=$expression]",
+                expression="%s/field[@name='%s']" % (standard_tree, field_name),
+            )
+            self.assertEqual(len(node), 1, field_name)
+            self.assertEqual(
+                node[0].xpath("./attribute[@name='invisible']/text()"),
+                ['1'],
+            )
+
+        standard_discount = root.xpath(
+            "//xpath[@expr=$expression]",
+            expression="%s/field[@name='discount']" % standard_tree,
+        )
+        self.assertEqual(len(standard_discount), 1)
+        self.assertEqual(
+            standard_discount[0].xpath("./attribute[@name='string']/text()"),
+            ['Discount %'],
+        )
+
     def test_assigned_specialist_can_delete_draft_line(self):
         order = self._order(owner=self.quotation_specialist)
         line = self._line(order)
