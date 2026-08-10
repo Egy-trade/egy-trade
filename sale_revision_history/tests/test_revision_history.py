@@ -188,7 +188,9 @@ class RevisionHistoryCase(SavepointCase):
         }
         legacy_snapshot = current.sudo().with_context(**internal_context).copy({
             "name": current.name,
-            "state": "cancel",
+            # Legacy storage is modelled in two steps so the modern sent-line
+            # guard is not bypassed merely to build the fixture.
+            "state": "draft",
             "active": False,
             "current_revision_id": current.id,
             "revision_number": 0,
@@ -196,6 +198,9 @@ class RevisionHistoryCase(SavepointCase):
             "revision_reason": "Legacy first revision",
             "revision_date": fields.Datetime.now(),
             "revision_author_id": self.owner.id,
+        })
+        legacy_snapshot.sudo().with_context(**internal_context).write({
+            "state": "cancel",
         })
         current.sudo().with_context(**internal_context).write({
             "revision_number": 1,
@@ -278,13 +283,26 @@ class RevisionHistoryCase(SavepointCase):
             ),
         )
 
+        revision_line = revision.order_line
+        copied_price = revision_line.price_unit
         revision.action_preview_product_pricing()
         revision.with_context(
             pricing_apply_confirmed=True,
         ).action_apply_product_pricing()
 
         self.assertEqual(revision.state, "draft")
-        self.assertEqual(revision.order_line.price_origin, "product_pricing")
+        self.assertEqual(revision_line.price_origin, "edited")
+        self.assertEqual(revision_line.price_unit, copied_price)
+
+        # Preview/Apply only reprices after an authorized pricing input changes
+        # on the draft successor; it never silently rewrites the exact copy.
+        revision_line.write({"purchase_price_estimate": 60.0})
+        self.assertTrue(revision_line.pricing_reprice_pending)
+        revision.action_preview_product_pricing()
+        revision.with_context(
+            pricing_apply_confirmed=True,
+        ).action_apply_product_pricing()
+        self.assertEqual(revision_line.price_origin, "product_pricing")
         self.assertTrue(revision.pricing_audit_log_ids)
 
     def test_10_history_views_are_readonly_filtered_and_newest_first(self):
