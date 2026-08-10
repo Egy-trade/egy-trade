@@ -116,9 +116,9 @@
                     {'invisible': [('current_user', '!=', True)]}
                 </attribute>
             </field>
-            <field name="user_id" position="attributes">
-                <attribute name="groups">sales_team.group_sale_manager</attribute>
-            </field>
+            <!-- Keep user_id available to the client: the inherited partner domain
+                 references it, so a group restriction here makes the whole CRM
+                 view invalid for sales users. -->
             <field name="team_id" position="attributes">
                 <attribute name="groups">sales_team.group_sale_manager</attribute>
             </field>
