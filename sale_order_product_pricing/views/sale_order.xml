@@ -15,6 +15,46 @@
                            attrs="{'invisible': [('partner_id', '=', False)], 'readonly': [('state', '!=', 'draft')]}"/>
                 </field>
 
+                <!-- A sent quotation is an immutable client version.  These are
+                     deliberately view guards too: the matching ORM guards remain
+                     authoritative for RPC, imports, and alternate views. -->
+                <xpath expr="//field[@name='partner_id']" position="attributes">
+                    <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
+                </xpath>
+                <xpath expr="//field[@name='partner_invoice_id']" position="attributes">
+                    <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
+                </xpath>
+                <xpath expr="//field[@name='partner_shipping_id']" position="attributes">
+                    <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
+                </xpath>
+                <xpath expr="//field[@name='date_order']" position="attributes">
+                    <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
+                </xpath>
+                <xpath expr="//field[@name='validity_date']" position="attributes">
+                    <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
+                </xpath>
+                <xpath expr="//field[@name='pricelist_id']" position="attributes">
+                    <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
+                </xpath>
+                <xpath expr="//field[@name='payment_term_id']" position="attributes">
+                    <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
+                </xpath>
+                <xpath expr="//field[@name='fiscal_position_id']" position="attributes">
+                    <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
+                </xpath>
+                <xpath expr="//field[@name='incoterm']" position="attributes">
+                    <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
+                </xpath>
+                <xpath expr="//field[@name='client_order_ref']" position="attributes">
+                    <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
+                </xpath>
+                <xpath expr="//field[@name='note']" position="attributes">
+                    <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
+                </xpath>
+                <xpath expr="//page[@name='order_lines']/field[@name='order_line']" position="attributes">
+                    <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
+                </xpath>
+
                 <xpath expr="//field[@name='user_id']" position="attributes">
                     <attribute name="groups"/>
                     <attribute name="attrs">{'readonly': ['|', ('state', '!=', 'draft'),
@@ -124,6 +164,10 @@
             <field name="arch" type="xml">
                 <field name="ks_enable_discount" position="after">
                     <field name="can_edit_quotation_price" invisible="1"/>
+                </field>
+                <field name="ks_enable_discount" position="attributes">
+                    <attribute name="attrs">{'readonly': ['|', ('state', '!=', 'draft'),
+                        ('can_edit_quotation_price', '=', False)]}</attribute>
                 </field>
                 <field name="ks_global_discount_type" position="attributes">
                     <attribute name="attrs">{'invisible': [('ks_enable_discount', '!=', True)],

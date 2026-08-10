@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 
-from odoo.exceptions import AccessError, UserError, ValidationError
+from lxml import etree
+
+from odoo import fields
+from odoo.exceptions import AccessError, UserError
 from odoo.tests.common import SavepointCase
 
 
@@ -67,7 +70,7 @@ class TestProductPricingAccess(SavepointCase):
 
         for state in ('sent', 'sale'):
             order.write({'state': state})
-            with self.assertRaises((AccessError, UserError, ValidationError)):
+            with self.assertRaises(UserError):
                 order.with_user(self.quotation_specialist).write({'user_id': self.env.user.id})
 
     def test_legacy_draft_backfills_specialist_before_salesperson_assignment(self):
@@ -102,16 +105,48 @@ class TestProductPricingAccess(SavepointCase):
         self.assertEqual(line.product_uom_qty, 2.0)
         self.assertEqual(line.name, 'Updated quotation description')
 
+        purchase_model = self.env['purchase.order']
+        purchase_order = purchase_model.create({'partner_id': self.partner.id})
+        purchase_line = self.env['purchase.order.line'].create({
+            'order_id': purchase_order.id,
+            'product_id': self.product.id,
+            'name': 'Initial linked purchase description',
+            'product_qty': 1.0,
+            'product_uom': self.product.uom_po_id.id,
+            'date_planned': fields.Datetime.now(),
+            'price_unit': 1.0,
+            'sale_line_id': line.id,
+        })
+        line.with_user(self.quotation_specialist).write({
+            'name': 'Synchronized quotation description',
+        })
+        self.assertEqual(purchase_line.name, 'Synchronized quotation description')
+
+        specialist_purchase_model = purchase_model.with_user(self.quotation_specialist)
+        specialist_purchase_line_model = self.env['purchase.order.line'].with_user(
+            self.quotation_specialist
+        )
+        for protected_model in (specialist_purchase_model, specialist_purchase_line_model):
+            for operation in ('read', 'create', 'write'):
+                with self.assertRaises(AccessError):
+                    protected_model.check_access_rights(operation, raise_exception=True)
+        with self.assertRaises(AccessError):
+            specialist_purchase_model.create({'partner_id': self.partner.id})
+        with self.assertRaises(AccessError):
+            specialist_purchase_model.browse(purchase_order.id).write({
+                'partner_ref': 'Quotation specialist must not edit purchases',
+            })
+
     def test_quotation_specialist_cannot_price_or_manually_edit_price(self):
         order = self._order(owner=self.quotation_specialist)
         line = self._line(order)
-        with self.assertRaises((AccessError, UserError, ValidationError)):
+        with self.assertRaises(AccessError):
             order.with_user(self.quotation_specialist).action_preview_product_pricing()
-        with self.assertRaises((AccessError, UserError, ValidationError)):
+        with self.assertRaises(AccessError):
             order.with_user(self.quotation_specialist).with_context(
                 pricing_apply_confirmed=True
             ).action_apply_product_pricing()
-        with self.assertRaises((AccessError, UserError, ValidationError)):
+        with self.assertRaises(UserError):
             line.with_user(self.quotation_specialist).write({'price_unit': 90.0})
 
     def test_product_pricing_user_can_preview_apply_and_edit_price(self):
@@ -125,11 +160,11 @@ class TestProductPricingAccess(SavepointCase):
     def test_non_specialist_cannot_override_manual_price(self):
         order = self._order(owner=self.basic_user)
         line = self._line(order)
-        with self.assertRaises((AccessError, UserError, ValidationError)):
+        with self.assertRaises(UserError):
             line.with_user(self.basic_user).write({'price_unit': 90.0})
-        with self.assertRaises((AccessError, UserError, ValidationError)):
+        with self.assertRaises(AccessError):
             line.with_user(self.basic_user).write({'discount_2': 5.0})
-        with self.assertRaises((AccessError, UserError, ValidationError)):
+        with self.assertRaises(AccessError):
             self._order(owner=self.quotation_specialist).with_user(
                 self.quotation_specialist
             ).write({
@@ -139,7 +174,7 @@ class TestProductPricingAccess(SavepointCase):
     def test_rpc_context_cannot_forge_internal_pricing_authority(self):
         order = self._order(owner=self.quotation_specialist)
         line = self._line(order)
-        with self.assertRaises((AccessError, UserError, ValidationError)):
+        with self.assertRaises(UserError):
             line.with_user(self.quotation_specialist).with_context(
                 pricing_internal=True,
                 pricing_automatic_price=True,
@@ -166,7 +201,7 @@ class TestProductPricingAccess(SavepointCase):
 
     def test_quotation_specialist_cannot_change_pricelist(self):
         order = self._order(owner=self.quotation_specialist)
-        with self.assertRaises((AccessError, UserError, ValidationError)):
+        with self.assertRaises(AccessError):
             order.with_user(self.quotation_specialist).write({
                 'pricelist_id': self.env.ref('product.list0').id,
             })
@@ -176,17 +211,17 @@ class TestProductPricingAccess(SavepointCase):
         line = self._line(order)
         for state in ('sent', 'sale'):
             order.write({'state': state})
-            with self.assertRaises((AccessError, UserError, ValidationError)):
+            with self.assertRaises(UserError):
                 order.with_user(self.pricing_user).action_preview_product_pricing()
-            with self.assertRaises((AccessError, UserError, ValidationError)):
+            with self.assertRaises(UserError):
                 line.with_user(self.pricing_user).write({'price_unit': 90.0})
-            with self.assertRaises((AccessError, UserError, ValidationError)):
+            with self.assertRaises(UserError):
                 line.with_user(self.pricing_user).write({'name': 'Post-send mutation'})
-            with self.assertRaises((AccessError, UserError, ValidationError)):
+            with self.assertRaises(UserError):
                 order.with_user(self.pricing_user).write({
                     'partner_id': self.env.ref('base.res_partner_2').id,
                 })
-            with self.assertRaises((AccessError, UserError, ValidationError)):
+            with self.assertRaises(UserError):
                 order.with_user(self.pricing_user).write({'state': 'draft'})
 
     def test_pricing_audit_is_visible_only_to_product_pricing_users(self):
@@ -207,3 +242,39 @@ class TestProductPricingAccess(SavepointCase):
         for user in (self.quotation_specialist, self.basic_user):
             with self.assertRaises(AccessError):
                 analysis_model.with_user(user).search([], limit=1)
+
+    def test_sent_quotation_view_locks_commercial_header_and_lines(self):
+        """Keep the view guard aligned with the immutable-version ORM guard."""
+        view = self.env.ref('sale_order_product_pricing.sale_order_product_pricing_form')
+        root = etree.fromstring(view.arch_db.encode())
+        expected_xpaths = (
+            "//field[@name='partner_id']",
+            "//field[@name='partner_invoice_id']",
+            "//field[@name='partner_shipping_id']",
+            "//field[@name='date_order']",
+            "//field[@name='validity_date']",
+            "//field[@name='pricelist_id']",
+            "//field[@name='payment_term_id']",
+            "//field[@name='fiscal_position_id']",
+            "//field[@name='incoterm']",
+            "//field[@name='client_order_ref']",
+            "//field[@name='note']",
+            "//page[@name='order_lines']/field[@name='order_line']",
+        )
+        for expression in expected_xpaths:
+            node = root.xpath("//xpath[@expr=$expression]", expression=expression)
+            self.assertEqual(len(node), 1, expression)
+            attrs = node[0].xpath("./attribute[@name='attrs']/text()")
+            self.assertEqual(len(attrs), 1, expression)
+            self.assertIn("'readonly'", attrs[0], expression)
+            self.assertIn("('state', '!=', 'draft')", attrs[0], expression)
+
+    def test_sent_quotation_view_locks_global_discount_toggle(self):
+        view = self.env.ref('sale_order_product_pricing.sale_order_universal_discount_security')
+        root = etree.fromstring(view.arch_db.encode())
+        node = root.xpath("//field[@name='ks_enable_discount'][@position='attributes']")
+        self.assertEqual(len(node), 1)
+        attrs = node[0].xpath("./attribute[@name='attrs']/text()")
+        self.assertEqual(len(attrs), 1)
+        self.assertIn("('state', '!=', 'draft')", attrs[0])
+        self.assertIn("('can_edit_quotation_price', '=', False)", attrs[0])

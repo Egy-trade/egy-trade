@@ -87,11 +87,16 @@ class SaleOrderLine(models.Model):
 
     @api.constrains('name')
     def _check_name_c(self):
-        """ Validate name_c """
+        """Keep an already-linked purchase line description synchronized.
+
+        A quotation specialist is allowed to prepare sale-order lines without
+        Purchase access.  The relation is internal workflow data, so the
+        lookup and the narrowly-scoped description update run with system
+        rights rather than requiring the sale-line editor to read or write
+        purchase records.
+        """
         for rec in self:
-            purchase_line_ids = self.env['purchase.order.line'].search([
+            purchase_line_ids = self.env['purchase.order.line'].sudo().search([
                 ('sale_line_id','=', rec.id)
             ])
-            if purchase_line_ids:
-                for line in purchase_line_ids:
-                    line.name = rec.name
+            purchase_line_ids.write({'name': rec.name})

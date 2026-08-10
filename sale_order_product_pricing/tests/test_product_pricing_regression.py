@@ -138,7 +138,7 @@ class ProductPricingCase(SavepointCase):
         self.assertEqual(line.price_origin, 'product_pricing')
 
     def test_07_negative_cost_is_rejected(self):
-        with self.assertRaises((UserError, ValidationError)):
+        with self.assertRaises(ValidationError):
             self._line(self._order(), cost=-0.01)
 
     def test_08_authorized_manual_price_is_edited_and_survives_recompute(self):
@@ -161,7 +161,7 @@ class ProductPricingCase(SavepointCase):
         })
         before = priced.price_unit
         self._preview(order)
-        with self.assertRaises((UserError, ValidationError)):
+        with self.assertRaises(UserError):
             self._apply(order)
         self.assertEqual(priced.price_unit, before)
         self.assertEqual(priced.price_origin, 'pricelist')
@@ -176,7 +176,7 @@ class ProductPricingCase(SavepointCase):
             'product_uom': self.env.ref('uom.product_uom_dozen').id,
         })
         self.assertTrue(line.pricing_reprice_pending)
-        with self.assertRaises((UserError, ValidationError)):
+        with self.assertRaises(UserError):
             self._apply(order)
         self._preview(order)
         self.assertEqual(self._preview_item(line)['status'], 'ready')
@@ -318,7 +318,7 @@ class ProductPricingCase(SavepointCase):
         self.assertAlmostEqual(line.factor, 1.50)
         self.assertAlmostEqual(line.line_factor, 1.10)
         self.assertEqual(line.price_unit, original_price)
-        with self.assertRaises((UserError, ValidationError)):
+        with self.assertRaises(UserError):
             self._apply(order)
 
         self._preview(order)
