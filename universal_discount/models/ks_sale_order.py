@@ -137,12 +137,8 @@ class SaleOrderLine(models.Model):
     """
     _inherit = 'sale.order.line'
 
-    discount_2 = fields.Float(
-        'Discount 1'
-    )
-    discount_3 = fields.Float(
-        'Discount 2'
-    )
+    discount_2 = fields.Float(string='Discount 1')
+    discount_3 = fields.Float(string='Discount 2')
     discount = fields.Float(
         string='Discount (%)',
         compute='_compute_compound_discount',
