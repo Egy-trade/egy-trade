@@ -296,7 +296,7 @@ class RevisionHistoryCase(SavepointCase):
 
         # Preview/Apply only reprices after an authorized pricing input changes
         # on the draft successor; it never silently rewrites the exact copy.
-        revision_line.write({"purchase_price_estimate": 60.0})
+        revision_line.write({"product_uom_qty": 3.0})
         self.assertTrue(revision_line.pricing_reprice_pending)
         revision.action_preview_product_pricing()
         revision.with_context(
