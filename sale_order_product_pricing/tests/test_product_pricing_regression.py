@@ -9,6 +9,8 @@ a deleted line and later fail during preview/apply.
 from odoo.exceptions import UserError, ValidationError
 from odoo.tests.common import Form, SavepointCase
 
+from ..models.sale_order import _PRICING_INTERNAL_TOKEN
+
 
 class ProductPricingCase(SavepointCase):
     @classmethod
@@ -159,11 +161,10 @@ class ProductPricingCase(SavepointCase):
         # Model a legacy/imported invalid row without violating Odoo's
         # accountable-line constraint or exposing an RPC bypass flag. Apply
         # must reject the batch before changing the otherwise ready line.
-        self.env.cr.execute(
-            'UPDATE sale_order_line SET factor = %s WHERE id = %s',
-            [0.0, incomplete.id],
-        )
-        self.env.invalidate_all()
+        incomplete.with_context(
+            _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+        ).write({'factor': 0.0})
+        self.assertEqual(incomplete.factor, 0.0)
         before = priced.price_unit
         self._preview(order)
         with self.assertRaises(UserError):
