@@ -16,7 +16,7 @@
     'version': '16.0.2.0.0',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'sale', 'egy-trade_custom', 'universal_discount', 'sale_stock'],
+    'depends': ['base', 'sale', 'sale_management', 'egy-trade_custom', 'universal_discount', 'sale_stock'],
 
     # always loaded
     'data': [

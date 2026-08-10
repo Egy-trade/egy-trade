@@ -54,6 +54,16 @@ class TestProductPricingAccess(SavepointCase):
             'purchase_price_estimate': 50,
         })
 
+    def _option(self, order):
+        return self.env['sale.order.option'].create({
+            'order_id': order.id,
+            'product_id': self.product.id,
+            'name': self.product.display_name,
+            'quantity': 1.0,
+            'uom_id': self.product.uom_id.id,
+            'price_unit': self.product.list_price,
+        })
+
     def _preview(self, order):
         return order.with_user(self.pricing_user).action_preview_product_pricing()
 
@@ -224,6 +234,30 @@ class TestProductPricingAccess(SavepointCase):
             with self.assertRaises(UserError):
                 order.with_user(self.pricing_user).write({'state': 'draft'})
 
+    def test_state_lock_blocks_template_and_optional_product_mutations(self):
+        order = self._order()
+        option = self._option(order)
+        order.write({'state': 'sent'})
+
+        with self.assertRaises(UserError):
+            order.write({'sale_order_template_id': False})
+        with self.assertRaises(UserError):
+            self._option(order)
+        with self.assertRaises(UserError):
+            option.write({'quantity': 2.0})
+        with self.assertRaises(UserError):
+            option.unlink()
+
+    def test_state_lock_blocks_moving_a_draft_optional_product_to_sent_order(self):
+        source_order = self._order()
+        option = self._option(source_order)
+        sent_order = self._order()
+        sent_order.write({'state': 'sent'})
+
+        with self.assertRaises(UserError):
+            option.write({'order_id': sent_order.id})
+        self.assertEqual(option.order_id, source_order)
+
     def test_pricing_audit_is_visible_only_to_product_pricing_users(self):
         order = self._order()
         self._line(order)
@@ -268,6 +302,19 @@ class TestProductPricingAccess(SavepointCase):
             self.assertEqual(len(attrs), 1, expression)
             self.assertIn("'readonly'", attrs[0], expression)
             self.assertIn("('state', '!=', 'draft')", attrs[0], expression)
+
+    def test_sent_quotation_view_locks_template_and_optional_products(self):
+        view = self.env.ref('sale_order_product_pricing.sale_order_template_immutability')
+        root = etree.fromstring(view.arch_db.encode())
+        for field_name in ('sale_order_template_id', 'sale_order_option_ids'):
+            node = root.xpath(
+                "//field[@name=$field_name][@position='attributes']",
+                field_name=field_name,
+            )
+            self.assertEqual(len(node), 1, field_name)
+            attrs = node[0].xpath("./attribute[@name='attrs']/text()")
+            self.assertEqual(len(attrs), 1, field_name)
+            self.assertIn("('state', '!=', 'draft')", attrs[0], field_name)
 
     def test_sent_quotation_view_locks_global_discount_toggle(self):
         view = self.env.ref('sale_order_product_pricing.sale_order_universal_discount_security')

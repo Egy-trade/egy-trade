@@ -32,6 +32,8 @@ _ORDER_STATE_LOCKED_FIELDS = _ORDER_PRICING_FIELDS | {
     "incoterm_id",
     "client_order_ref",
     "note",
+    "sale_order_template_id",
+    "sale_order_option_ids",
 }
 _LINE_PRICING_FIELDS = {
     "product_id",
@@ -275,4 +277,36 @@ class SaleOrderLine(models.Model):
     def unlink(self):
         if self.filtered(lambda line: line.order_id.state != "draft"):
             raise UserError(_("Quotation lines cannot be removed after the quotation has been sent or confirmed."))
+        return super().unlink()
+
+
+class SaleOrderOption(models.Model):
+    _inherit = "sale.order.option"
+
+    @staticmethod
+    def _ensure_options_draft(orders, operation):
+        if orders.filtered(lambda order: order.state != "draft"):
+            raise UserError(_(
+                "Optional products cannot be %(operation)s after the related quotation has left draft."
+            ) % {"operation": operation})
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        order_ids = {
+            values.get("order_id") or self.env.context.get("default_order_id")
+            for values in vals_list
+        }
+        orders = self.env["sale.order"].browse([order_id for order_id in order_ids if order_id])
+        self._ensure_options_draft(orders, "added")
+        return super().create(vals_list)
+
+    def write(self, vals):
+        orders = self.mapped("order_id")
+        if vals.get("order_id"):
+            orders |= self.env["sale.order"].browse(vals["order_id"])
+        self._ensure_options_draft(orders, "changed")
+        return super().write(vals)
+
+    def unlink(self):
+        self._ensure_options_draft(self.mapped("order_id"), "removed")
         return super().unlink()
