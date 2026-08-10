@@ -163,7 +163,7 @@ class ProductPricingCase(SavepointCase):
             'UPDATE sale_order_line SET factor = %s WHERE id = %s',
             [0.0, incomplete.id],
         )
-        incomplete.invalidate_cache(['factor'])
+        self.env.invalidate_all()
         before = priced.price_unit
         self._preview(order)
         with self.assertRaises(UserError):
@@ -258,7 +258,7 @@ class ProductPricingCase(SavepointCase):
         self.assertEqual(order.odoo_pricelist_line_count, 1)
 
     def test_13_form_creation_leaves_a_single_canonical_line(self):
-        with Form(self.env['sale.order']) as form:
+        with Form(self.env['sale.order'].with_user(self.pricing_user)) as form:
             form.partner_id = self.partner
             form.product_pricing = True
         order = form.save()
