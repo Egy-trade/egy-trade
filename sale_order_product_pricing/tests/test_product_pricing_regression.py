@@ -356,7 +356,90 @@ class ProductPricingCase(SavepointCase):
 
         self.assertEqual(line.price_unit, old_price)
         self.assertTrue(line.pricing_reprice_pending)
-    def test_20_item_numbers_are_sequential_and_exclude_sections_and_notes(self):
+
+    def test_20_quantity_onchange_preserves_product_pricing_after_reopen(self):
+        order = self._order()
+        line = self._line(order)
+        self._preview(order)
+        self._apply(order)
+        quoted_price = line.price_unit
+
+        with Form(order) as order_form:
+            with order_form.order_line.edit(0) as line_form:
+                line_form.product_uom_qty = 2.0
+                self.assertAlmostEqual(line_form.price_unit, quoted_price)
+
+        line.invalidate_cache()
+        reopened = self.env['sale.order.line'].browse(line.id)
+        self.assertAlmostEqual(reopened.price_unit, quoted_price)
+        self.assertEqual(reopened.price_origin, 'product_pricing')
+        self.assertTrue(reopened.price_origin_verified)
+
+    def test_21_quantity_onchange_preserves_manual_price_after_reopen(self):
+        order = self._order()
+        line = self._line(order)
+        line.with_user(self.pricing_user).write({'price_unit': 137.0})
+
+        with Form(order) as order_form:
+            with order_form.order_line.edit(0) as line_form:
+                line_form.product_uom_qty = 2.0
+                self.assertAlmostEqual(line_form.price_unit, 137.0)
+
+        line.invalidate_cache()
+        reopened = self.env['sale.order.line'].browse(line.id)
+        self.assertAlmostEqual(reopened.price_unit, 137.0)
+        self.assertEqual(reopened.price_origin, 'edited')
+        self.assertTrue(reopened.price_origin_verified)
+
+    def test_22_quantity_onchange_recomputes_verified_pricelist(self):
+        order = self._order()
+        pricelist = self.env['product.pricelist'].create({
+            'name': 'Regression quantity pricing',
+            'currency_id': order.currency_id.id,
+        })
+        self.env['product.pricelist.item'].create({
+            'pricelist_id': pricelist.id,
+            'applied_on': '1_product',
+            'product_tmpl_id': self.product.product_tmpl_id.id,
+            'min_quantity': 2.0,
+            'compute_price': 'fixed',
+            'fixed_price': 80.0,
+        })
+        order.write({'pricelist_id': pricelist.id})
+        line = self._line(order, cost=0.0)
+
+        with Form(order) as order_form:
+            with order_form.order_line.edit(0) as line_form:
+                line_form.product_uom_qty = 2.0
+                self.assertAlmostEqual(line_form.price_unit, 80.0)
+
+        line.invalidate_cache()
+        reopened = self.env['sale.order.line'].browse(line.id)
+        self.assertAlmostEqual(reopened.price_unit, 80.0)
+        self.assertEqual(reopened.price_origin, 'pricelist')
+        self.assertTrue(reopened.price_origin_verified)
+        self.assertEqual(reopened.price_origin_evidence, 'new_pricelist')
+
+    def test_23_draft_date_refresh_preserves_controlled_prices(self):
+        order = self._order()
+        product_pricing_line = self._line(order)
+        self._preview(order)
+        self._apply(order)
+        product_pricing_price = product_pricing_line.price_unit
+
+        manual_line = self._line(order, self.other_product, cost=0.0)
+        manual_line.with_user(self.pricing_user).write({'price_unit': 137.0})
+
+        order.write({'note': 'Refresh the draft offer date'})
+
+        product_pricing_line.invalidate_cache()
+        manual_line.invalidate_cache()
+        self.assertAlmostEqual(product_pricing_line.price_unit, product_pricing_price)
+        self.assertEqual(product_pricing_line.price_origin, 'product_pricing')
+        self.assertAlmostEqual(manual_line.price_unit, 137.0)
+        self.assertEqual(manual_line.price_origin, 'edited')
+
+    def test_24_item_numbers_are_sequential_and_exclude_sections_and_notes(self):
         order = self._order()
         section = self.env['sale.order.line'].create({
             'order_id': order.id,

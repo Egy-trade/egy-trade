@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="sale_order_offer_expiry_form" model="ir.ui.view">
+        <field name="name">sale.order.offer.expiry.form</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="priority" eval="110"/>
+        <field name="arch" type="xml">
+            <field name="validity_date" position="before">
+                <field name="offer_date" readonly="1"
+                       help="Automatically updated to today's business date whenever this draft is saved."/>
+                <field name="offer_expiry_days" string="Days of Expiry"
+                       attrs="{'readonly': [('state', '!=', 'draft')]}"
+                       help="Expiration Date equals Offer Date plus this number of days."/>
+            </field>
+            <field name="validity_date" position="attributes">
+                <attribute name="string">Expiration Date</attribute>
+                <attribute name="readonly">1</attribute>
+                <attribute name="help">Automatically calculated from Offer Date and Days of Expiry.</attribute>
+            </field>
+        </field>
+    </record>
+
+    <record id="res_config_settings_view_form_offer_expiry" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.offer.expiry</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="sale.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@data-key='sale_management']/div[hasclass('o_settings_container')][2]"
+                   position="inside">
+                <div class="col-xs-12 col-md-6 o_setting_box">
+                    <div class="o_setting_left_pane"/>
+                    <div class="o_setting_right_pane">
+                        <label for="quotation_expiry_days_default"/>
+                        <span class="fa fa-lg fa-building-o"
+                              title="Values set here are company-specific."
+                              groups="base.group_multi_company"/>
+                        <div class="text-muted">
+                            Default Days of Expiry for newly created quotations.
+                        </div>
+                        <div class="content-group">
+                            <field name="quotation_expiry_days_default"/>
+                        </div>
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

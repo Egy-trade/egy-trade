@@ -13,7 +13,7 @@
     'author': "Abdullah/OIT-Solution",
     'website': "https://www.oit-solution.com",
     'category': 'Sales',
-    'version': '16.0.2.1.1',
+    'version': '16.0.2.2.0',
 
     # any module necessary for this one to work correctly
     'depends': ['base', 'sale', 'sale_management', 'egy-trade_custom', 'universal_discount', 'sale_stock'],
@@ -24,6 +24,7 @@
         'security/ir.model.access.csv',
         'views/product_pricing_preview.xml',
         'views/sale_order.xml',
+        'views/offer_expiry.xml',
         'views/product_analysis.xml',
     ],
 

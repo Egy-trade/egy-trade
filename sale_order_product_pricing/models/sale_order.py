@@ -15,6 +15,7 @@ from odoo.exceptions import UserError, ValidationError
 _PRICING_INTERNAL_TOKEN = object()
 _PRICING_DOWNPAYMENT_TOKEN = object()
 _PRICING_RECLASSIFY_TOKEN = object()
+_PRICING_ORDER_RECOMPUTE_TOKEN = object()
 
 
 def _is_pricing_internal(env):
@@ -30,6 +31,13 @@ def _is_pricing_downpayment(env):
 def _is_pricing_reclassification(env):
     """Identify the narrowly scoped manager provenance-certification operation."""
     return env.context.get('_pricing_reclassify_token') is _PRICING_RECLASSIFY_TOKEN
+
+
+def _is_pricing_order_recompute(env):
+    """Identify an in-process customer/date onchange price recomputation."""
+    return env.context.get(
+        '_pricing_order_recompute_token'
+    ) is _PRICING_ORDER_RECOMPUTE_TOKEN
 
 
 class SaleOrder(models.Model):
@@ -93,6 +101,7 @@ class SaleOrder(models.Model):
 
     def write(self, vals):
         currency_changed = bool({'currency_id', 'pricelist_id'} & set(vals))
+        order_price_recompute = bool({'partner_id', 'date_order'} & set(vals))
         previous_currencies = {}
         previous_prices = {}
         if currency_changed:
@@ -105,7 +114,10 @@ class SaleOrder(models.Model):
                 )
                 for order in self for line in order._pricing_lines()
             }
-        result = super().write(vals)
+        write_target = self.with_context(
+            _pricing_order_recompute_token=_PRICING_ORDER_RECOMPUTE_TOKEN,
+        ) if order_price_recompute else self
+        result = super(SaleOrder, write_target).write(vals)
         if 'global_factor' in vals and not _is_pricing_internal(self.env):
             for order in self:
                 order._pricing_lines().with_context(
@@ -116,7 +128,8 @@ class SaleOrder(models.Model):
                 for line in order._pricing_lines():
                     old_price, old_origin, old_currency = previous_prices[line.id]
                     protected_line = line.sudo()
-                    if protected_line.price_origin == 'pricelist':
+                    if (protected_line.price_origin == 'pricelist'
+                            and protected_line.price_origin_verified):
                         pricelist_price = line._pricing_pricelist_price()
                         protected_line.with_context(
                             _pricing_internal_token=_PRICING_INTERNAL_TOKEN
@@ -644,6 +657,37 @@ class SaleOrderLine(models.Model):
         public_lines._check_purchase_price_estimate()
         return public_lines
 
+    @api.depends(
+        'product_id', 'product_uom', 'product_uom_qty',
+        'order_id.pricelist_id', 'order_id.partner_id', 'order_id.date_order',
+        'order_id.currency_id',
+    )
+    def _compute_price_unit(self):
+        """Keep protected quoted prices stable during browser onchange.
+
+        Odoo recomputes price_unit for quantity, UoM, customer and date
+        changes. That is appropriate only for a verified Odoo Pricelist line.
+        Product Pricing, Manual Price, and unverified historical values remain
+        visible until an explicit controlled reprice.
+        """
+        protected_prices = {}
+        for line in self:
+            persisted = line._origin
+            if not persisted or not persisted.id:
+                continue
+            protected_line = persisted.sudo()
+            if not (
+                protected_line.price_origin == 'pricelist'
+                and protected_line.price_origin_verified
+            ):
+                protected_prices[line.id] = line.price_unit
+
+        super()._compute_price_unit()
+
+        for line in self:
+            if line.id in protected_prices:
+                line.price_unit = protected_prices[line.id]
+
     def write(self, vals):
         if _is_pricing_internal(self.env):
             return super().write(vals)
@@ -680,6 +724,45 @@ class SaleOrderLine(models.Model):
         previous_uoms = {line.id: line.product_uom.display_name for line in self}
         previous_quantities = {line.id: line.product_uom_qty for line in self}
 
+        # Customer/date onchange saves can include browser-generated price_unit
+        # values. These are automatic recomputations, not manual price edits.
+        if (_is_pricing_order_recompute(self.env)
+                and price_change and not pricing_input_change):
+            for line in self:
+                protected_line = line.sudo()
+                old_price = previous_prices[line.id]
+                old_origin = previous_origins[line.id]
+                line_vals = dict(vals)
+                can_reprice = (
+                    protected_line.price_origin == 'pricelist'
+                    and protected_line.price_origin_verified
+                )
+                if can_reprice:
+                    line_vals.pop('price_unit', None)
+                    super(SaleOrderLine, line).write(line_vals)
+                    pricelist_price = line._pricing_pricelist_price()
+                    protected_line.with_context(
+                        _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+                    ).write({
+                        'price_unit': pricelist_price,
+                        'price_reference': pricelist_price,
+                        'price_origin': 'pricelist',
+                        'price_origin_verified': True,
+                        'price_origin_evidence': 'new_pricelist',
+                        'price_currency_id': line.order_id.currency_id.id,
+                        'pricing_reprice_pending': False,
+                    })
+                    line.order_id._pricing_log_line(
+                        line,
+                        _('Verified Odoo Pricelist refreshed after customer/date change.'),
+                        old_price=old_price,
+                        old_origin=old_origin,
+                    )
+                else:
+                    line_vals['price_unit'] = old_price
+                    super(SaleOrderLine, line).write(line_vals)
+            return True
+
         # An existing product/UoM replacement never silently accepts the client
         # onchange price. It is held at the current selling price until preview.
         if pricing_input_change:
@@ -690,6 +773,37 @@ class SaleOrderLine(models.Model):
                 line_vals.pop('price_origin_evidence', None)
                 line_vals.pop('price_reference', None)
                 line_vals.pop('price_currency_id', None)
+                protected_line = line.sudo()
+                can_reprice_pricelist = (
+                    'product_id' not in vals
+                    and protected_line.price_origin == 'pricelist'
+                    and protected_line.price_origin_verified
+                    and not cost_change
+                )
+                if can_reprice_pricelist:
+                    # Persist the quantity/UoM before calculating. Never trust
+                    # the browser onchange amount.
+                    line_vals.pop('price_unit', None)
+                    super(SaleOrderLine, line).write(line_vals)
+                    pricelist_price = line._pricing_pricelist_price()
+                    protected_line.with_context(
+                        _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+                    ).write({
+                        'price_unit': pricelist_price,
+                        'price_reference': pricelist_price,
+                        'price_origin': 'pricelist',
+                        'price_origin_verified': True,
+                        'price_origin_evidence': 'new_pricelist',
+                        'price_currency_id': line.order_id.currency_id.id,
+                        'pricing_reprice_pending': False,
+                    })
+                    line.order_id._pricing_log_line(
+                        line,
+                        _('Verified Odoo Pricelist refreshed after quantity or UoM change.'),
+                        old_price=previous_prices[line.id],
+                        old_origin=previous_origins[line.id],
+                    )
+                    continue
                 # Odoo's standard product/UoM onchange may include or derive a
                 # fresh pricelist price even when the client did not explicitly
                 # send ``price_unit``.  Hold the existing selling price until

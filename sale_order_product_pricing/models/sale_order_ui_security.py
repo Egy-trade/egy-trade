@@ -30,6 +30,8 @@ _ORDER_STATE_LOCKED_FIELDS = _ORDER_PRICING_FIELDS | {
     "partner_invoice_id",
     "partner_shipping_id",
     "date_order",
+    "offer_date",
+    "offer_expiry_days",
     "validity_date",
     "payment_term_id",
     "fiscal_position_id",
