@@ -1,19 +1,18 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields, api, exceptions, _
-from datetime import date, datetime, time, timedelta
-from odoo.fields import Date, Datetime
-from odoo.tools import float_compare
-import odoo.addons.decimal_precision as dp
+
+from odoo import fields, models
 
 
-class NewModule(models.TransientModel):
-    _name = 'revision.reason'
-    _rec_name = 'name'
-    _description = 'Revision Reason'
+class RevisionReason(models.TransientModel):
+    _name = "revision.reason"
+    _rec_name = "name"
+    _description = "Quotation Revision Comment"
 
-    name = fields.Char("Objective", required=True)
-    sale_id = fields.Many2one(comodel_name="sale.order", string="Sale Order", required=False, )
+    name = fields.Text(string="Revision Comment", required=True)
+    sale_id = fields.Many2one(
+        "sale.order", string="Quotation", required=True, readonly=True,
+    )
 
     def action_confirm(self):
-        if self.sale_id:
-            self.sale_id.action_view_revision_wizard(self.name)
+        self.ensure_one()
+        return self.sale_id.action_view_revision_wizard(self.name)

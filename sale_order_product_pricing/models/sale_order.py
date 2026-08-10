@@ -491,6 +491,13 @@ class SaleOrderLine(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        # A quotation revision is an exact in-process copy.  The caller carries
+        # the unforgeable pricing token, so preserve the copied origin,
+        # reference, currency, cost, and factors instead of treating its lines
+        # as newly keyed public input.
+        if _is_pricing_internal(self.env):
+            return super().create(vals_list)
+
         prepared_vals = []
         pricing_defaults = []
         can_manage_pricing = self.env.is_superuser() or self.env.user.has_group(

@@ -1,2 +1,2 @@
 "id","name","model_id:id","group_id:id","perm_read","perm_write","perm_create","perm_unlink"
-access_revision_reason,access_revision_reason,model_revision_reason,base.group_user,1,1,1,1
+access_revision_reason_sales,access_revision_reason_sales,model_revision_reason,sales_team.group_sale_salesman,1,0,1,0
