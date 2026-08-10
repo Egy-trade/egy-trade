@@ -497,6 +497,8 @@ class SaleOrderLine(models.Model):
             'sale_order_product_pricing.product_pricing_group')
         for values in vals_list:
             values = dict(values)
+            if values.get('purchase_price_estimate', 0) < 0:
+                raise ValidationError(_('Purchasing cost cannot be negative.'))
             if values.get('is_downpayment') and not _is_pricing_downpayment(self.env):
                 values['is_downpayment'] = False
             order = self.env['sale.order'].browse(values.get('order_id'))
@@ -515,8 +517,10 @@ class SaleOrderLine(models.Model):
             values.pop('pricing_reprice_pending', None)
             prepared_vals.append(values)
             pricing_defaults.append((factor, protected_order.currency_id.id))
-        lines = super(SaleOrderLine, self.with_context(pricing_initializing=True)).create(
-            prepared_vals)
+        lines = super(
+            SaleOrderLine,
+            self.with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN),
+        ).create(prepared_vals)
         for line, (factor, currency_id) in zip(lines, pricing_defaults):
             if line.display_type or (line.is_downpayment and _is_pricing_downpayment(self.env)):
                 continue
@@ -537,7 +541,11 @@ class SaleOrderLine(models.Model):
             line.order_id._pricing_log_line(
                 line, _('New quotation line uses Odoo Price List.'),
                 old_price=0.0, old_origin=False)
-        return lines
+        # Do not return a recordset carrying the internal bypass token. Validate
+        # the fully initialized values using the same rules as public writes.
+        public_lines = lines.with_context(_pricing_internal_token=None)
+        public_lines._check_purchase_price_estimate()
+        return public_lines
 
     def write(self, vals):
         if _is_pricing_internal(self.env):
@@ -581,8 +589,11 @@ class SaleOrderLine(models.Model):
                 line_vals.pop('price_origin', None)
                 line_vals.pop('price_reference', None)
                 line_vals.pop('price_currency_id', None)
-                if price_change:
-                    line_vals['price_unit'] = line.price_unit
+                # Odoo's standard product/UoM onchange may include or derive a
+                # fresh pricelist price even when the client did not explicitly
+                # send ``price_unit``.  Hold the existing selling price until
+                # the controlled preview/apply workflow approves a reprice.
+                line_vals['price_unit'] = line.price_unit
                 super(SaleOrderLine, line).write(line_vals)
                 if not line.display_type and not line.is_downpayment:
                     protected_line = line.sudo()
@@ -672,7 +683,7 @@ class SaleOrderLine(models.Model):
 
     @api.constrains('purchase_price_estimate', 'factor', 'line_factor', 'currency_rate_estimate')
     def _check_purchase_price_estimate(self):
-        if self.env.context.get('pricing_initializing'):
+        if _is_pricing_internal(self.env):
             return
         protected_lines = self.sudo()
         if any(line.purchase_price_estimate < 0 for line in protected_lines):

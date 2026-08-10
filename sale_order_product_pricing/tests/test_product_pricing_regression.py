@@ -155,10 +155,15 @@ class ProductPricingCase(SavepointCase):
     def test_09_apply_is_atomic_for_incomplete_attempted_product_pricing(self):
         order = self._order()
         priced = self._line(order, cost=50.0)
-        incomplete = self.env['sale.order.line'].create({
-            'order_id': order.id, 'name': 'Incomplete pricing line',
-            'product_uom_qty': 1.0, 'purchase_price_estimate': 50.0,
-        })
+        incomplete = self._line(order, self.other_product, cost=50.0)
+        # Model a legacy/imported invalid row without violating Odoo's
+        # accountable-line constraint or exposing an RPC bypass flag. Apply
+        # must reject the batch before changing the otherwise ready line.
+        self.env.cr.execute(
+            'UPDATE sale_order_line SET factor = %s WHERE id = %s',
+            [0.0, incomplete.id],
+        )
+        incomplete.invalidate_cache(['factor'])
         before = priced.price_unit
         self._preview(order)
         with self.assertRaises(UserError):
@@ -255,7 +260,6 @@ class ProductPricingCase(SavepointCase):
     def test_13_form_creation_leaves_a_single_canonical_line(self):
         with Form(self.env['sale.order']) as form:
             form.partner_id = self.partner
-            form.global_factor = 1.10
             form.product_pricing = True
         order = form.save()
         line = self._line(order)
@@ -326,3 +330,23 @@ class ProductPricingCase(SavepointCase):
         self._apply(order)
         self.assertAlmostEqual(line.price_unit, proposed_price)
         self.assertEqual(line.price_origin, 'product_pricing')
+
+    def test_18_public_initializing_context_cannot_bypass_pricing_constraints(self):
+        order = self._order()
+        line = self._line(order)
+
+        with self.assertRaises(ValidationError):
+            line.with_context(pricing_initializing=True).write({'factor': 0.0})
+
+    def test_19_product_replacement_ignores_simultaneous_manual_price(self):
+        order = self._order()
+        line = self._line(order)
+        old_price = line.price_unit
+
+        line.with_user(self.pricing_user).write({
+            'product_id': self.other_product.id,
+            'price_unit': 999.0,
+        })
+
+        self.assertEqual(line.price_unit, old_price)
+        self.assertTrue(line.pricing_reprice_pending)
