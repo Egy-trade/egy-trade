@@ -59,7 +59,10 @@ class SaleOrder(models.Model):
     )
     offer_expiry_days = fields.Integer(
         string="Days of Expiry",
-        default=lambda self: self.env.company.quotation_expiry_days_default,
+        # Keep schema initialization independent from the new company column.
+        # ``create`` below still applies the selected company's configured
+        # default to every newly created quotation.
+        default=30,
         copy=True,
         help=(
             "Expiration Date is automatically calculated as Offer Date plus "
@@ -73,6 +76,17 @@ class SaleOrder(models.Model):
             if order.offer_expiry_days < 0:
                 raise ValidationError(_("Days of Expiry cannot be negative."))
 
+    @api.model
+    def default_get(self, fields_list):
+        values = super().default_get(fields_list)
+        if (
+            "offer_expiry_days" in fields_list
+            and "default_offer_expiry_days" not in self.env.context
+        ):
+            values["offer_expiry_days"] = (
+                self.env.company.quotation_expiry_days_default
+            )
+        return values
     def _offer_date_values(self):
         """Return the current business date and derived expiration."""
         self.ensure_one()

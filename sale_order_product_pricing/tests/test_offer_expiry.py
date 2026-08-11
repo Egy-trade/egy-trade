@@ -30,6 +30,20 @@ class TestOfferExpiry(SavepointCase):
         defaults.update(values)
         return self.env["sale.order"].create(defaults)
 
+    def test_order_column_default_is_schema_safe(self):
+        field = self.env["sale.order"]._fields["offer_expiry_days"]
+        self.assertEqual(field.default, 30)
+
+    def test_default_get_uses_company_setting_and_preserves_context_default(self):
+        self.company.quotation_expiry_days_default = 14
+        defaults = self.env["sale.order"].default_get(["offer_expiry_days"])
+        self.assertEqual(defaults["offer_expiry_days"], 14)
+        context_defaults = (
+            self.env["sale.order"].with_context(default_offer_expiry_days=9)
+            .default_get(["offer_expiry_days"])
+        )
+        self.assertEqual(context_defaults["offer_expiry_days"], 9)
+
     def test_create_uses_company_default_and_timezone_business_date(self):
         self.company.quotation_expiry_days_default = 14
         order = self.env["sale.order"].with_context(
