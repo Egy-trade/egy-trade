@@ -198,6 +198,24 @@ class TestQuotationRoleVisibility(SavepointCase):
             ])),
             set(),
         )
+        for view_xmlid, view_type in (
+            ("sale_order_product_pricing.quotation_technical_scope_tree", "tree"),
+            ("sale_order_product_pricing.quotation_technical_scope_form", "form"),
+        ):
+            view = scope_model.fields_view_get(
+                view_id=self.env.ref(view_xmlid).id,
+                view_type=view_type,
+            )
+            root = etree.fromstring(view["arch"].encode())
+            forbidden = {
+                "order_id", "designer_id", "sale_line_id",
+                "client_organization", "owner_team_name", "latest_activity",
+            }
+            self.assertFalse(root.xpath(".//field[@name=%s]" % "'order_id'"))
+            self.assertFalse({
+                field.get("name") for field in root.xpath(".//field")
+            }.intersection(forbidden))
+            self.assertFalse(set(view["fields"]).intersection(forbidden))
         values = scope_model.search_read([], ["project_name", "internal_reference"])[0]
         self.assertEqual(set(values), {"id", "project_name", "internal_reference"})
         with self.assertRaises(AccessError):
@@ -226,6 +244,18 @@ class TestQuotationRoleVisibility(SavepointCase):
             set(visible.fields_get(["order_id", "name", "file_data"])),
             {"name", "file_data"},
         )
+        drawing_model = self.env["quotation.technical.drawing"].with_user(self.designer)
+        for view_xmlid, view_type in (
+            ("sale_order_product_pricing.quotation_technical_drawing_tree", "tree"),
+            ("sale_order_product_pricing.quotation_technical_drawing_form", "form"),
+        ):
+            view = drawing_model.fields_view_get(
+                view_id=self.env.ref(view_xmlid).id,
+                view_type=view_type,
+            )
+            root = etree.fromstring(view["arch"].encode())
+            self.assertFalse(root.xpath(".//field[@name='order_id']"))
+            self.assertNotIn("order_id", view["fields"])
         with self.assertRaises(AccessError):
             self.env["quotation.technical.drawing"].with_user(self.employee).check_access_rights(
                 "read", raise_exception=True,

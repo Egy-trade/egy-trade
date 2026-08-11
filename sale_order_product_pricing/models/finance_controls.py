@@ -490,12 +490,16 @@ class AccountMove(models.Model):
     quotation_retention_basis = fields.Monetary(compute='_compute_quotation_retention', store=True)
     quotation_retention_amount = fields.Monetary(compute='_compute_quotation_retention', store=True)
 
-    @api.depends('amount_untaxed', 'quotation_retention_tax_id')
+    @api.depends('amount_untaxed', 'quotation_retention_tax_id', 'move_type')
     def _compute_quotation_retention(self):
         for move in self:
-            move.quotation_retention_basis = move.amount_untaxed if move.quotation_retention_tax_id else 0.0
+            refund_sign = -1.0 if move.move_type in ('out_refund', 'in_refund') else 1.0
+            move.quotation_retention_basis = (
+                refund_sign * move.amount_untaxed
+                if move.quotation_retention_tax_id else 0.0
+            )
             move.quotation_retention_amount = (
-                move.amount_untaxed * (move.quotation_retention_tax_id.amount / 100.0)
+                move.quotation_retention_basis * (move.quotation_retention_tax_id.amount / 100.0)
                 if move.quotation_retention_tax_id and move.quotation_retention_tax_id.amount_type == 'percent'
                 else 0.0
             )

@@ -9,7 +9,7 @@
         <xpath expr="//field[@name='payment_term_id']" position="after">
           <field name="tax_treatment" groups="sale_order_product_pricing.quotation_manager_group,sales_team.group_sale_manager,account.group_account_manager"
                  attrs="{'readonly': [('state', '!=', 'draft')]}"
-                 help="Finance-controlled tax policy. Standard uses configured VAT and withholding taxes; CIF removes taxes."/>
+                 help="Selects the Finance-controlled tax policy for this quotation. Finance, Quotation, Sales, or Accounting Managers may change it; Standard applies configured VAT and retention while CIF removes taxes, so confirm the commercial terms and select the required treatment before adding or issuing lines."/>
           <field name="finance_approval_required" invisible="1"/>
         </xpath>
         <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='price_unit']" position="after">
@@ -48,7 +48,9 @@
           <div class="col-12 col-lg-6 o_setting_box">
             <div class="o_setting_right_pane"><div class="o_form_label">Quotation Finance Controls</div>
               <div class="text-muted">Configure accounting-owned taxes and the normal commercial terms. Tax accounts and reporting tags remain on the configured tax records.</div>
-              <field name="quotation_vat_tax_id"/><field name="quotation_retention_tax_id"/>
+              <field name="quotation_vat_tax_id"/>
+              <field name="quotation_retention_tax_id"
+                     help="Sets the Finance-configured negative withholding tax for Standard quotations. Finance or Accounting Managers select it; it deducts the configured retention after VAT and uses its account and report tags, so choose a validated retention tax before using the Standard treatment."/>
               <field name="quotation_standard_payment_term_id"/><field name="quotation_standard_incoterm_id"/>
             </div>
           </div>

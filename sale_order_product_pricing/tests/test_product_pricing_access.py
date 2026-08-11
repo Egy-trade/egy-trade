@@ -320,6 +320,24 @@ class TestProductPricingAccess(SavepointCase):
             with self.assertRaises(AccessError):
                 audit_model.with_user(user).search([('order_id', '=', order.id)])
 
+    def test_sales_manager_can_reach_origin_certification_but_ordinary_sales_cannot(self):
+        view_id = self.env.ref('sale.view_order_form').id
+        manager_view = self.env['sale.order'].with_user(
+            self.sales_manager
+        ).fields_view_get(view_id=view_id, view_type='form')
+        manager_root = etree.fromstring(manager_view['arch'].encode())
+        manager_page = manager_root.xpath("//page[@name='product_pricing']")
+        self.assertEqual(len(manager_page), 1)
+        self.assertTrue(manager_page[0].xpath(
+            ".//button[@name='action_reclassify_historical_origin']"
+        ))
+
+        ordinary_view = self.env['sale.order'].with_user(
+            self.basic_user
+        ).fields_view_get(view_id=view_id, view_type='form')
+        ordinary_root = etree.fromstring(ordinary_view['arch'].encode())
+        self.assertFalse(ordinary_root.xpath("//page[@name='product_pricing']"))
+
     def test_product_analysis_is_not_globally_exposed(self):
         analysis_model = self.env['product.analysis']
         analysis_model.with_user(self.pricing_user).search([], limit=1)

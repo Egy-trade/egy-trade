@@ -45,7 +45,7 @@
                     <button name="action_confirm_apply" type="object" string="Confirm Apply"
                             class="btn-primary" attrs="{'invisible': [('can_apply', '=', False)]}"
                             confirm="Apply this reviewed pricing proposal atomically?"
-                            help="Apply exactly this unchanged preview. If an input changed or a line is blocked, close and Preview again."/>
+                            help="Product Pricing users apply this reviewed proposal to the quotation. It updates only the unchanged ready lines; if an input changed or a line is blocked, close this window and Preview again before applying."/>
                     <button string="Close" special="cancel" class="btn-secondary"/>
                 </footer>
             </form>

@@ -8,7 +8,7 @@
             <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='sn']" position="attributes">
                 <attribute name="string">Item #</attribute>
                 <attribute name="optional">show</attribute>
-                <attribute name="help">Optional item reference entered by the quotation preparer. It is never generated or renumbered.</attribute>
+                <attribute name="help">Optional item reference entered by the Quotation Specialist or assigned Sales user. It is never generated or renumbered, so enter the required reference or leave it blank before saving the draft.</attribute>
             </xpath>
         </field>
     </record>

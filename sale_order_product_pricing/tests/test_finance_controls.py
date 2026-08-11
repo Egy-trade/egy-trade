@@ -41,6 +41,67 @@ class TestQuotationFinanceControls(SavepointCase):
         defaults.update(values)
         return self.env['sale.order.line'].create(defaults)
 
+    def _standard_tax_fixture(self):
+        """Create isolated Finance-owned taxes, account and reporting tag."""
+        income = self.env['account.account'].create({
+            'name': 'UAT finance sales income', 'code': 'UATFINSAL',
+            'account_type': 'income', 'company_id': self.company.id,
+        })
+        retention_account = self.env['account.account'].create({
+            'name': 'UAT finance withholding receivable', 'code': 'UATFINRET',
+            'account_type': 'asset_current', 'company_id': self.company.id,
+        })
+        tag = self.env['account.account.tag'].create({
+            'name': 'UAT finance withholding tag', 'applicability': 'taxes',
+        })
+        vat = self.env['account.tax'].create({
+            'name': 'UAT finance VAT 14', 'amount_type': 'percent', 'amount': 14.0,
+            'type_tax_use': 'sale', 'company_id': self.company.id,
+        })
+        retention = self.env['account.tax'].create({
+            'name': 'UAT finance retention 1', 'amount_type': 'percent', 'amount': -1.0,
+            'type_tax_use': 'sale', 'company_id': self.company.id,
+            'invoice_repartition_line_ids': [
+                (0, 0, {'repartition_type': 'base', 'factor_percent': 100.0}),
+                (0, 0, {'repartition_type': 'tax', 'factor_percent': 100.0,
+                        'account_id': retention_account.id,
+                        'tag_ids': [(6, 0, [tag.id])]}),
+            ],
+            'refund_repartition_line_ids': [
+                (0, 0, {'repartition_type': 'base', 'factor_percent': 100.0}),
+                (0, 0, {'repartition_type': 'tax', 'factor_percent': 100.0,
+                        'account_id': retention_account.id,
+                        'tag_ids': [(6, 0, [tag.id])]}),
+            ],
+        })
+        original = {
+            'quotation_vat_tax_id': self.company.quotation_vat_tax_id.id,
+            'quotation_retention_tax_id': self.company.quotation_retention_tax_id.id,
+            'property_account_income_id': self.product.product_tmpl_id.property_account_income_id.id,
+        }
+        self.company.write({
+            'quotation_vat_tax_id': vat.id,
+            'quotation_retention_tax_id': retention.id,
+        })
+        self.product.product_tmpl_id.write({'property_account_income_id': income.id})
+        return vat, retention, retention_account, tag, original
+
+    def _restore_standard_tax_fixture(self, original):
+        self.company.write({
+            'quotation_vat_tax_id': original['quotation_vat_tax_id'],
+            'quotation_retention_tax_id': original['quotation_retention_tax_id'],
+        })
+        self.product.product_tmpl_id.write({
+            'property_account_income_id': original['property_account_income_id'],
+        })
+
+    def _invoice_from_order(self, order):
+        invoice = self.env['account.move'].create(order._prepare_invoice())
+        invoice.write({'invoice_line_ids': [(0, 0, line._prepare_invoice_line())
+                                            for line in order.order_line
+                                            if not line.display_type]})
+        return invoice
+
     def test_issue_blocks_zero_price_until_authorized_foc_with_reason(self):
         order = self._order()
         order.write({'tax_treatment': 'cif_no_taxes'})
@@ -151,6 +212,85 @@ class TestQuotationFinanceControls(SavepointCase):
                 'quotation_vat_tax_id': old_vat.id,
                 'quotation_retention_tax_id': old_retention.id,
             })
+
+    def test_standard_invoice_preserves_retention_evidence_and_tax_reporting(self):
+        vat, retention, retention_account, tag, original = self._standard_tax_fixture()
+        try:
+            order = self._order()
+            self._line(order, price_unit=100.0)
+            order.write({'tax_treatment': 'standard'})
+            invoice = self._invoice_from_order(order)
+            retention_line = invoice.line_ids.filtered(
+                lambda line: line.tax_repartition_line_id.tax_id == retention
+            )
+            self.assertEqual(invoice.quotation_tax_treatment, 'standard')
+            self.assertEqual(invoice.quotation_retention_tax_id, retention)
+            self.assertAlmostEqual(invoice.quotation_retention_basis, 100.0)
+            self.assertAlmostEqual(invoice.quotation_retention_amount, -1.0)
+            self.assertEqual(retention_line.account_id, retention_account)
+            self.assertIn(tag, retention_line.tax_tag_ids)
+            self.assertAlmostEqual(invoice.amount_total, 113.0)
+            self.assertEqual(order.order_line.tax_id, vat | retention)
+        finally:
+            self._restore_standard_tax_fixture(original)
+
+    def test_credit_note_reversal_preserves_and_reverses_retention(self):
+        _vat, retention, retention_account, tag, original = self._standard_tax_fixture()
+        try:
+            order = self._order()
+            self._line(order, price_unit=100.0)
+            order.write({'tax_treatment': 'standard'})
+            invoice = self._invoice_from_order(order)
+            invoice.action_post()
+            reversal = invoice._reverse_moves(default_values_list=[{'ref': 'UAT-FIN retention reversal'}], cancel=False)
+            original_retention = invoice.line_ids.filtered(
+                lambda line: line.tax_repartition_line_id.tax_id == retention
+            )
+            reversal_retention = reversal.line_ids.filtered(
+                lambda line: line.tax_repartition_line_id.tax_id == retention
+            )
+            self.assertEqual(reversal.move_type, 'out_refund')
+            self.assertEqual(reversal.quotation_tax_treatment, 'standard')
+            self.assertEqual(reversal.quotation_retention_tax_id, retention)
+            self.assertAlmostEqual(reversal.quotation_retention_basis, -100.0)
+            self.assertAlmostEqual(reversal.quotation_retention_amount, 1.0)
+            self.assertEqual(reversal_retention.account_id, retention_account)
+            self.assertIn(tag, reversal_retention.tax_tag_ids)
+            self.assertAlmostEqual(reversal_retention.balance, -original_retention.balance)
+        finally:
+            self._restore_standard_tax_fixture(original)
+
+    def test_eur_equivalent_threshold_requires_approval_at_exact_boundary(self):
+        eur = self.env.ref('base.EUR')
+        pricelist = self.env['product.pricelist'].create({
+            'name': 'UAT finance EUR threshold', 'currency_id': eur.id,
+        })
+        at_threshold = self._order()
+        at_threshold.write({'pricelist_id': pricelist.id, 'tax_treatment': 'cif_no_taxes'})
+        self._line(at_threshold, price_unit=100000.0)
+        self.assertIn('high_value', at_threshold._finance_requirement_codes())
+        below_threshold = self._order()
+        below_threshold.write({'pricelist_id': pricelist.id, 'tax_treatment': 'cif_no_taxes'})
+        self._line(below_threshold, price_unit=99999.99)
+        self.assertNotIn('high_value', below_threshold._finance_requirement_codes())
+
+    def test_decimal_discount_rounds_vat_and_retention_on_invoice(self):
+        _vat, retention, _retention_account, _tag, original = self._standard_tax_fixture()
+        try:
+            order = self._order()
+            line = self._line(order, price_unit=100.03)
+            order.write({'tax_treatment': 'standard'})
+            line.write({'discount_2': 10.0})
+            invoice = self._invoice_from_order(order)
+            retention_line = invoice.line_ids.filtered(
+                lambda move_line: move_line.tax_repartition_line_id.tax_id == retention
+            )
+            self.assertAlmostEqual(invoice.amount_untaxed, 90.03)
+            self.assertAlmostEqual(invoice.quotation_retention_amount, -0.90)
+            self.assertAlmostEqual(retention_line.balance, 0.90)
+            self.assertAlmostEqual(invoice.amount_total, 101.73)
+        finally:
+            self._restore_standard_tax_fixture(original)
 
     def test_cif_and_invoice_preserve_tax_treatment(self):
         order = self._order()

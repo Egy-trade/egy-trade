@@ -11,7 +11,7 @@
                        help="Set to the Cairo business date only when Update Today is recorded; viewing or an unrelated save never changes it."/>
                 <field name="offer_expiry_days" string="Days of Expiry"
                        attrs="{'readonly': [('state', '!=', 'draft')]}"
-                       help="Expiration Date equals Offer Date plus this number of days."/>
+                       help="Sets the number of days used to calculate Expiration Date from Offer Date. Quotation, Sales, or Accounting Managers may override the company default; the override changes the offer validity and is audited, so state the manager reason before saving."/>
             </field>
             <field name="validity_date" position="attributes">
                 <attribute name="string">Expiration Date</attribute>

@@ -216,6 +216,42 @@ class QuotationLifecycleCase(SavepointCase):
         self.assertTrue(accepted.sales_responsibility_accepted)
         self.assertEqual(accepted.sales_responsibility_accepted_by, self.env.user)
 
+    def test_accepted_sales_responsibility_issues_without_exception_flag_or_audit(self):
+        order = self._draft(user_id=self.env.user.id)
+        order.action_accept_sales_responsibility()
+        report_service = self.env["ir.actions.report"]
+        with patch.object(
+                type(report_service), "_render_qweb_pdf",
+                return_value=(b"%PDF-test", "pdf")):
+            order.action_issue_offer_pdf()
+        self.assertFalse(order.issued_without_sales_acceptance)
+        self.assertNotIn(
+            "without Sales responsibility acceptance", order.issued_offer_audit,
+        )
+
+    def test_unaccepted_issue_notifies_assigned_sales_and_sales_manager_in_chatter(self):
+        manager = self.env["res.users"].create({
+            "name": "Lifecycle Sales Manager",
+            "login": "lifecycle.sales.manager@example.test",
+            "groups_id": [(6, 0, [
+                self.env.ref("base.group_user").id,
+                self.env.ref("sales_team.group_sale_manager").id,
+            ])],
+        })
+        order = self._draft(user_id=self.env.user.id)
+        report_service = self.env["ir.actions.report"]
+        with patch.object(
+                type(report_service), "_render_qweb_pdf",
+                return_value=(b"%PDF-test", "pdf")):
+            order.action_issue_offer_pdf()
+        exception_messages = order.message_ids.filtered(
+            lambda message: "without Sales responsibility acceptance" in (message.body or "")
+        )
+        self.assertEqual(len(exception_messages), 1)
+        recipients = exception_messages.partner_ids
+        self.assertIn(order.user_id.partner_id, recipients)
+        self.assertIn(manager.partner_id, recipients)
+
     def test_combined_order_view_has_one_visible_manual_item_number(self):
         base_view = self.env.ref("sale.view_order_form")
         arch = self.env["sale.order"].fields_view_get(

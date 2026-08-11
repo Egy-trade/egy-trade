@@ -59,10 +59,10 @@
                 <attribute name="help">Purchase Price Estimate is the expected supplier cost used by Product Pricing. It is restricted to Product Pricing users; enter or verify it before Preview.</attribute>
             </xpath>
             <xpath expr="//page[@name='product_pricing']//field[@name='pricing_eligible']" position="attributes">
-                <attribute name="help">Pricing Eligible explains whether Product Pricing can calculate this line. Resolve a warning before Apply if the line is blocked.</attribute>
+                <attribute name="help">Pricing Eligible tells Product Pricing users whether this line can be calculated. It determines whether the line may be included in Apply; correct the stated warning, then Preview again before applying.</attribute>
             </xpath>
             <xpath expr="//page[@name='product_pricing']//field[@name='pricing_warning']" position="attributes">
-                <attribute name="help">Pricing Warning explains why Product Pricing will skip or block a line. Correct the stated input and run Preview again.</attribute>
+                <attribute name="help">Pricing Warning tells Product Pricing users why a line will be skipped or blocked. It prevents an unsafe Apply result; correct the stated input, then run Preview again.</attribute>
             </xpath>
             <xpath expr="//page[@name='product_pricing']//field[@name='factor']" position="attributes">
                 <attribute name="help">Global Factor copied to this eligible line for the Product Pricing calculation. Review it in Preview before applying any price.</attribute>

@@ -69,7 +69,8 @@
                 </xpath>
 
                 <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='discount']" position="after">
-                    <field name="price_origin_label" string="Price Origin" readonly="1" optional="show"/>
+                    <field name="price_origin_label" string="Price Origin" readonly="1" optional="show"
+                           help="Shows whether this price came from the Odoo Pricelist, Product Pricing, a manual edit, or historical data. Sales and Quotation Specialists may read it; only a Sales Manager certifies a historical origin. Review it before changing the commercial terms or applying a Standard Discount."/>
                 </xpath>
 
                 <xpath expr="//field[@name='order_line']/tree/field[@name='price_unit']" position="before">
@@ -107,7 +108,7 @@
 
                 <xpath expr="//notebook/page[@name='customer_signature']" position="after">
                     <page string="Product Pricing" name="product_pricing"
-                          groups="sale_order_product_pricing.product_pricing_group">
+                          groups="sale_order_product_pricing.product_pricing_group,sales_team.group_sale_manager">
                         <group>
                             <field name="product_pricing"
                                    attrs="{'readonly': [('state', '!=', 'draft')]}"/>
@@ -127,7 +128,7 @@
                         <group>
                             <button name="action_preview_product_pricing" type="object" string="Preview Product Pricing"
                                     class="btn-secondary" attrs="{'invisible': [('state', '!=', 'draft')]}"
-                                    help="Calculate and explain every proposed line price without changing the quotation."/>
+                                    help="Product Pricing users calculate and explain proposed line prices without changing the quotation. Review the results, then use Confirm Apply only when every line is ready."/>
                         </group>
                         <field name="pricing_line_ids" nolabel="1"
                                attrs="{'readonly': [('state', '!=', 'draft')]}">
@@ -149,7 +150,8 @@
                                 <button name="action_reclassify_historical_origin" type="object"
                                         string="Certify Origin" icon="fa-shield"
                                         groups="sales_team.group_sale_manager"
-                                        attrs="{'invisible': [('price_origin', '!=', 'historical_unverified')]}"/>
+                                        attrs="{'invisible': [('price_origin', '!=', 'historical_unverified')]}"
+                                        help="Sales Managers certify the evidence for a Historical-Unverified price origin. Certification records the chosen origin without changing the price; review the source document and enter the evidence reason before confirming."/>
                             </tree>
                         </field>
                         <group string="Price Origin Summary">
@@ -267,7 +269,8 @@
                     </sheet>
                     <footer>
                         <button name="action_confirm" string="Certify Origin"
-                                type="object" class="btn-primary"/>
+                                type="object" class="btn-primary"
+                                help="Sales Managers save the reviewed historical-origin certification. It records the selected origin and evidence reason without repricing the line; return to the quotation and continue only after the evidence is complete."/>
                         <button string="Cancel" special="cancel" class="btn-secondary"/>
                     </footer>
                 </form>
