@@ -6,6 +6,8 @@ from datetime import timedelta
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+from .sale_order import _is_pricing_internal
+
 
 _OFFER_DATE_INTERNAL_TOKEN = object()
 
@@ -74,6 +76,7 @@ class SaleOrder(models.Model):
     def _check_offer_expiry_days(self):
         for order in self:
             if order.offer_expiry_days < 0:
+
                 raise ValidationError(_("Days of Expiry cannot be negative."))
 
     @api.model
@@ -128,7 +131,11 @@ class SaleOrder(models.Model):
         return super().create(prepared_vals)
 
     def write(self, vals):
-        if _is_offer_date_internal(self.env):
+        # Preview/apply audit writes are technical pricing operations, not a
+        # user save of the commercial quotation. Refreshing ``date_order``
+        # inside them would invalidate the exact preview hash that Apply is
+        # required to verify.
+        if _is_offer_date_internal(self.env) or _is_pricing_internal(self.env):
             return super().write(vals)
 
         vals = dict(vals)

@@ -369,7 +369,7 @@ class ProductPricingCase(SavepointCase):
                 line_form.product_uom_qty = 2.0
                 self.assertAlmostEqual(line_form.price_unit, quoted_price)
 
-        line.invalidate_cache()
+        line.invalidate_recordset()
         reopened = self.env['sale.order.line'].browse(line.id)
         self.assertAlmostEqual(reopened.price_unit, quoted_price)
         self.assertEqual(reopened.price_origin, 'product_pricing')
@@ -385,7 +385,7 @@ class ProductPricingCase(SavepointCase):
                 line_form.product_uom_qty = 2.0
                 self.assertAlmostEqual(line_form.price_unit, 137.0)
 
-        line.invalidate_cache()
+        line.invalidate_recordset()
         reopened = self.env['sale.order.line'].browse(line.id)
         self.assertAlmostEqual(reopened.price_unit, 137.0)
         self.assertEqual(reopened.price_origin, 'edited')
@@ -413,7 +413,7 @@ class ProductPricingCase(SavepointCase):
                 line_form.product_uom_qty = 2.0
                 self.assertAlmostEqual(line_form.price_unit, 80.0)
 
-        line.invalidate_cache()
+        line.invalidate_recordset()
         reopened = self.env['sale.order.line'].browse(line.id)
         self.assertAlmostEqual(reopened.price_unit, 80.0)
         self.assertEqual(reopened.price_origin, 'pricelist')
@@ -432,8 +432,8 @@ class ProductPricingCase(SavepointCase):
 
         order.write({'note': 'Refresh the draft offer date'})
 
-        product_pricing_line.invalidate_cache()
-        manual_line.invalidate_cache()
+        product_pricing_line.invalidate_recordset()
+        manual_line.invalidate_recordset()
         self.assertAlmostEqual(product_pricing_line.price_unit, product_pricing_price)
         self.assertEqual(product_pricing_line.price_origin, 'product_pricing')
         self.assertAlmostEqual(manual_line.price_unit, 137.0)
