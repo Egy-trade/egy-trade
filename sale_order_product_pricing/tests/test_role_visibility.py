@@ -192,8 +192,14 @@ class TestQuotationRoleVisibility(SavepointCase):
         self.assertTrue(scope)
         self.assertEqual(set(scope_model.fields_get(["order_id", "designer_id"])), set())
         self.assertEqual(set(scope.line_ids.with_user(self.designer).fields_get(["sale_line_id"])), set())
-        values = scope_model.search_read([], ["project_name", "internal_reference", "client_organization"])[0]
-        self.assertEqual(set(values), {"id", "project_name", "internal_reference", "client_organization"})
+        self.assertEqual(
+            set(scope_model.fields_get([
+                "client_organization", "owner_team_name", "latest_activity",
+            ])),
+            set(),
+        )
+        values = scope_model.search_read([], ["project_name", "internal_reference"])[0]
+        self.assertEqual(set(values), {"id", "project_name", "internal_reference"})
         with self.assertRaises(AccessError):
             self.env["sale.order"].with_user(self.designer).check_access_rights("read", raise_exception=True)
         directory_model = self.env["quotation.project.directory"].with_user(self.employee)

@@ -125,10 +125,7 @@ class SaleOrder(models.Model):
                     "designer_id": designer.id,
                     "project_name": order.project or order.name,
                     "internal_reference": order.name,
-                    "client_organization": order.partner_id.commercial_partner_id.name,
                     "revision_status": dict(order._fields["state"].selection).get(order.state, order.state),
-                    "owner_team_name": order.team_id.name,
-                    "latest_activity": fields.Datetime.now(),
                 }
                 if scope:
                     scope.write(values)
@@ -178,9 +175,6 @@ class SaleOrder(models.Model):
                         existing[sale_line.id].write(values)
                     else:
                         ScopeLine.create(values)
-                # A technical line change is meaningful project activity. Keep
-                # this projection current without writing back to the quotation.
-                scope.write({"latest_activity": fields.Datetime.now()})
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -307,17 +301,14 @@ class ResPartner(models.Model):
 class QuotationTechnicalScope(models.Model):
     _name = "quotation.technical.scope"
     _description = "Lighting Designer Technical Quotation Scope"
-    _order = "latest_activity desc, id desc"
+    _order = "id desc"
     _rec_name = "internal_reference"
 
     order_id = fields.Many2one("sale.order", required=True, ondelete="cascade", groups="base.group_no_one")
     designer_id = fields.Many2one("res.users", required=True, ondelete="cascade", groups="base.group_no_one")
     project_name = fields.Char(readonly=True)
     internal_reference = fields.Char(readonly=True)
-    client_organization = fields.Char(readonly=True)
     revision_status = fields.Char(readonly=True)
-    owner_team_name = fields.Char(readonly=True)
-    latest_activity = fields.Datetime(readonly=True)
     line_ids = fields.One2many("quotation.technical.scope.line", "scope_id", readonly=True)
 
     _sql_constraints = [
