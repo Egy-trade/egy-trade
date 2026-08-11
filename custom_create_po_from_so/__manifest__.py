@@ -15,15 +15,16 @@
     'category': "OIT Solutions/apps",
     'license': 'AGPL-3',
     'sequence': 1,
-    'version': '0.1',
+    'version': '0.2.0',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'sale_purchase', 'purchase_stock'],
+    'depends': ['base', 'sale_purchase', 'purchase_stock', 'sale_order_product_pricing'],
 
     # always loaded
     'data': [
         # 'security/ir.model.access.csv',
         'views/views.xml',
         'views/templates.xml',
+        'views/finance_purchase.xml',
     ],
 }

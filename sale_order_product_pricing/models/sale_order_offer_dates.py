@@ -24,7 +24,7 @@ class ResCompany(models.Model):
 
     quotation_expiry_days_default = fields.Integer(
         string="Default Days of Expiry",
-        default=30,
+        default=14,
         help=(
             "Default number of days between Offer Date and Expiration Date "
             "for newly created quotations."
@@ -55,8 +55,8 @@ class SaleOrder(models.Model):
         readonly=True,
         copy=False,
         help=(
-            "Business date automatically refreshed whenever this active draft "
-            "quotation is saved."
+            "Commercial offer date. It changes only after the user records the "
+            "first commercial-change decision for the Cairo business day."
         ),
     )
     offer_expiry_days = fields.Integer(
@@ -64,7 +64,7 @@ class SaleOrder(models.Model):
         # Keep schema initialization independent from the new company column.
         # ``create`` below still applies the selected company's configured
         # default to every newly created quotation.
-        default=30,
+        default=14,
         copy=True,
         help=(
             "Expiration Date is automatically calculated as Offer Date plus "
@@ -96,7 +96,6 @@ class SaleOrder(models.Model):
         offer_date = fields.Date.context_today(self)
         return {
             "offer_date": offer_date,
-            "date_order": fields.Datetime.now(),
             "validity_date": offer_date + timedelta(days=self.offer_expiry_days),
         }
 
@@ -121,10 +120,11 @@ class SaleOrder(models.Model):
                 vals.get("state", "draft") == "draft"
                 and vals.get("active", True)
             ):
-                offer_date = fields.Date.context_today(self.with_company(company))
+                offer_date = fields.Date.context_today(
+                    self.with_company(company).with_context(tz="Africa/Cairo")
+                )
                 vals.update({
                     "offer_date": offer_date,
-                    "date_order": fields.Datetime.now(),
                     "validity_date": offer_date + timedelta(days=days),
                 })
             prepared_vals.append(vals)
@@ -132,9 +132,7 @@ class SaleOrder(models.Model):
 
     def write(self, vals):
         # Preview/apply audit writes are technical pricing operations, not a
-        # user save of the commercial quotation. Refreshing ``date_order``
-        # inside them would invalidate the exact preview hash that Apply is
-        # required to verify.
+        # user save of the commercial quotation.
         if _is_offer_date_internal(self.env) or _is_pricing_internal(self.env):
             return super().write(vals)
 
@@ -155,12 +153,19 @@ class SaleOrder(models.Model):
 
         result = super().write(vals)
 
-        # Only an active draft is refreshed. Sent/confirmed quotations and
-        # superseded revision history retain their exact historical dates.
-        for order in self.filtered(
-            lambda item: item.state == "draft" and getattr(item, "active", True)
-        ):
-            order.with_context(
-                _offer_date_internal_token=_OFFER_DATE_INTERNAL_TOKEN
-            ).write(order._offer_date_values())
+        # Changing Days of Expiry is the one direct date operation.  A normal
+        # commercial save must go through the daily-change decision in
+        # sale_revision_history; merely viewing or saving unrelated metadata
+        # never mutates an offer date or the standard Odoo ``date_order``.
+        if "offer_expiry_days" in vals:
+            for order in self.filtered(
+                lambda item: item.state == "draft" and getattr(item, "active", True)
+            ):
+                order.with_context(
+                    _offer_date_internal_token=_OFFER_DATE_INTERNAL_TOKEN
+                ).write({
+                    "validity_date": order.offer_date + timedelta(
+                        days=order.offer_expiry_days
+                    ),
+                })
         return result

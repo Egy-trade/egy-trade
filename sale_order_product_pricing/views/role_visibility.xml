@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <record id="sale_order_role_assignment_form" model="ir.ui.view">
+        <field name="name">sale.order.role.assignment.form</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="priority" eval="210"/>
+        <field name="arch" type="xml">
+            <field name="user_id" position="attributes">
+                <attribute name="domain">[('id', 'in', allowed_salesperson_ids)]</attribute>
+                <attribute name="help">Sales owner for this quotation. An assigned Quotation Specialist may choose only an active internal Sales user while the quotation is still a draft; save to record the assignment audit.</attribute>
+            </field>
+            <field name="partner_id" position="attributes">
+                <attribute name="options">{'no_create': True, 'no_create_edit': True}</attribute>
+                <attribute name="help">Select an existing client. Quotation Specialists cannot create or edit client master data; ask an authorized colleague to maintain it first.</attribute>
+            </field>
+            <field name="partner_invoice_id" position="attributes">
+                <attribute name="options">{'no_create': True, 'no_create_edit': True}</attribute>
+                <attribute name="help">Select an existing invoice contact. Create or correct contacts in the controlled Contacts workspace, then return here.</attribute>
+            </field>
+            <field name="partner_shipping_id" position="attributes">
+                <attribute name="options">{'no_create': True, 'no_create_edit': True}</attribute>
+                <attribute name="help">Select an existing delivery contact. Create or correct contacts in the controlled Contacts workspace, then return here.</attribute>
+            </field>
+            <field name="quotation_specialist_id" position="attributes">
+                <attribute name="help">Quotation Specialist responsible for preparing this draft. Sales management assigns this role; the assigned specialist can hand Salesperson ownership to an active internal Sales user.</attribute>
+            </field>
+            <field name="user_id" position="after">
+                <field name="allowed_salesperson_ids" invisible="1"/>
+                <field name="lighting_designer_ids" widget="many2many_tags" groups="sale_order_product_pricing.quotation_manager_group,sales_team.group_sale_manager"
+                       attrs="{'readonly': [('state', '!=', 'draft')]}"/>
+                <field name="technical_drawing_ids" groups="sale_order_product_pricing.quotation_manager_group,sales_team.group_sale_manager"
+                       attrs="{'readonly': [('state', '!=', 'draft')]}"
+                       help="Release technical drawings only after checking that they contain no prices, costs, margins, vendors, or client contacts.">
+                    <tree editable="bottom">
+                        <field name="name"/>
+                        <field name="file_data" filename="file_name"/>
+                        <field name="file_name" invisible="1"/>
+                        <field name="uploaded_by_id"/>
+                    </tree>
+                </field>
+                <field name="standard_discount_override_reason" groups="sale_order_product_pricing.quotation_manager_group,sales_team.group_sale_manager"
+                       placeholder="Required only before a manager exceeds a personal discount cap."
+                       attrs="{'readonly': [('state', '!=', 'draft')]}"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="sale_order_role_guidance" model="ir.ui.view">
+        <field name="name">sale.order.role.guidance</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale_order_product_pricing.sale_order_product_pricing_form"/>
+        <field name="priority" eval="220"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='product_pricing']//field[@name='global_factor']" position="attributes">
+                <attribute name="help">Global Factor is the default multiplier for eligible Product Pricing lines. Product Pricing users set it, preview the non-mutating result, then Apply the reviewed proposal.</attribute>
+            </xpath>
+            <xpath expr="//page[@name='product_pricing']//field[@name='purchase_price_estimate']" position="attributes">
+                <attribute name="help">Purchase Price Estimate is the expected supplier cost used by Product Pricing. It is restricted to Product Pricing users; enter or verify it before Preview.</attribute>
+            </xpath>
+            <xpath expr="//page[@name='product_pricing']//field[@name='pricing_eligible']" position="attributes">
+                <attribute name="help">Pricing Eligible explains whether Product Pricing can calculate this line. Resolve a warning before Apply if the line is blocked.</attribute>
+            </xpath>
+            <xpath expr="//page[@name='product_pricing']//field[@name='pricing_warning']" position="attributes">
+                <attribute name="help">Pricing Warning explains why Product Pricing will skip or block a line. Correct the stated input and run Preview again.</attribute>
+            </xpath>
+            <xpath expr="//page[@name='product_pricing']//field[@name='factor']" position="attributes">
+                <attribute name="help">Global Factor copied to this eligible line for the Product Pricing calculation. Review it in Preview before applying any price.</attribute>
+            </xpath>
+            <xpath expr="//page[@name='product_pricing']//field[@name='line_factor']" position="attributes">
+                <attribute name="help">Line Factor adjusts only this eligible line. Product Pricing users review it in Preview; it does not change a quoted price until Apply.</attribute>
+            </xpath>
+            <xpath expr="//page[@name='product_pricing']//field[@name='price_origin_display']" position="attributes">
+                <attribute name="help">Price Origin shows how the current selling price was established. Historical-Unverified requires manager certification; Manual Price remains protected from Product Pricing Apply.</attribute>
+            </xpath>
+            <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='discount']" position="attributes">
+                <attribute name="help">Standard Discount is available only on a verified Odoo Pricelist line for the assigned Salesperson or Quotation Specialist within their personal cap. Management enters a reason before an authorized override.</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="quotation_technical_scope_tree" model="ir.ui.view">
+        <field name="name">quotation.technical.scope.tree</field>
+        <field name="model">quotation.technical.scope</field>
+        <field name="arch" type="xml">
+            <tree create="0" edit="0" delete="0">
+                <field name="project_name"/>
+                <field name="internal_reference"/>
+                <field name="client_organization"/>
+                <field name="revision_status"/>
+                <field name="owner_team_name"/>
+                <field name="latest_activity"/>
+            </tree>
+        </field>
+    </record>
+    <record id="quotation_technical_scope_form" model="ir.ui.view">
+        <field name="name">quotation.technical.scope.form</field>
+        <field name="model">quotation.technical.scope</field>
+        <field name="arch" type="xml">
+            <form create="0" edit="0" delete="0">
+                <sheet>
+                    <group>
+                        <field name="project_name"/>
+                        <field name="internal_reference"/>
+                        <field name="client_organization"/>
+                        <field name="revision_status"/>
+                        <field name="owner_team_name"/>
+                        <field name="latest_activity"/>
+                    </group>
+                    <field name="line_ids" nolabel="1">
+                        <tree create="0" edit="0" delete="0">
+                            <field name="product_name"/>
+                            <field name="description"/>
+                            <field name="quantity"/>
+                            <field name="uom_name"/>
+                        </tree>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="action_quotation_technical_scope" model="ir.actions.act_window">
+        <field name="name">Technical Quotations</field>
+        <field name="res_model">quotation.technical.scope</field>
+        <field name="view_mode">tree,form</field>
+        <field name="groups_id" eval="[(4, ref('sale_order_product_pricing.lighting_designer_group'))]"/>
+    </record>
+    <menuitem id="menu_quotation_technical_scope" name="Technical Quotations"
+              action="action_quotation_technical_scope" sequence="35"
+              groups="sale_order_product_pricing.lighting_designer_group"/>
+
+    <record id="quotation_technical_drawing_tree" model="ir.ui.view">
+        <field name="name">quotation.technical.drawing.tree</field>
+        <field name="model">quotation.technical.drawing</field>
+        <field name="arch" type="xml">
+            <tree create="0" edit="0" delete="0">
+                <field name="name"/>
+                <field name="file_data" filename="file_name"/>
+                <field name="file_name" invisible="1"/>
+                <field name="revision_status"/>
+                <field name="uploaded_by_id"/>
+                <field name="create_date"/>
+            </tree>
+        </field>
+    </record>
+    <record id="quotation_technical_drawing_form" model="ir.ui.view">
+        <field name="name">quotation.technical.drawing.form</field>
+        <field name="model">quotation.technical.drawing</field>
+        <field name="arch" type="xml">
+            <form create="0" edit="0" delete="0">
+                <sheet><group>
+                    <field name="name"/>
+                    <field name="file_data" filename="file_name"/>
+                    <field name="file_name" invisible="1"/>
+                    <field name="revision_status"/>
+                    <field name="uploaded_by_id"/>
+                    <field name="create_date"/>
+                </group></sheet>
+            </form>
+        </field>
+    </record>
+    <record id="action_quotation_technical_drawing" model="ir.actions.act_window">
+        <field name="name">Technical Drawings</field>
+        <field name="res_model">quotation.technical.drawing</field>
+        <field name="view_mode">tree,form</field>
+        <field name="groups_id" eval="[(4, ref('sale_order_product_pricing.lighting_designer_group'))]"/>
+    </record>
+    <menuitem id="menu_quotation_technical_drawing" name="Technical Drawings"
+              action="action_quotation_technical_drawing" sequence="36"
+              groups="sale_order_product_pricing.lighting_designer_group"/>
+
+    <record id="quotation_project_directory_tree" model="ir.ui.view">
+        <field name="name">quotation.project.directory.tree</field>
+        <field name="model">quotation.project.directory</field>
+        <field name="arch" type="xml">
+            <tree create="0" edit="0" delete="0">
+                <field name="project_name"/>
+                <field name="internal_reference"/>
+                <field name="client_organization"/>
+                <field name="stage"/>
+                <field name="owner_team_name"/>
+                <field name="latest_activity"/>
+            </tree>
+        </field>
+    </record>
+    <record id="quotation_project_directory_form" model="ir.ui.view">
+        <field name="name">quotation.project.directory.form</field>
+        <field name="model">quotation.project.directory</field>
+        <field name="arch" type="xml">
+            <form create="0" edit="0" delete="0">
+                <sheet><group>
+                    <field name="project_name"/>
+                    <field name="internal_reference"/>
+                    <field name="client_organization"/>
+                    <field name="stage"/>
+                    <field name="owner_team_name"/>
+                    <field name="latest_activity"/>
+                </group></sheet>
+            </form>
+        </field>
+    </record>
+    <record id="action_quotation_project_directory" model="ir.actions.act_window">
+        <field name="name">Project Directory</field>
+        <field name="res_model">quotation.project.directory</field>
+        <field name="view_mode">tree,form</field>
+        <field name="groups_id" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+    <menuitem id="menu_quotation_project_directory" name="Project Directory"
+              action="action_quotation_project_directory" sequence="34"
+              groups="base.group_user"/>
+</odoo>

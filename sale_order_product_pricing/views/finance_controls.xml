@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+  <data>
+    <record id="sale_order_finance_controls_form" model="ir.ui.view">
+      <field name="name">sale.order.finance.controls.form</field>
+      <field name="model">sale.order</field>
+      <field name="inherit_id" ref="sale.view_order_form"/>
+      <field name="arch" type="xml">
+        <xpath expr="//field[@name='payment_term_id']" position="after">
+          <field name="tax_treatment" groups="sale_order_product_pricing.quotation_manager_group,sales_team.group_sale_manager,account.group_account_manager"
+                 attrs="{'readonly': [('state', '!=', 'draft')]}"
+                 help="Finance-controlled tax policy. Standard uses configured VAT and withholding taxes; CIF removes taxes."/>
+          <field name="finance_approval_required" invisible="1"/>
+        </xpath>
+        <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='price_unit']" position="after">
+          <field name="is_free_of_charge" optional="hide"
+                 help="Authorized zero-price exception. A Pricing User or quotation/sales manager marks it and records a reason before Issue Offer PDF."/>
+          <field name="free_of_charge_reason" optional="hide"
+                 help="Required reason for the authorized zero-price exception; resolve it before Issue Offer PDF."/>
+        </xpath>
+        <xpath expr="//notebook" position="inside">
+          <page string="Finance Controls" groups="sale_order_product_pricing.quotation_manager_group,sales_team.group_sale_manager">
+            <group>
+              <field name="finance_approval_required" readonly="1"
+                     help="Shows that one or more current commercial exceptions need manager approval before Issue Offer PDF."/>
+              <field name="finance_approval_reason" placeholder="State the approval or self-approval reason."
+                     help="Manager's audit reason. It is mandatory for self-approval and retained with the approval evidence."/>
+              <button name="action_approve_finance_requirements" type="object" string="Approve Finance Requirements" class="btn-primary"
+                      attrs="{'invisible': [('state', '!=', 'draft')]}"
+                      help="Quotation or Sales Management approves every current exception. Any later commercial change invalidates the approval."/>
+            </group>
+            <field name="finance_approval_ids" readonly="1">
+              <tree create="0" edit="0" delete="0">
+                <field name="label"/><field name="approver_id"/><field name="approval_date"/>
+                <field name="reason"/><field name="invalidated"/><field name="invalidated_reason"/>
+              </tree>
+            </field>
+          </page>
+        </xpath>
+      </field>
+    </record>
+    <record id="res_config_settings_finance_controls" model="ir.ui.view">
+      <field name="name">res.config.settings.finance.controls</field>
+      <field name="model">res.config.settings</field>
+      <field name="inherit_id" ref="sale.res_config_settings_view_form"/>
+      <field name="arch" type="xml">
+        <xpath expr="//div[@data-key='sale_management']/div[hasclass('o_settings_container')][2]" position="inside">
+          <div class="col-12 col-lg-6 o_setting_box">
+            <div class="o_setting_right_pane"><div class="o_form_label">Quotation Finance Controls</div>
+              <div class="text-muted">Configure accounting-owned taxes and the normal commercial terms. Tax accounts and reporting tags remain on the configured tax records.</div>
+              <field name="quotation_vat_tax_id"/><field name="quotation_retention_tax_id"/>
+              <field name="quotation_standard_payment_term_id"/><field name="quotation_standard_incoterm_id"/>
+            </div>
+          </div>
+        </xpath>
+      </field>
+    </record>
+  </data>
+</odoo>

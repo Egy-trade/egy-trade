@@ -5,6 +5,7 @@ from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
 
 from .sale_order import (
+    _PRICING_INTERNAL_TOKEN,
     _is_pricing_downpayment,
     _is_pricing_internal,
     _is_pricing_reclassification,
@@ -186,6 +187,18 @@ class SaleOrder(models.Model):
         if "user_id" in vals:
             if not self._is_quotation_specialist():
                 raise AccessError(_("Only Quotation Specialists can change the Salesperson."))
+            if (
+                    not self.env.is_superuser()
+                    and not self.env.user.has_group("sales_team.group_sale_manager")
+                    and self.filtered(
+                        lambda order: (
+                            order.quotation_specialist_id != self.env.user
+                            and vals.get("quotation_specialist_id") != self.env.user.id
+                        )
+                    )):
+                raise AccessError(_(
+                    "Only the Quotation Specialist assigned to this draft may change its Salesperson."
+                ))
             if self.filtered(lambda order: order.state != "draft"):
                 raise UserError(
                     _("The Salesperson can only be changed on a draft quotation or revision.")
@@ -235,6 +248,17 @@ class SaleOrderLine(models.Model):
         string="Price Origin", compute="_compute_price_origin_display", readonly=True,
         sanitize=False, groups="sale_order_product_pricing.product_pricing_group"
     )
+    standard_discount_override_used = fields.Boolean(
+        string="Discount Override Used", readonly=True, copy=True,
+        groups=(
+            "sale_order_product_pricing.quotation_manager_group,"
+            "sales_team.group_sale_manager"
+        ),
+        help=(
+            "System evidence that the current Standard Discount was applied "
+            "above the acting user's personal cap and needs approval before issue."
+        ),
+    )
 
     @api.depends_context("uid")
     def _compute_can_edit_quoted_price(self):
@@ -251,9 +275,15 @@ class SaleOrderLine(models.Model):
     @api.depends_context("uid")
     def _compute_can_edit_pricelist_discount(self):
         user = self.env.user
-        full_access = self.env.is_superuser() or user.has_group(
-            "sale_order_product_pricing.product_pricing_group"
-        ) or user.has_group("sales_team.group_sale_manager")
+        quotation_manager = self.env.ref(
+            "sale_order_product_pricing.quotation_manager_group",
+            raise_if_not_found=False,
+        )
+        full_access = (
+            self.env.is_superuser()
+            or user.has_group("sales_team.group_sale_manager")
+            or (quotation_manager and quotation_manager in user.groups_id)
+        )
         for line in self:
             order = line.order_id
             protected_line = line.sudo()
@@ -261,7 +291,8 @@ class SaleOrderLine(models.Model):
             line.can_edit_pricelist_discount = (
                 order.state == "draft"
                 and (
-                    full_access
+                    (full_access and protected_line.price_origin == "pricelist"
+                     and protected_line.price_origin_verified)
                     or (
                         assigned
                         and protected_line.price_origin == "pricelist"
@@ -287,25 +318,66 @@ class SaleOrderLine(models.Model):
 
     def _ensure_standard_discount_access(self, discount):
         user = self.env.user
-        full_access = self.env.is_superuser() or user.has_group(
-            "sale_order_product_pricing.product_pricing_group"
-        ) or user.has_group("sales_team.group_sale_manager")
-        if full_access:
-            return
-        ceiling = min(max(user.max_discount or 0.0, 0.0), 30.0)
+        quotation_manager = self.env.ref(
+            "sale_order_product_pricing.quotation_manager_group",
+            raise_if_not_found=False,
+        )
+        manager = (
+            self.env.is_superuser()
+            or user.has_group("sales_team.group_sale_manager")
+            or (quotation_manager and quotation_manager in user.groups_id)
+        )
+        overrides = []
         for line in self:
             order = line.order_id
             protected_line = line.sudo()
-            if user != order.user_id and user != order.quotation_specialist_id:
+            company = order.company_id
+            # ``sale_discount_total`` may be deliberately absent on an older
+            # database. Keep the old secure 30% default in that upgrade path.
+            if "standard_discount_enabled" in company._fields:
+                enabled = company.standard_discount_enabled
+                company_cap = min(max(company.standard_discount_maximum or 0.0, 0.0), 30.0)
+            else:
+                enabled = True
+                company_cap = 30.0
+            if not enabled:
+                raise AccessError(_(
+                    "Standard Discount is disabled in Sales Settings for this company."
+                ))
+            if discount < 0 or discount > company_cap:
+                raise ValidationError(_(
+                    "Standard Discount must be between 0%% and the company maximum of %(limit).2f%%."
+                ) % {"limit": company_cap})
+            if not manager and user != order.user_id and user != order.quotation_specialist_id:
                 raise AccessError(_("Only the assigned Salesperson or Quotation Specialist may discount this line."))
             if protected_line.price_origin != "pricelist" or not protected_line.price_origin_verified:
                 raise AccessError(_("Standard Discount is allowed only on a verified Odoo Pricelist line."))
-            if discount < 0 or discount > ceiling:
+            personal_cap = (
+                user.standard_discount_cap
+                if "standard_discount_cap" in user._fields
+                else user.max_discount
+            )
+            ceiling = min(max(personal_cap or 0.0, 0.0), company_cap, 30.0)
+            if discount > ceiling and not manager:
                 raise ValidationError(_(
                     "Your maximum standard discount on this line is %(limit).2f%%."
                 ) % {"limit": ceiling})
+            if discount > ceiling:
+                reason = (order.standard_discount_override_reason or "").strip()
+                if not reason:
+                    raise ValidationError(_(
+                        "Quotation or Sales Management must provide a Standard Discount Override Reason before exceeding the personal cap."
+                    ))
+                overrides.append((line, ceiling, reason))
+        return overrides
 
     def write(self, vals):
+        if (
+                "standard_discount_override_used" in vals
+                and not _is_pricing_internal(self.env)):
+            raise AccessError(_(
+                "Discount override evidence is system-managed and cannot be changed through RPC/import."
+            ))
         metadata_reclassification = (
             _is_pricing_reclassification(self.env)
             and set(vals).issubset({
@@ -324,14 +396,47 @@ class SaleOrderLine(models.Model):
                     _("Pricing is locked after the related quotation has been sent or confirmed.")
                 )
         if not _is_pricing_internal(self.env):
+            standard_discount_overrides = []
             if "discount" in vals:
-                self._ensure_standard_discount_access(vals["discount"])
+                standard_discount_overrides = self._ensure_standard_discount_access(vals["discount"])
             if {"discount_2", "discount_3"}.intersection(vals):
                 self.order_id._ensure_price_editor_access()
-        return super().write(vals)
+        result = super().write(vals)
+        if not _is_pricing_internal(self.env) and "discount" in vals:
+            override_lines = self.env["sale.order.line"].concat(*[
+                line for line, _ceiling, _reason in standard_discount_overrides
+            ]) if standard_discount_overrides else self.env["sale.order.line"]
+            (self - override_lines).with_context(
+                _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+            ).write({"standard_discount_override_used": False})
+            override_lines.with_context(
+                _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+            ).write({"standard_discount_override_used": True})
+        if not _is_pricing_internal(self.env) and standard_discount_overrides:
+            consumed_orders = self.env["sale.order"]
+            for line, ceiling, reason in standard_discount_overrides:
+                line.order_id._pricing_log_line(
+                    line,
+                    _("Standard Discount override from personal cap %(cap).2f%% to %(discount).2f%%: %(reason)s") % {
+                        "cap": ceiling,
+                        "discount": vals["discount"],
+                        "reason": reason,
+                    },
+                )
+                consumed_orders |= line.order_id
+            # Reasons are one-use evidence, so a later override always asks for
+            # a fresh business justification rather than silently reusing text.
+            consumed_orders.sudo().write({"standard_discount_override_reason": False})
+        return result
 
     @api.model_create_multi
     def create(self, vals_list):
+        if not _is_pricing_internal(self.env) and any(
+                "standard_discount_override_used" in values
+                for values in vals_list):
+            raise AccessError(_(
+                "Discount override evidence is system-managed and cannot be supplied through RPC/import."
+            ))
         genuine_downpayment = _is_pricing_downpayment(self.env)
         protected_values = [
             values for values in vals_list
@@ -345,7 +450,43 @@ class SaleOrderLine(models.Model):
         )
         if locked_orders:
             raise UserError(_("Quotation lines cannot be added after the quotation has been sent or confirmed."))
-        return super().create(vals_list)
+        lines = super().create(vals_list)
+        # Imports and RPC creates do not pass through ``write``. Validate only
+        # after the pricing layer has established the authoritative Pricelist
+        # origin on the freshly-created line, then let the transaction roll
+        # back if the requested discount is not allowed.
+        if not _is_pricing_internal(self.env):
+            overrides = []
+            for line, values in zip(lines, vals_list):
+                if "discount" in values:
+                    overrides.extend(line._ensure_standard_discount_access(
+                        values["discount"]
+                    ))
+            if overrides:
+                consumed_orders = self.env["sale.order"]
+                for line, ceiling, reason in overrides:
+                    line.order_id._pricing_log_line(
+                        line,
+                        _("Standard Discount override from personal cap %(cap).2f%% to %(discount).2f%%: %(reason)s") % {
+                            "cap": ceiling,
+                            "discount": line.discount,
+                            "reason": reason,
+                        },
+                    )
+                    consumed_orders |= line.order_id
+                consumed_orders.sudo().write({
+                    "standard_discount_override_reason": False,
+                })
+            override_lines = self.env["sale.order.line"].concat(*[
+                line for line, _ceiling, _reason in overrides
+            ]) if overrides else self.env["sale.order.line"]
+            (lines - override_lines).with_context(
+                _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+            ).write({"standard_discount_override_used": False})
+            override_lines.with_context(
+                _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+            ).write({"standard_discount_override_used": True})
+        return lines
 
     def unlink(self):
         if self.filtered(lambda line: line.order_id.state != "draft"):

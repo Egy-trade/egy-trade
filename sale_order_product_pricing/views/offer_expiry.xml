@@ -8,7 +8,7 @@
         <field name="arch" type="xml">
             <field name="validity_date" position="before">
                 <field name="offer_date" readonly="1"
-                       help="Automatically updated to today's business date whenever this draft is saved."/>
+                       help="Set to the Cairo business date only when Update Today is recorded; viewing or an unrelated save never changes it."/>
                 <field name="offer_expiry_days" string="Days of Expiry"
                        attrs="{'readonly': [('state', '!=', 'draft')]}"
                        help="Expiration Date equals Offer Date plus this number of days."/>

@@ -304,10 +304,6 @@ class SaleOrder(models.Model):
         if not preview:
             raise UserError(_('Add at least one quotation line before previewing Product Pricing.'))
         preview_hash = self._pricing_preview_hash(preview)
-        self.with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN).write({
-            'product_pricing_preview_hash': preview_hash,
-            'product_pricing_previewed_at': fields.Datetime.now(),
-        })
         counts = {}
         for item in preview:
             counts[item['status']] = counts.get(item['status'], 0) + 1
@@ -344,14 +340,6 @@ class SaleOrder(models.Model):
             'can_apply': not counts.get('blocked', 0),
             'line_ids': wizard_lines,
         })
-        self._pricing_log(_(
-            'Product Pricing preview created: %(ready)s ready, %(protected)s Edited protected, '
-            '%(skipped)s skipped, %(blocked)s blocked.') % {
-                'ready': counts.get('ready', 0),
-                'protected': counts.get('protected', 0),
-                'skipped': counts.get('skipped', 0),
-                'blocked': counts.get('blocked', 0),
-            })
         return {
             'type': 'ir.actions.act_window',
             'name': _('Product Pricing Preview'),
@@ -375,8 +363,7 @@ class SaleOrder(models.Model):
             if not self.env.context.get('pricing_apply_confirmed'):
                 raise UserError(_('Preview Product Pricing first, then confirm Apply.'))
             preview = order._pricing_preview_payload()
-            if not order.product_pricing_previewed_at or (
-                    order.product_pricing_preview_hash != order._pricing_preview_hash(preview)):
+            if self.env.context.get('pricing_preview_hash') != order._pricing_preview_hash(preview):
                 raise UserError(_('Pricing inputs changed since the last preview. Preview again before applying.'))
             blocked = [item for item in preview if item['status'] == 'blocked']
             if blocked:
@@ -444,10 +431,6 @@ class SaleOrder(models.Model):
             order._pricing_log(_(
                 'Confirmed Product Pricing Apply completed; ordinary Edited prices remained protected.'
             ))
-            order.with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN).write({
-                'product_pricing_preview_hash': False,
-                'product_pricing_previewed_at': False,
-            })
         return True
 
     def apply_estimate_product_price(self):
@@ -491,9 +474,12 @@ class SaleOrder(models.Model):
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
-    quotation_item_number = fields.Integer(
-        string='Item #', compute='_compute_quotation_item_number',
-        help='Sequential commercial item number. Sections and notes are excluded.')
+    # ``sn`` is the pre-existing user-entered reference field.  It deliberately
+    # remains free-form: BOQ item references are often alphanumeric and must
+    # not be silently renumbered when sections/notes are moved.
+    sn = fields.Char(
+        string='Item #', copy=True,
+        help='Optional item reference entered by the quotation preparer. It is not generated or renumbered by the system.')
     purchase_price_estimate = fields.Float(
         string='Purchase Price Estimate', copy=True,
         help='Estimated supplier purchase price used only for quotation pricing. It is not the Accounting Cost.',
@@ -561,18 +547,6 @@ class SaleOrderLine(models.Model):
         copy=False, readonly=True,
         help='Set when a product, UoM, or quantity change must be repriced by confirmed Apply.',
         groups='sale_order_product_pricing.product_pricing_group')
-
-    @api.depends('order_id.order_line.sequence', 'order_id.order_line.display_type')
-    def _compute_quotation_item_number(self):
-        for line in self:
-            line.quotation_item_number = 0
-        for order in self.mapped('order_id'):
-            number = 0
-            for line in order.order_line:
-                if line.display_type:
-                    continue
-                number += 1
-                line.quotation_item_number = number
 
     @api.depends('price_origin', 'price_origin_verified')
     def _compute_price_origin_label(self):
@@ -1103,7 +1077,8 @@ class SaleOrderPricingPreview(models.TransientModel):
                 'Pricing inputs changed after this dialog opened. Close it and preview again.'
             ))
         self.order_id.with_context(
-            pricing_apply_confirmed=True
+            pricing_apply_confirmed=True,
+            pricing_preview_hash=self.preview_hash,
         ).action_apply_product_pricing()
         return {'type': 'ir.actions.act_window_close'}
 

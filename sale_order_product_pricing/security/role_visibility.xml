@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <record id="lighting_designer_group" model="res.groups">
+        <field name="name">Lighting Designer</field>
+        <field name="category_id" ref="base.module_category_sales_sales"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <record id="lighting_designer_technical_scope_rule" model="ir.rule">
+        <field name="name">Lighting Designers: assigned technical quotation scope</field>
+        <field name="model_id" ref="model_quotation_technical_scope"/>
+        <field name="groups" eval="[(4, ref('lighting_designer_group'))]"/>
+        <field name="domain_force">[('designer_id', '=', user.id)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="lighting_designer_technical_scope_line_rule" model="ir.rule">
+        <field name="name">Lighting Designers: assigned technical quotation lines</field>
+        <field name="model_id" ref="model_quotation_technical_scope_line"/>
+        <field name="groups" eval="[(4, ref('lighting_designer_group'))]"/>
+        <field name="domain_force">[('scope_id.designer_id', '=', user.id)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="lighting_designer_technical_drawing_rule" model="ir.rule">
+        <field name="name">Lighting Designers: drawings released for assigned quotations</field>
+        <field name="model_id" ref="model_quotation_technical_drawing"/>
+        <field name="groups" eval="[(4, ref('lighting_designer_group'))]"/>
+        <field name="domain_force">[('order_id.lighting_designer_ids', 'in', [user.id])]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="quotation_manager_technical_drawing_rule" model="ir.rule">
+        <field name="name">Quotation Managers: all released technical drawings</field>
+        <field name="model_id" ref="model_quotation_technical_drawing"/>
+        <field name="groups" eval="[(4, ref('quotation_manager_group'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+    </record>
+    <record id="sales_manager_technical_drawing_rule" model="ir.rule">
+        <field name="name">Sales Managers: all released technical drawings</field>
+        <field name="model_id" ref="model_quotation_technical_drawing"/>
+        <field name="groups" eval="[(4, ref('sales_team.group_sale_manager'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+    </record>
+</odoo>

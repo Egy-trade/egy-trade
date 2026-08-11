@@ -23,3 +23,4 @@
 from . import discount_approval
 from . import sale
 from . import account_invoice
+from . import standard_discount_policy

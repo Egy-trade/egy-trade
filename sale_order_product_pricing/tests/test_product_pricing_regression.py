@@ -36,11 +36,13 @@ class ProductPricingCase(SavepointCase):
         })
 
     def _order(self, global_factor=1.20):
-        return self.env['sale.order'].create({
+        order = self.env['sale.order'].create({
             'partner_id': self.partner.id, 'global_factor': global_factor,
             'product_pricing': True,
             'user_id': self.pricing_user.id,
         })
+        order._record_commercial_change('update_today')
+        return order
 
     def _line(self, order, product=None, cost=50.0, price=None):
         product = product or self.product
@@ -52,10 +54,19 @@ class ProductPricingCase(SavepointCase):
         })
 
     def _preview(self, order):
-        return order.action_preview_product_pricing()
+        action = order.action_preview_product_pricing()
+        if not hasattr(self, '_preview_wizards'):
+            self._preview_wizards = {}
+        self._preview_wizards[order.id] = self.env[action['res_model']].browse(
+            action['res_id']
+        )
+        return action
 
     def _apply(self, order):
-        return order.with_context(pricing_apply_confirmed=True).action_apply_product_pricing()
+        wizard = getattr(self, '_preview_wizards', {}).get(order.id)
+        if not wizard:
+            raise UserError('Preview Product Pricing first, then confirm Apply.')
+        return wizard.action_confirm_apply()
 
     def _warning(self, line):
         preview = line.order_id.get_product_pricing_preview()['lines']
@@ -256,7 +267,7 @@ class ProductPricingCase(SavepointCase):
         self.assertEqual(order.product_pricing_line_count, 0)
         self.assertEqual(order.odoo_pricelist_line_count, 2)
         self.assertEqual(order.edited_price_line_count, 0)
-        self.assertTrue(self._has_audit(order, 'product pricing preview'))
+        self.assertFalse(self._has_audit(order, 'product pricing preview'))
         self.assertEqual(self._preview_item(calculated)['status'], 'ready')
         self.assertEqual(self._preview_item(pricelist)['status'], 'skipped')
         self._apply(order)
@@ -268,6 +279,7 @@ class ProductPricingCase(SavepointCase):
             form.partner_id = self.partner
             form.product_pricing = True
         order = form.save()
+        order.with_user(self.pricing_user)._record_commercial_change('update_today')
         line = self._line(order)
         self._preview(order)
         self.assertEqual(order.order_line, line)
@@ -439,7 +451,7 @@ class ProductPricingCase(SavepointCase):
         self.assertAlmostEqual(manual_line.price_unit, 137.0)
         self.assertEqual(manual_line.price_origin, 'edited')
 
-    def test_24_item_numbers_are_sequential_and_exclude_sections_and_notes(self):
+    def test_24_item_numbers_are_manual_and_sections_notes_are_not_renumbered(self):
         order = self._order()
         section = self.env['sale.order.line'].create({
             'order_id': order.id,
@@ -454,8 +466,10 @@ class ProductPricingCase(SavepointCase):
         })
         second = self._line(order, self.other_product)
 
-        self.assertEqual(section.quotation_item_number, 0)
-        self.assertEqual(first.quotation_item_number, 1)
-        self.assertEqual(note.quotation_item_number, 0)
-        self.assertEqual(second.quotation_item_number, 2)
+        first.write({'sn': 'L-10'})
+        second.write({'sn': 'L-20'})
+        self.assertFalse(section.sn)
+        self.assertEqual(first.sn, 'L-10')
+        self.assertFalse(note.sn)
+        self.assertEqual(second.sn, 'L-20')
         self.assertEqual(order.pricing_line_ids, first | second)

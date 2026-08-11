@@ -6,6 +6,7 @@ from odoo import fields
 from odoo.exceptions import AccessError, UserError, ValidationError
 
 from ..models.sale_order import _PRICING_INTERNAL_TOKEN
+from odoo.addons.sale_revision_history.models.sale_order import _LIFECYCLE_INTERNAL_TOKEN
 from odoo.tests.common import SavepointCase
 
 
@@ -74,7 +75,9 @@ class TestProductPricingAccess(SavepointCase):
         }
         if owner == self.quotation_specialist:
             values['quotation_specialist_id'] = owner.id
-        return self.env['sale.order'].create(values)
+        order = self.env['sale.order'].create(values)
+        order._record_commercial_change('update_today')
+        return order
 
     def _line(self, order):
         return self.env['sale.order.line'].create({
@@ -96,21 +99,34 @@ class TestProductPricingAccess(SavepointCase):
     def _preview(self, order):
         return order.with_user(self.pricing_user).action_preview_product_pricing()
 
+    @staticmethod
+    def _set_sent(order):
+        order.with_context(
+            _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
+        ).write({'state': 'sent'})
+
     def _apply(self, order):
-        return order.with_user(self.pricing_user).with_context(
-            pricing_apply_confirmed=True
-        ).action_apply_product_pricing()
+        action = self._preview(order)
+        wizard = self.env[action['res_model']].browse(action['res_id'])
+        return wizard.with_user(self.pricing_user).action_confirm_apply()
 
     def test_quotation_specialist_can_change_salesperson_only_on_draft_or_revision(self):
         order = self._order(owner=self.quotation_specialist)
         order.with_user(self.quotation_specialist).write({'user_id': self.env.user.id})
         revision = order.copy({'state': 'draft'})
+        revision._record_commercial_change('update_today')
         revision.with_user(self.quotation_specialist).write({'user_id': self.env.user.id})
 
         for state in ('sent', 'sale'):
-            order.write({'state': state})
+            locked_order = self._order(owner=self.quotation_specialist)
+            if state == 'sent':
+                self._set_sent(locked_order)
+            else:
+                locked_order.write({'state': state})
             with self.assertRaises(UserError):
-                order.with_user(self.quotation_specialist).write({'user_id': self.env.user.id})
+                locked_order.with_user(self.quotation_specialist).write({
+                    'user_id': self.env.user.id,
+                })
 
     def test_legacy_draft_backfills_specialist_before_salesperson_assignment(self):
         order = self.env['sale.order'].create({
@@ -118,6 +134,7 @@ class TestProductPricingAccess(SavepointCase):
             'user_id': self.quotation_specialist.id,
             'quotation_specialist_id': False,
         })
+        order._record_commercial_change('update_today')
 
         order.with_user(self.quotation_specialist).write({'user_id': self.pricing_user.id})
 
@@ -129,6 +146,7 @@ class TestProductPricingAccess(SavepointCase):
             'partner_id': self.partner.id,
             'user_id': self.quotation_specialist.id,
         })
+        order.with_user(self.quotation_specialist)._record_commercial_change('update_today')
         line = self.env['sale.order.line'].with_user(self.quotation_specialist).create({
             'order_id': order.id,
             'product_id': self.product.id,
@@ -191,7 +209,7 @@ class TestProductPricingAccess(SavepointCase):
     def test_product_pricing_user_can_preview_apply_and_edit_price(self):
         order = self._order()
         line = self._line(order)
-        self._preview(order)
+        self._apply(order)
         self._apply(order)
         line.with_user(self.pricing_user).write({'price_unit': 90.0})
         self.assertEqual(line.price_origin, 'edited')
@@ -249,7 +267,10 @@ class TestProductPricingAccess(SavepointCase):
         order = self._order()
         line = self._line(order)
         for state in ('sent', 'sale'):
-            order.write({'state': state})
+            if state == 'sent':
+                self._set_sent(order)
+            else:
+                order.write({'state': state})
             with self.assertRaises(UserError):
                 order.with_user(self.pricing_user).action_preview_product_pricing()
             with self.assertRaises(UserError):
@@ -266,7 +287,7 @@ class TestProductPricingAccess(SavepointCase):
     def test_state_lock_blocks_template_and_optional_product_mutations(self):
         order = self._order()
         option = self._option(order)
-        order.write({'state': 'sent'})
+        self._set_sent(order)
 
         with self.assertRaises(UserError):
             order.write({'sale_order_template_id': False})
@@ -281,7 +302,7 @@ class TestProductPricingAccess(SavepointCase):
         source_order = self._order()
         option = self._option(source_order)
         sent_order = self._order()
-        sent_order.write({'state': 'sent'})
+        self._set_sent(sent_order)
 
         with self.assertRaises(UserError):
             option.write({'order_id': sent_order.id})
@@ -417,7 +438,7 @@ class TestProductPricingAccess(SavepointCase):
         with self.assertRaises(AccessError):
             line.with_user(self.basic_user).write({'discount': 5.0})
 
-    def test_pricing_user_and_manager_have_full_draft_pricing_authority(self):
+    def test_only_management_can_override_standard_discount_with_reason(self):
         pricing_order = self._order(owner=self.pricing_user)
         pricing_line = self._line(pricing_order)
         pricing_line.sudo().with_context(
@@ -427,21 +448,23 @@ class TestProductPricingAccess(SavepointCase):
             'price_origin_verified': True,
             'price_origin_evidence': 'product_pricing_apply',
         })
-        self.assertTrue(
+        self.assertFalse(
             pricing_line.with_user(self.pricing_user).can_edit_pricelist_discount
         )
-        pricing_line.with_user(self.pricing_user).write({'discount': 45.0})
-        self.assertEqual(pricing_line.discount, 45.0)
+        with self.assertRaises(AccessError):
+            pricing_line.with_user(self.pricing_user).write({'discount': 5.0})
 
         manager_order = self._order(owner=self.sales_manager)
         manager_line = self._line(manager_order)
-        manager_order.with_user(self.sales_manager).action_preview_product_pricing()
+        manager_order.with_user(self.sales_manager).write({
+            'standard_discount_override_reason': 'Approved manager discount override.',
+        })
         manager_line.with_user(self.sales_manager).write({
             'price_unit': 88.0,
-            'discount': 60.0,
+            'discount': 30.0,
         })
         self.assertEqual(manager_line.price_origin, 'edited')
-        self.assertTrue(
+        self.assertFalse(
             manager_line.with_user(self.sales_manager).can_edit_pricelist_discount
         )
         self.assertTrue(manager_line.price_origin_verified)
@@ -459,7 +482,7 @@ class TestProductPricingAccess(SavepointCase):
             'price_origin_evidence': 'legacy_unverified',
             'pricing_warning': 'Manager review required.',
         })
-        order.write({'state': 'sent'})
+        self._set_sent(order)
 
         with self.assertRaises(UserError):
             line.with_user(self.basic_user).action_reclassify_historical_origin()
@@ -470,12 +493,11 @@ class TestProductPricingAccess(SavepointCase):
             'new_origin': 'product_pricing',
             'reason': 'Signed pricing worksheet PP-001 matches this line.',
         })
-        wizard.action_confirm()
+        with self.assertRaises(UserError):
+            wizard.action_confirm()
 
         self.assertEqual(line.price_unit, original_price)
-        self.assertEqual(line.price_origin, 'product_pricing')
-        self.assertTrue(line.price_origin_verified)
-        self.assertEqual(line.price_origin_evidence, 'manager_reclassified')
+        self.assertEqual(line.price_origin, 'historical_unverified')
         with self.assertRaises(UserError):
             line.with_user(self.sales_manager).write({'name': 'Sent mutation'})
 
@@ -491,21 +513,24 @@ class TestProductPricingAccess(SavepointCase):
         self.assertTrue(
             root.xpath("//field[@name='price_origin_label'][@optional='show']")
         )
-        self.assertTrue(
-            root.xpath("//field[@name='quotation_item_number'][@optional='show']")
+        self.assertFalse(root.xpath("//field[@name='sn']"))
+        button = root.xpath("//button[@name='action_preview_product_pricing']")
+        self.assertEqual(len(button), 1)
+        self.assertTrue(button[0].get('help'))
+        self.assertFalse(root.xpath("//button[@name='action_apply_product_pricing']"))
+        preview_view = self.env.ref(
+            'sale_order_product_pricing.sale_order_pricing_preview_form'
         )
-        for action_name in (
-            'action_preview_product_pricing',
-            'action_apply_product_pricing',
-        ):
-            button = root.xpath("//button[@name=$name]", name=action_name)
-            self.assertEqual(len(button), 1)
-            self.assertTrue(button[0].get('help'))
+        preview_root = etree.fromstring(preview_view.arch_db.encode())
+        confirm = preview_root.xpath("//button[@name='action_confirm_apply']")
+        self.assertEqual(len(confirm), 1)
+        self.assertTrue(confirm[0].get('help'))
     def test_assigned_salesperson_can_crud_draft_lines_but_unassigned_cannot(self):
         order = self.env['sale.order'].with_user(self.basic_user).create({
             'partner_id': self.partner.id,
             'user_id': self.basic_user.id,
         })
+        order.with_user(self.basic_user)._record_commercial_change('update_today')
         line = self.env['sale.order.line'].with_user(self.basic_user).create({
             'order_id': order.id,
             'product_id': self.product.id,
@@ -545,6 +570,7 @@ class TestProductPricingAccess(SavepointCase):
             'user_id': self.quotation_specialist.id,
             'quotation_specialist_id': self.quotation_specialist.id,
         })
+        order.with_user(self.quotation_specialist)._record_commercial_change('update_today')
         order.with_user(self.quotation_specialist).write({
             'order_line': [(0, 0, {
                 'product_id': self.product.id,

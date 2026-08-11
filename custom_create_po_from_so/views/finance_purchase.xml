@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+  <data>
+    <record id="purchase_order_finance_estimate_form" model="ir.ui.view">
+      <field name="name">purchase.order.finance.estimate.form</field>
+      <field name="model">purchase.order</field>
+      <field name="inherit_id" ref="purchase.purchase_order_form"/>
+      <field name="arch" type="xml">
+        <xpath expr="//field[@name='order_line']/tree/field[@name='price_unit']" position="after">
+          <field name="supplier_cost_required" optional="show"/>
+          <field name="purchase_estimate_amount" optional="hide"/>
+          <field name="purchase_estimate_currency_id" optional="hide"/>
+          <field name="purchase_estimate_rate" optional="hide"/>
+          <field name="supplier_cost_reason" optional="hide"/>
+        </xpath>
+        <xpath expr="//field[@name='order_line']/form//field[@name='price_unit']" position="after">
+          <group string="Quotation Estimate">
+            <field name="source_sale_order_id"/><field name="source_sale_line_id"/>
+            <field name="purchase_estimate_amount"/><field name="purchase_estimate_currency_id"/>
+            <field name="purchase_estimate_rate"/><field name="supplier_cost_required"/>
+            <field name="supplier_cost_reason" attrs="{'required': [('supplier_cost_required', '=', True)]}"/>
+            <field name="supplier_cost_recorded_by"/><field name="supplier_cost_recorded_at"/>
+          </group>
+        </xpath>
+      </field>
+    </record>
+  </data>
+</odoo>

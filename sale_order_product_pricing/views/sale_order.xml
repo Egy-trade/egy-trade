@@ -68,9 +68,6 @@
                     <attribute name="optional">show</attribute>
                 </xpath>
 
-                <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='product_id']" position="before">
-                    <field name="quotation_item_number" string="Item #" readonly="1" optional="show"/>
-                </xpath>
                 <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='discount']" position="after">
                     <field name="price_origin_label" string="Price Origin" readonly="1" optional="show"/>
                 </xpath>
@@ -131,11 +128,6 @@
                             <button name="action_preview_product_pricing" type="object" string="Preview Product Pricing"
                                     class="btn-secondary" attrs="{'invisible': [('state', '!=', 'draft')]}"
                                     help="Calculate and explain every proposed line price without changing the quotation."/>
-                            <button name="action_apply_product_pricing" type="object" string="Apply Product Pricing"
-                                    class="btn-primary" confirm="Apply the reviewed Product Pricing proposal to this quotation?"
-                                    context="{'pricing_apply_confirmed': True}"
-                                    attrs="{'invisible': [('state', '!=', 'draft')]}"
-                                    help="Apply the last unchanged preview. Blocked lines must be resolved first."/>
                         </group>
                         <field name="pricing_line_ids" nolabel="1"
                                attrs="{'readonly': [('state', '!=', 'draft')]}">

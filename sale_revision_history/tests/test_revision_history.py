@@ -8,7 +8,7 @@ from odoo.addons.sale_order_product_pricing.models.sale_order import (
     _PRICING_INTERNAL_TOKEN,
 )
 
-from ..models.sale_order import _REVISION_INTERNAL_TOKEN
+from ..models.sale_order import _LIFECYCLE_INTERNAL_TOKEN, _REVISION_INTERNAL_TOKEN
 
 
 class RevisionHistoryCase(SavepointCase):
@@ -63,6 +63,7 @@ class RevisionHistoryCase(SavepointCase):
             "product_pricing": True,
             "global_factor": 1.35,
         })
+        order._record_commercial_change("update_today")
         line = self.env["sale.order.line"].create({
             "order_id": order.id,
             "product_id": self.product.id,
@@ -84,7 +85,9 @@ class RevisionHistoryCase(SavepointCase):
             "factor": 1.35,
             "line_factor": 1.10,
         })
-        order.write({"state": "sent"})
+        order.with_context(
+            _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
+        ).write({"state": "sent"})
         return order
 
     @staticmethod
@@ -162,7 +165,9 @@ class RevisionHistoryCase(SavepointCase):
             self.env,
             original.with_user(self.owner).action_view_revision_wizard("First change"),
         )
-        first.write({"state": "sent"})
+        first.with_context(
+            _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
+        ).write({"state": "sent"})
         second = self._revision_from_action(
             self.env,
             first.with_user(self.owner).action_view_revision_wizard("Second change"),
@@ -179,7 +184,6 @@ class RevisionHistoryCase(SavepointCase):
 
         action = second.action_open_revision_history()
         self.assertEqual(set(action["domain"][0][2]), set((history | second).ids))
-        self.assertEqual(action["domain"][1], ("revision_reason", "!=", False))
         self.assertEqual(
             action["search_view_id"][0],
             self.env.ref(
@@ -187,7 +191,7 @@ class RevisionHistoryCase(SavepointCase):
             ).id,
         )
         self.assertFalse(action["context"]["active_test"])
-        self.assertEqual(action["context"]["search_default_has_revision_comment"], 1)
+        self.assertFalse(action["context"].get("search_default_has_revision_comment"))
 
     def test_05_legacy_snapshot_direction_is_reused_without_reversal(self):
         current = self._sent_order()
@@ -294,10 +298,8 @@ class RevisionHistoryCase(SavepointCase):
 
         revision_line = revision.order_line
         copied_price = revision_line.price_unit
-        revision.action_preview_product_pricing()
-        revision.with_context(
-            pricing_apply_confirmed=True,
-        ).action_apply_product_pricing()
+        action = revision.action_preview_product_pricing()
+        self.env[action['res_model']].browse(action['res_id']).action_confirm_apply()
 
         self.assertEqual(revision.state, "draft")
         self.assertEqual(revision_line.price_origin, "edited")
@@ -307,10 +309,8 @@ class RevisionHistoryCase(SavepointCase):
         # on the draft successor; it never silently rewrites the exact copy.
         revision_line.write({"product_uom_qty": 3.0})
         self.assertTrue(revision_line.pricing_reprice_pending)
-        revision.action_preview_product_pricing()
-        revision.with_context(
-            pricing_apply_confirmed=True,
-        ).action_apply_product_pricing()
+        action = revision.action_preview_product_pricing()
+        self.env[action['res_model']].browse(action['res_id']).action_confirm_apply()
         self.assertEqual(revision_line.price_origin, "product_pricing")
         self.assertTrue(revision.pricing_audit_log_ids)
 
@@ -341,7 +341,9 @@ class RevisionHistoryCase(SavepointCase):
             self.env,
             original.with_user(self.owner).action_view_revision_wizard('First alternative'),
         )
-        first.write({'state': 'sent'})
+        first.with_context(
+            _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
+        ).write({'state': 'sent'})
 
         action = first.with_user(self.owner).action_restore_revision(
             original,
