@@ -23,11 +23,11 @@ class SaleOrderLine(models.Model):
         estimate_currency = self.order_id.currency_estimate_id or self.order_id.currency_id
         if estimate_currency == purchase_order.currency_id:
             return self.purchase_price_estimate
-        # ``currency_rate_estimate`` is the deliberate estimate-to-quotation
-        # conversion captured during pricing.  Reuse it whenever the RFQ is in
-        # quotation currency; otherwise use the configured currency conversion.
+        # ``currency_rate_inverse`` is the stored estimate-to-quotation
+        # conversion captured during pricing.  ``currency_rate_estimate`` is
+        # the opposite company-to-estimate rate and must never seed an RFQ.
         if purchase_order.currency_id == self.order_id.currency_id:
-            return self.purchase_price_estimate * self.order_id.currency_rate_estimate
+            return self.purchase_price_estimate * self.order_id.currency_rate_inverse
         date = fields.Date.to_date(self.order_id.date_order) or fields.Date.context_today(self)
         return estimate_currency._convert(
             self.purchase_price_estimate, purchase_order.currency_id,
@@ -150,6 +150,26 @@ class PurchaseOrderLine(models.Model):
         )
         return self._decorate_procurement_purchase_values(self.env, values, purchase_order, line_values)
 
+    def _find_candidate(self, product_id, product_qty, product_uom, location_id, name, origin,
+                        company_id, values):
+        """Keep MTO quotation evidence one source line per generated RFQ line.
+
+        The stock purchase flow normally merges matching product lines.  A
+        second quotation line must not replace the first line's immutable
+        estimate/provenance fields, so only a repeat procurement for the same
+        sale line is eligible for that merge.
+        """
+        sale_line = self._purchase_line_from_values(self.env, values)
+        if not sale_line:
+            return super()._find_candidate(
+                product_id, product_qty, product_uom, location_id, name, origin,
+                company_id, values,
+            )
+        candidates = self.filtered(lambda line: line.source_sale_line_id == sale_line)
+        return super(PurchaseOrderLine, candidates)._find_candidate(
+            product_id, product_qty, product_uom, location_id, name, origin,
+            company_id, values,
+        )
     @api.model_create_multi
     def create(self, vals_list):
         prepared = []
@@ -216,3 +236,37 @@ class PurchaseOrderLine(models.Model):
             else:
                 super(PurchaseOrderLine, line).write(vals)
         return True
+
+
+class StockRule(models.Model):
+    _inherit = 'stock.rule'
+
+    @api.model
+    def _get_procurements_to_merge_groupby(self, procurement):
+        """Never batch-merge procurement requests from different quotations."""
+        source_sale_line = PurchaseOrderLine._purchase_line_from_values(
+            self.env, procurement.values,
+        )
+        return (*super()._get_procurements_to_merge_groupby(procurement),
+                source_sale_line.id or False)
+
+    @api.model
+    def _update_purchase_order_line(self, product_id, product_qty, product_uom, company_id,
+                                    values, line):
+        """Keep a repeated MTO procurement on its quotation estimate.
+
+        Standard Odoo refreshes the supplier price while increasing a matched
+        draft RFQ line.  For a line tied to the same quotation source, retain
+        the captured estimate; for a zero estimate awaiting Procurement, do
+        not let that background update clear the mandatory-cost workflow.
+        """
+        result = super()._update_purchase_order_line(
+            product_id, product_qty, product_uom, company_id, values, line,
+        )
+        sale_line = PurchaseOrderLine._purchase_line_from_values(self.env, values)
+        if sale_line and line.source_sale_line_id == sale_line:
+            if sale_line.purchase_price_estimate > 0.0:
+                result['price_unit'] = sale_line._estimate_price_in_purchase_currency(line.order_id)
+            elif line.supplier_cost_required:
+                result['price_unit'] = line.price_unit
+        return result

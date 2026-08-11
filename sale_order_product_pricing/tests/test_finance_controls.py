@@ -22,6 +22,15 @@ class TestQuotationFinanceControls(SavepointCase):
                 cls.env.ref('sales_team.group_sale_salesman').id,
             ])],
         })
+        cls.accounting_manager = cls.env['res.users'].create({
+            'name': 'Finance controls accounting manager',
+            'login': 'finance.controls.accounting.manager@example.test',
+            'groups_id': [(6, 0, [
+                cls.env.ref('base.group_user').id,
+                cls.env.ref('sales_team.group_sale_salesman').id,
+                cls.env.ref('account.group_account_manager').id,
+            ])],
+        })
 
     def _order(self, owner=None):
         values = {'partner_id': self.partner.id}
@@ -305,6 +314,43 @@ class TestQuotationFinanceControls(SavepointCase):
         with self.assertRaises(UserError):
             order._check_finance_issue_requirements()
 
+    def test_standard_tax_requires_refund_account_and_reporting_tag(self):
+        account = self.env['account.account'].create({
+            'name': 'Refund validation receivable', 'code': 'QRETFUND',
+            'account_type': 'asset_current', 'company_id': self.company.id,
+        })
+        tag = self.env['account.account.tag'].create({
+            'name': 'Refund validation tag', 'applicability': 'taxes',
+        })
+        vat = self.env['account.tax'].create({
+            'name': 'Refund validation VAT', 'amount_type': 'percent', 'amount': 14.0,
+            'type_tax_use': 'sale', 'company_id': self.company.id,
+        })
+        retention = self.env['account.tax'].create({
+            'name': 'Refund validation retention', 'amount_type': 'percent', 'amount': -1.0,
+            'type_tax_use': 'sale', 'company_id': self.company.id,
+            'invoice_repartition_line_ids': [
+                (0, 0, {'repartition_type': 'base', 'factor_percent': 100.0}),
+                (0, 0, {'repartition_type': 'tax', 'factor_percent': 100.0,
+                        'account_id': account.id, 'tag_ids': [(6, 0, [tag.id])]}),
+            ],
+        })
+        original_vat = self.company.quotation_vat_tax_id
+        original_retention = self.company.quotation_retention_tax_id
+        self.company.write({
+            'quotation_vat_tax_id': vat.id,
+            'quotation_retention_tax_id': retention.id,
+        })
+        try:
+            order = self._order()
+            with self.assertRaises(ValidationError):
+                order._finance_tax_ids()
+        finally:
+            self.company.write({
+                'quotation_vat_tax_id': original_vat.id,
+                'quotation_retention_tax_id': original_retention.id,
+            })
+
     def test_validity_override_requires_manager_reason_and_is_audited(self):
         order = self._order()
         target_days = order.company_id.quotation_expiry_days_default + 1
@@ -317,4 +363,16 @@ class TestQuotationFinanceControls(SavepointCase):
         self.assertEqual(order.offer_expiry_days, target_days)
         self.assertTrue(order.message_ids.filtered(
             lambda message: 'Days of Expiry overridden' in (message.body or '')
+        ))
+
+    def test_accounting_manager_can_audit_validity_override(self):
+        order = self._order()
+        target_days = order.company_id.quotation_expiry_days_default + 2
+        order.with_user(self.accounting_manager).write({
+            'offer_expiry_days': target_days,
+            'finance_approval_reason': 'Accounting approved tender validity.',
+        })
+        self.assertEqual(order.offer_expiry_days, target_days)
+        self.assertTrue(order.message_ids.filtered(
+            lambda message: 'Accounting approved tender validity.' in (message.body or '')
         ))

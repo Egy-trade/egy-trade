@@ -122,7 +122,7 @@ class SaleOrder(models.Model):
             company = self.env['res.company'].browse(vals.get('company_id')) or self.env.company
             days = vals.get('offer_expiry_days', company.quotation_expiry_days_default)
             if days != company.quotation_expiry_days_default:
-                if not self._quotation_manager():
+                if not self._finance_manager():
                     raise AccessError(_('Only Quotation, Sales, or Accounting Managers may override Days of Expiry.'))
                 if not (vals.get('finance_approval_reason') or '').strip():
                     raise ValidationError(_('A stated reason is required for a Days of Expiry override.'))
@@ -160,13 +160,20 @@ class SaleOrder(models.Model):
             raise ValidationError(_('The configured quotation VAT tax must be a 14% percentage tax.'))
         if retention_tax.amount_type != 'percent' or float_compare(retention_tax.amount, -1.0, precision_digits=4):
             raise ValidationError(_('The configured quotation retention tax must be a negative 1% percentage tax.'))
-        retention_lines = retention_tax.invoice_repartition_line_ids.filtered(
-            lambda line: line.repartition_type == 'tax'
-        )
-        if not retention_lines.mapped('account_id'):
-            raise ValidationError(_('The configured quotation retention tax needs a Finance-configured withholding account.'))
-        if not retention_lines.mapped('tag_ids'):
-            raise ValidationError(_('The configured quotation retention tax needs at least one tax-report tag.'))
+        for document_name, retention_lines in (
+                ('invoice', retention_tax.invoice_repartition_line_ids),
+                ('credit note', retention_tax.refund_repartition_line_ids)):
+            retention_lines = retention_lines.filtered(
+                lambda line: line.repartition_type == 'tax'
+            )
+            if not retention_lines or any(not line.account_id for line in retention_lines):
+                raise ValidationError(_(
+                    'The configured quotation retention tax needs a Finance-configured withholding account on every %(document)s tax repartition line.'
+                ) % {'document': document_name})
+            if any(not line.tag_ids for line in retention_lines):
+                raise ValidationError(_(
+                    'The configured quotation retention tax needs at least one tax-report tag on every %(document)s tax repartition line.'
+                ) % {'document': document_name})
         return vat_tax | retention_tax
 
     def _apply_tax_treatment(self):
@@ -343,7 +350,7 @@ class SaleOrder(models.Model):
             vals['offer_expiry_days'] != order.offer_expiry_days
         )
         if expiry_changes:
-            if not self._quotation_manager():
+            if not self._finance_manager():
                 raise AccessError(_('Only Quotation, Sales, or Accounting Managers may override Days of Expiry.'))
             for order in expiry_changes.filtered(
                 lambda item: vals['offer_expiry_days'] != item.company_id.quotation_expiry_days_default
