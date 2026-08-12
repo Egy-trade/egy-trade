@@ -15,7 +15,7 @@
     'category': "OIT Solutions/apps",
     'license': 'AGPL-3',
     'sequence': 1,
-    'version': '0.2.2',
+    'version': '0.2.3',
 
     # any module necessary for this one to work correctly
     'depends': ['base', 'sale_purchase', 'purchase_stock', 'sale_order_product_pricing'],

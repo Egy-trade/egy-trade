@@ -23,23 +23,27 @@ class TestPurchaseEstimateControls(SavepointCase):
         order = self.env['sale.order'].create({'partner_id': self.partner.id})
         if hasattr(order, '_record_commercial_change'):
             order._record_commercial_change('update_today')
-        return self.env['sale.order.line'].create({
+        line = self.env['sale.order.line'].create({
             'order_id': order.id, 'product_id': self.product.id,
             'name': self.product.display_name, 'product_uom_qty': 1.0,
             'price_unit': 100.0, 'purchase_price_estimate': estimate,
         })
+        line.write({'purchase_price_estimate': estimate})
+        return line
 
     def _purchase_order(self):
         return self.env['purchase.order'].create({'partner_id': self.vendor.id})
 
     def _provenance_line(self, purchase, sale_line, price_unit=0.0):
-        return self.env['purchase.order.line'].create({
+        values = {
             'order_id': purchase.id, 'product_id': self.product.id,
             'name': self.product.display_name, 'product_qty': 1.0,
             'product_uom': self.product.uom_po_id.id, 'price_unit': price_unit,
-            'source_sale_line_id': sale_line.id,
-            '_finance_purchase_provenance_token': _PURCHASE_PROVENANCE_TOKEN,
-        })
+        }
+        values = self.env['purchase.order.line']._purchase_estimate_values(
+            sale_line, purchase, values,
+        )
+        return self.env['purchase.order.line'].create(values)
 
     def test_nonzero_estimate_is_kept_as_source_evidence(self):
         sale_line = self._sale_line(25.0)

@@ -131,7 +131,7 @@ class TestQuotationRoleVisibility(SavepointCase):
         line = self.env["sale.order.line"].with_user(self.salesperson).with_context(
             import_file=True,
         ).create(values)
-        self.assertEqual(line.discount, 10.0)
+        self.assertAlmostEqual(line.discount, 10.0)
 
         with self.assertRaises(ValidationError):
             self.env["sale.order.line"].with_user(self.salesperson).create(

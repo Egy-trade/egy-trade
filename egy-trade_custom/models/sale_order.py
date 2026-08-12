@@ -2,6 +2,7 @@
 
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
+from odoo.tools.float_utils import float_compare
 
 
 class SaleOrder(models.Model):
@@ -93,9 +94,20 @@ class SaleOrderLine(models.Model):
         )
         if has_full_pricing:
             return
-        limit = min(max(user.max_discount or 0.0, 0.0), 30.0)
+        # The quotation policy supersedes the legacy integer cap when it is
+        # installed. Retain this constraint as defence in depth, using the
+        # same personal and company ceilings as the new policy.
+        company = self.env.company
+        if "standard_discount_cap" in user._fields:
+            personal_cap = user.standard_discount_cap
+            company_cap = getattr(company, "standard_discount_maximum", 30.0)
+        else:
+            personal_cap = user.max_discount
+            company_cap = 30.0
+        limit = min(max(personal_cap or 0.0, 0.0), company_cap or 0.0, 30.0)
         for rec in self:
-            if rec.discount < 0 or rec.discount > limit:
+            if float_compare(rec.discount, 0.0, precision_digits=2) < 0 or float_compare(
+                    rec.discount, limit, precision_digits=2) > 0:
                 raise ValidationError(_(
                     'Your maximum allowed standard discount per order line is %(limit).2f%%.'
                 ) % {'limit': limit})
