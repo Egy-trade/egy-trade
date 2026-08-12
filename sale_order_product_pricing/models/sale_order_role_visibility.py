@@ -109,7 +109,10 @@ class SaleOrder(models.Model):
             )
         )
         for order in self:
-            order.allowed_salesperson_ids = salespeople
+            # Populate the non-stored selector cache under sudo so restrictive
+            # sale.order record rules do not make the compute silently miss a
+            # perfectly readable assigned quotation.
+            order.sudo().allowed_salesperson_ids = [(6, 0, salespeople.ids)]
 
     def _sync_technical_scopes(self):
         Scope = self.env["quotation.technical.scope"].sudo()
@@ -190,7 +193,8 @@ class SaleOrder(models.Model):
                     raise AccessError(_(
                         "A Quotation Specialist may only create a quotation assigned to themselves."
                     ))
-                vals.setdefault("quotation_specialist_id", self.env.user.id)
+                if not requested_specialist:
+                    vals["quotation_specialist_id"] = self.env.user.id
             if vals.get("user_id"):
                 self._validate_salesperson(vals["user_id"])
             if vals.get("lighting_designer_ids") and not self._is_sales_or_quotation_manager():

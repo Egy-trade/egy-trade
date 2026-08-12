@@ -3,6 +3,7 @@
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.tools.float_utils import float_compare
 
 from .sale_order import (
     _PRICING_INTERNAL_TOKEN,
@@ -344,7 +345,8 @@ class SaleOrderLine(models.Model):
                 raise AccessError(_(
                     "Standard Discount is disabled in Sales Settings for this company."
                 ))
-            if discount < 0 or discount > company_cap:
+            if float_compare(discount, 0.0, precision_digits=2) < 0 or float_compare(
+                    discount, company_cap, precision_digits=2) > 0:
                 raise ValidationError(_(
                     "Standard Discount must be between 0%% and the company maximum of %(limit).2f%%."
                 ) % {"limit": company_cap})
@@ -358,11 +360,14 @@ class SaleOrderLine(models.Model):
                 else user.max_discount
             )
             ceiling = min(max(personal_cap or 0.0, 0.0), company_cap, 30.0)
-            if discount > ceiling and not manager:
+            above_personal_cap = float_compare(
+                discount, ceiling, precision_digits=2
+            ) > 0
+            if above_personal_cap and not manager:
                 raise ValidationError(_(
                     "Your maximum standard discount on this line is %(limit).2f%%."
                 ) % {"limit": ceiling})
-            if discount > ceiling:
+            if above_personal_cap:
                 reason = (order.standard_discount_override_reason or "").strip()
                 if not reason:
                     raise ValidationError(_(
@@ -456,6 +461,14 @@ class SaleOrderLine(models.Model):
         # origin on the freshly-created line, then let the transaction roll
         # back if the requested discount is not allowed.
         if not _is_pricing_internal(self.env):
+            # Some standard pricing onchanges normalize the value supplied by
+            # RPC/import during create. Preserve the caller's requested
+            # Standard Discount, then validate that exact persisted value.
+            for line, values in zip(lines, vals_list):
+                if "discount" in values:
+                    line.sudo().with_context(
+                        _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+                    ).write({"discount": values["discount"]})
             overrides = []
             for line, values in zip(lines, vals_list):
                 if "discount" in values:

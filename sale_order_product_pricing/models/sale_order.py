@@ -955,6 +955,8 @@ class SaleOrderLine(models.Model):
             raise UserError(_('Only a Sales Manager may certify a historical Price Origin.'))
         if self.price_origin != 'historical_unverified' or self.price_origin_verified:
             raise UserError(_('This line no longer requires historical origin review.'))
+        if self.order_id.state != 'draft' or not self.order_id.active:
+            raise UserError(_('Historical Price Origin can only be certified on an active draft quotation or revision.'))
         return {
             'type': 'ir.actions.act_window',
             'name': _('Reclassify Historical Price Origin'),
@@ -1029,7 +1031,7 @@ class SaleOrderPriceOriginReclassify(models.TransientModel):
         line = self.line_id
         if not line.exists() or line.price_origin != 'historical_unverified' or line.price_origin_verified:
             raise UserError(_('This historical line changed while the dialog was open. Reopen it and try again.'))
-        if line.order_id.state != 'draft':
+        if line.order_id.state != 'draft' or not line.order_id.active:
             raise UserError(_('Historical Price Origin can only be certified on an active draft quotation or revision.'))
         reason = (self.reason or '').strip()
         if not reason:

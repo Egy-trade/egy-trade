@@ -259,7 +259,12 @@ class SaleOrder(models.Model):
             order.finance_approval_required = bool(order._finance_requirement_codes())
 
     def _invalidate_finance_approvals(self, reason):
-        approvals = self.mapped('finance_approval_ids').filtered(lambda approval: not approval.invalidated)
+        # Ordinary Sales/QS users intentionally have no read ACL on protected
+        # approval evidence. Commercial edits must still invalidate that
+        # evidence without leaking it or failing the legitimate edit.
+        approvals = self.sudo().mapped('finance_approval_ids').filtered(
+            lambda approval: not approval.invalidated
+        )
         if approvals:
             approvals.sudo().with_context(_finance_internal_token=_FINANCE_INTERNAL_TOKEN).write({
                 'invalidated': True,

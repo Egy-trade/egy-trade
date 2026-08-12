@@ -156,6 +156,7 @@ class TestProductPricingAccess(SavepointCase):
             'partner_id': self.partner.id,
             'user_id': self.quotation_specialist.id,
         })
+        self.assertEqual(order.quotation_specialist_id, self.quotation_specialist)
         self._record_commercial_change_if_available(
             order.with_user(self.quotation_specialist)
         )
@@ -205,6 +206,15 @@ class TestProductPricingAccess(SavepointCase):
             specialist_purchase_model.browse(purchase_order.id).write({
                 'partner_ref': 'Quotation specialist must not edit purchases',
             })
+
+    def test_quotation_specialist_explicit_unassigned_normalizes_to_self(self):
+        order = self.env['sale.order'].with_user(self.quotation_specialist).create({
+            'partner_id': self.partner.id,
+            'user_id': self.quotation_specialist.id,
+            'quotation_specialist_id': False,
+        })
+
+        self.assertEqual(order.quotation_specialist_id, self.quotation_specialist)
 
     def test_quotation_specialist_cannot_price_or_manually_edit_price(self):
         order = self._order(owner=self.quotation_specialist)
@@ -458,6 +468,15 @@ class TestProductPricingAccess(SavepointCase):
         with self.assertRaises(AccessError):
             line.with_user(self.basic_user).write({'discount': 5.0})
 
+        with self.assertRaises(AccessError):
+            self.env['sale.order.line'].with_user(self.basic_user).create({
+                'order_id': order.id,
+                'product_id': self.product.id,
+                'name': self.product.display_name,
+                'product_uom_qty': 1.0,
+                'standard_discount_override_used': True,
+            })
+
         line.sudo().with_context(
             _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
         ).write({
@@ -549,20 +568,40 @@ class TestProductPricingAccess(SavepointCase):
         })
         self._set_sent(order)
 
-        action = line.with_user(self.sales_manager).action_reclassify_historical_origin()
-        wizard = self.env[action['res_model']].with_user(self.sales_manager).create({
-            'line_id': line.id,
-            'new_origin': 'product_pricing',
-            'reason': 'Sent records must remain immutable.',
-        })
         with self.assertRaises(UserError):
-            wizard.action_confirm()
+            line.with_user(self.sales_manager).action_reclassify_historical_origin()
 
         self.assertEqual(line.price_unit, original_price)
         self.assertEqual(line.price_origin, 'historical_unverified')
         self.assertFalse(line.price_origin_verified)
         with self.assertRaises(UserError):
             line.with_user(self.sales_manager).write({'name': 'Sent mutation'})
+
+    def test_manager_cannot_certify_historical_origin_on_archived_draft(self):
+        order = self._order(owner=self.basic_user)
+        line = self._line(order)
+        line.sudo().with_context(
+            _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+        ).write({
+            'price_origin': 'historical_unverified',
+            'price_origin_verified': False,
+            'price_origin_evidence': 'legacy_unverified',
+            'pricing_warning': 'Manager review required.',
+        })
+        action = line.with_user(self.sales_manager).action_reclassify_historical_origin()
+        wizard = self.env[action['res_model']].with_user(self.sales_manager).create({
+            'line_id': line.id,
+            'new_origin': 'product_pricing',
+            'reason': 'Archived drafts must remain immutable.',
+        })
+        order.sudo().write({'active': False})
+
+        with self.assertRaises(UserError):
+            line.with_user(self.sales_manager).action_reclassify_historical_origin()
+        with self.assertRaises(UserError):
+            wizard.action_confirm()
+        self.assertEqual(line.price_origin, 'historical_unverified')
+        self.assertFalse(line.price_origin_verified)
 
     def test_standard_and_pricing_views_use_separate_line_fields(self):
         view = self.env.ref('sale_order_product_pricing.sale_order_product_pricing_form')
