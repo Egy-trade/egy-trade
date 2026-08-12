@@ -180,10 +180,10 @@ class SaleOrder(models.Model):
                 "A sent, confirmed, cancelled, or superseded quotation cannot be reopened. "
                 "Create a new draft revision instead."
             ))
-        if _ORDER_STATE_LOCKED_FIELDS.intersection(vals):
+        if _ORDER_STATE_LOCKED_FIELDS.intersection(vals) and not _is_pricing_internal(self.env):
             self._ensure_pricing_editable()
         editor_fields = (_ORDER_PRICING_FIELDS - {"order_line"}).intersection(vals)
-        if editor_fields:
+        if editor_fields and not _is_pricing_internal(self.env):
             self._ensure_price_editor_access()
         if "user_id" in vals:
             if not self._is_quotation_specialist():

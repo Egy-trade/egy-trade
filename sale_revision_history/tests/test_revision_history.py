@@ -34,6 +34,7 @@ class RevisionHistoryCase(SavepointCase):
             return cls.env["res.users"].create({
                 "name": name,
                 "login": login,
+                "email": login,
                 "groups_id": [(6, 0, [group.id for group in groups])],
             })
 

@@ -930,6 +930,23 @@ class SaleOrder(models.Model):
 class SaleOrderLine(models.Model):
     _inherit = "sale.order.line"
 
+    is_add_below_placeholder = fields.Boolean(
+        string="Add Below Placeholder",
+        default=False,
+        copy=False,
+        readonly=True,
+        help="System-managed marker for a newly inserted blank Add Below row.",
+    )
+
+    _sql_constraints = [
+        (
+            "accountable_required_fields",
+            "CHECK(display_type IS NOT NULL OR is_add_below_placeholder OR "
+            "(product_id IS NOT NULL AND product_uom IS NOT NULL))",
+            "Missing required fields on accountable sale order line.",
+        ),
+    ]
+
     def _ensure_lifecycle_line_editable(self):
         orders = self.mapped("order_id")
         if orders.filtered(lambda order: order.state == "sent"):
@@ -963,11 +980,14 @@ class SaleOrderLine(models.Model):
         # Intentionally pass no source commercial values.  The pricing module
         # supplies only the header Global Factor; product, quantity, prices,
         # estimates, discounts, Item #, and Line Factor start blank/default.
-        new_line = self.env["sale.order.line"].create({
+        new_line = self.env["sale.order.line"].with_context(
+            _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
+        ).create({
             "order_id": order.id,
             "sequence": self.sequence + 1,
             "name": _("New product line"),
             "product_uom_qty": 0.0,
+            "is_add_below_placeholder": True,
         })
         return {
             "type": "ir.actions.act_window",
@@ -979,6 +999,8 @@ class SaleOrderLine(models.Model):
         }
 
     def write(self, vals):
+        if "is_add_below_placeholder" in vals and not _is_lifecycle_internal(self.env):
+            raise AccessError(_("Add Below placeholder evidence is system-managed."))
         if self.mapped("order_id").filtered(lambda order: order.state == "sent") and not _is_lifecycle_internal(self.env):
             raise UserError(_(
                 "Lines on an issued quotation are immutable through the interface, "
@@ -991,10 +1013,21 @@ class SaleOrderLine(models.Model):
                     or _is_pricing_internal(self.env)
                     or _is_finance_internal(self.env))):
             self.mapped("order_id")._ensure_daily_commercial_change_decided()
-        return super().write(vals)
+        result = super().write(vals)
+        completed = self.filtered(
+            lambda line: line.is_add_below_placeholder
+            and line.product_id and line.product_uom
+        )
+        if completed:
+            completed.with_context(
+                _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
+            ).write({"is_add_below_placeholder": False})
+        return result
 
     @api.model_create_multi
     def create(self, vals_list):
+        if any(values.get("is_add_below_placeholder") for values in vals_list) and not _is_lifecycle_internal(self.env):
+            raise AccessError(_("Add Below placeholder evidence is system-managed."))
         if not (
                 _is_lifecycle_initializing(self.env)
                 or _is_pricing_internal(self.env)

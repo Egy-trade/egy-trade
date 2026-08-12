@@ -68,6 +68,7 @@ class QuotationLifecycleCase(SavepointCase):
         added = self.env["sale.order.line"].browse(action["context"]["focus_line_id"])
         self.assertEqual(source.sn, "A-01")
         self.assertFalse(added.product_id)
+        self.assertTrue(added.is_add_below_placeholder)
         self.assertEqual(added.name, "New product line")
         self.assertEqual(added.product_uom_qty, 0.0)
         self.assertFalse(added.sn)
@@ -77,6 +78,13 @@ class QuotationLifecycleCase(SavepointCase):
         self.assertEqual(added.factor, order.global_factor)
         self.assertEqual(added.line_factor, 1.0)
         self.assertEqual(added.sequence, source.sequence + 1)
+        with self.assertRaises(UserError):
+            order.action_issue_offer_pdf()
+        added.write({
+            "product_id": self.product.id,
+            "product_uom": self.product.uom_id.id,
+        })
+        self.assertFalse(added.is_add_below_placeholder)
 
     def test_daily_gate_update_today_keeps_date_order_and_audits(self):
         order = self._draft()

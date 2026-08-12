@@ -305,6 +305,14 @@ class SaleOrder(models.Model):
         """Authoritative Issue Offer PDF gate; lifecycle code calls this before rendering."""
         for order in self:
             commercial_lines = order.order_line.filtered(lambda line: not line.display_type)
+            incomplete_lines = commercial_lines.filtered(
+                lambda line: getattr(line, 'is_add_below_placeholder', False)
+                or not line.product_id or not line.product_uom
+            )
+            if incomplete_lines:
+                raise UserError(_(
+                    'Issue Offer PDF is blocked: complete or remove every blank Add Below product row.'
+                ))
             if order.tax_treatment == 'standard':
                 tax_ids = order._finance_tax_ids()
                 if any(line.tax_id != tax_ids for line in commercial_lines):
