@@ -9,6 +9,7 @@ from .sale_order import (
     _PRICING_INTERNAL_TOKEN,
     _is_pricing_downpayment,
     _is_pricing_internal,
+    _is_pricing_order_recompute,
     _is_pricing_reclassification,
 )
 
@@ -403,6 +404,16 @@ class SaleOrderLine(models.Model):
         if not _is_pricing_internal(self.env):
             standard_discount_overrides = []
             if "discount" in vals:
+                manual_price_change = (
+                    "price_unit" in vals
+                    and not {"product_id", "product_uom", "product_uom_qty"}.intersection(vals)
+                    and not _is_pricing_order_recompute(self.env)
+                )
+                if manual_price_change:
+                    raise AccessError(_(
+                        "Standard Discount cannot be saved together with a manual selling-price change. "
+                        "Save the verified Odoo Pricelist price first, then apply Standard Discount separately."
+                    ))
                 standard_discount_overrides = self._ensure_standard_discount_access(vals["discount"])
             if {"discount_2", "discount_3"}.intersection(vals):
                 self.order_id._ensure_price_editor_access()

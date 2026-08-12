@@ -511,19 +511,30 @@ class TestProductPricingAccess(SavepointCase):
 
         manager_order = self._order(owner=self.sales_manager)
         manager_line = self._line(manager_order)
+        self.sales_manager.write({'standard_discount_cap': 10.0})
         manager_order.with_user(self.sales_manager).write({
             'standard_discount_override_reason': 'Approved manager discount override.',
         })
-        manager_line.with_user(self.sales_manager).write({
-            'price_unit': 88.0,
-            'discount': 30.0,
-        })
-        self.assertEqual(manager_line.price_origin, 'edited')
-        self.assertFalse(
-            manager_line.with_user(self.sales_manager).can_edit_pricelist_discount
-        )
-        self.assertTrue(manager_line.price_origin_verified)
-        self.assertEqual(manager_line.price_origin_evidence, 'manual_edit')
+        manager_line.with_user(self.sales_manager).write({'discount': 15.0})
+        self.assertAlmostEqual(manager_line.discount, 15.0)
+        self.assertEqual(manager_line.price_origin, 'pricelist')
+        self.assertTrue(manager_line.standard_discount_override_used)
+
+    def test_manual_price_and_standard_discount_cannot_share_one_write(self):
+        order = self._order(owner=self.sales_manager)
+        line = self._line(order)
+        original_price = line.price_unit
+
+        with self.assertRaises(AccessError):
+            line.with_user(self.sales_manager).write({
+                'price_unit': 88.0,
+                'discount': 10.0,
+            })
+
+        self.assertEqual(line.price_unit, original_price)
+        self.assertAlmostEqual(line.discount, 0.0)
+        self.assertEqual(line.price_origin, 'pricelist')
+        self.assertTrue(line.price_origin_verified)
 
     def test_manager_can_certify_active_draft_historical_origin_and_audits(self):
         order = self._order(owner=self.basic_user)

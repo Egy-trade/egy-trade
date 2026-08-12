@@ -4,7 +4,12 @@
 
 Run this only on a disposable Odoo 16 database restored from a recent production backup. Do not test on `live`.
 
-Deploy the isolated branch `staging-pricing-test-20260810`, then upgrade these modules together:
+Deploy the final approved commit from `codex/quotation-uat-completion` to the
+isolated Odoo.sh branch `staging-pricing-test-20260810`. Test only the Odoo.sh
+build whose SHA exactly matches that final commit (it must contain `7202e97`
+and the follow-up R03 origin-integrity fix). Record the deployed SHA with the
+evidence; do not test an older branch or build. Then upgrade these modules
+together:
 
 ```text
 sale_discount_total
@@ -54,7 +59,7 @@ Note: the daily control is a server-enforced transactional gate plus a **Record 
 |---|---|---|---|
 | R01 | Assigned QS | As the quotation's assigned QS, assign/reassign Salesperson on an active draft; repeat by import/RPC with inactive, portal, and non-Sales users; then try on Sent. | Selector contains only active internal Sales users; backend/import/RPC rejects all invalid users; assignment changes are audited; Sent cannot be reassigned. |
 | R02 | QS | Separately use the client, invoice-contact, and delivery-contact selectors, then try each selector's Create/Edit route and try deleting a contact from Contacts/direct URL. | Existing selection works; Create/Edit is absent or denied and deletion raises access denial. QS has no Purchase access. |
-| R03 | Sales/QS | Apply Standard Discount to a verified Pricelist line at personal cap, then 0.01 above. Repeat draft line creation through CSV import/RPC with policy disabled and with manual/unverified origin. | At-cap save succeeds; over-cap and disabled-policy creation are blocked in UI/import/RPC. Product Pricing/manual/historical-unverified origins are ineligible. |
+| R03 | Sales/QS | Apply Standard Discount to a verified Pricelist line at personal cap, then 0.01 above. Repeat draft line creation through CSV import/RPC with policy disabled and with manual/unverified origin. Also try changing Selling Price and Standard Discount together in one UI save/import/RPC write. | At-cap save succeeds; over-cap and disabled-policy creation are blocked in UI/import/RPC. Product Pricing/manual/historical-unverified origins are ineligible. A combined manual-price/Standard-Discount write is rejected without changing either value, including for management. |
 | R04 | Quotation Manager and Sales Manager | Set the user's personal cap below the company cap. Exceed the personal cap with no reason, then supply a reason. | No-reason save is blocked; reasoned override succeeds only within company/30% hard caps, creates protected audit evidence, clears the one-use reason, and requires issue approval. |
 | R05 | Salesperson | Do not accept Sales responsibility; have issuer issue the offer. | Issue confirmation warns; issue still succeeds; exception is audited, assigned Sales/Managers are notified, and Issued Without Sales Acceptance KPI is true. |
 | R06 | Assigned Salesperson | Accept responsibility, then issue a fresh draft. | Acceptance actor/time are stored and exception KPI remains false. |

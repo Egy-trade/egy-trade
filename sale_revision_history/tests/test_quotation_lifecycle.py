@@ -54,6 +54,23 @@ class QuotationLifecycleCase(SavepointCase):
         })
         wizard.action_confirm()
 
+    def test_assigned_salesperson_can_open_and_submit_commercial_change_wizard(self):
+        order = self._draft()
+        line = order.order_line.with_user(self.salesperson)
+        action = line.action_add_below()
+        self.assertEqual(action["res_model"], "quotation.commercial.change")
+
+        wizard_model = self.env[action["res_model"]].with_user(self.salesperson)
+        for operation in ("read", "write", "create", "unlink"):
+            self.assertTrue(wizard_model.check_access_rights(operation))
+        wizard = wizard_model.with_context(**action["context"]).create({
+            "sale_id": order.id,
+            "decision": "update_today",
+        })
+        wizard.action_confirm()
+        self.assertEqual(order.commercial_change_decision, "update_today")
+        self.assertEqual(order.commercial_change_decision_by, self.salesperson)
+
     def test_manual_item_number_is_not_computed_or_copied_by_add_below(self):
         order = self._draft()
         source = order.order_line
