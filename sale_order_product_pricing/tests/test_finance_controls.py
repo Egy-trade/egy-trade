@@ -105,7 +105,19 @@ class TestQuotationFinanceControls(SavepointCase):
         })
 
     def _invoice_from_order(self, order):
-        invoice = self.env['account.move'].create(order._prepare_invoice())
+        journal = self.env['account.journal'].search([
+            ('type', '=', 'sale'), ('company_id', '=', order.company_id.id),
+        ], limit=1)
+        if not journal:
+            journal = self.env['account.journal'].create({
+                'name': 'UAT Finance Sales Journal',
+                'code': 'UATFS',
+                'type': 'sale',
+                'company_id': order.company_id.id,
+            })
+        invoice_values = order._prepare_invoice()
+        invoice_values['journal_id'] = journal.id
+        invoice = self.env['account.move'].create(invoice_values)
         invoice.write({'invoice_line_ids': [(0, 0, line._prepare_invoice_line())
                                             for line in order.order_line
                                             if not line.display_type]})
@@ -124,6 +136,7 @@ class TestQuotationFinanceControls(SavepointCase):
 
     def test_foc_and_direct_tax_import_bypasses_are_rejected(self):
         order = self._order()
+        order.write({'tax_treatment': 'cif_no_taxes'})
         with self.assertRaises(ValidationError):
             self._line(order, price_unit=0.0, is_free_of_charge=True)
         line = self._line(order, tax_id=[(6, 0, [])])
@@ -303,11 +316,15 @@ class TestQuotationFinanceControls(SavepointCase):
         })
         at_threshold = self._order()
         at_threshold.write({'pricelist_id': pricelist.id, 'tax_treatment': 'cif_no_taxes'})
-        self._line(at_threshold, price_unit=100000.0)
+        threshold_line = self._line(at_threshold, price_unit=100000.0)
+        threshold_line.write({'price_unit': 100000.0})
+        self.assertAlmostEqual(at_threshold.amount_untaxed, 100000.0)
         self.assertIn('high_value', at_threshold._finance_requirement_codes())
         below_threshold = self._order()
         below_threshold.write({'pricelist_id': pricelist.id, 'tax_treatment': 'cif_no_taxes'})
-        self._line(below_threshold, price_unit=99999.99)
+        below_line = self._line(below_threshold, price_unit=99999.99)
+        below_line.write({'price_unit': 99999.99})
+        self.assertAlmostEqual(below_threshold.amount_untaxed, 99999.99)
         self.assertNotIn('high_value', below_threshold._finance_requirement_codes())
 
     def test_decimal_discount_rounds_vat_and_retention_on_invoice(self):
@@ -401,7 +418,7 @@ class TestQuotationFinanceControls(SavepointCase):
         ))
 
     def test_accounting_manager_can_audit_validity_override(self):
-        order = self._order()
+        order = self._order(owner=self.accounting_manager)
         target_days = order.company_id.quotation_expiry_days_default + 2
         order.with_user(self.accounting_manager).write({
             'offer_expiry_days': target_days,
