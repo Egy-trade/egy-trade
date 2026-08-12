@@ -17,6 +17,7 @@ class TestQuotationFinanceControls(SavepointCase):
         cls.salesperson = cls.env['res.users'].create({
             'name': 'Finance controls salesperson',
             'login': 'finance.controls.salesperson@example.test',
+            'email': 'finance.controls.salesperson@example.test',
             'groups_id': [(6, 0, [
                 cls.env.ref('base.group_user').id,
                 cls.env.ref('sales_team.group_sale_salesman').id,
@@ -25,6 +26,7 @@ class TestQuotationFinanceControls(SavepointCase):
         cls.accounting_manager = cls.env['res.users'].create({
             'name': 'Finance controls accounting manager',
             'login': 'finance.controls.accounting.manager@example.test',
+            'email': 'finance.controls.accounting.manager@example.test',
             'groups_id': [(6, 0, [
                 cls.env.ref('base.group_user').id,
                 cls.env.ref('sales_team.group_sale_salesman').id,
@@ -60,12 +62,26 @@ class TestQuotationFinanceControls(SavepointCase):
             'name': 'UAT finance withholding receivable', 'code': 'UATFINRET',
             'account_type': 'asset_current', 'company_id': self.company.id,
         })
+        vat_account = self.env['account.account'].create({
+            'name': 'UAT finance VAT payable', 'code': 'UATFINVAT',
+            'account_type': 'liability_current', 'company_id': self.company.id,
+        })
         tag = self.env['account.account.tag'].create({
             'name': 'UAT finance withholding tag', 'applicability': 'taxes',
         })
         vat = self.env['account.tax'].create({
             'name': 'UAT finance VAT 14', 'amount_type': 'percent', 'amount': 14.0,
             'type_tax_use': 'sale', 'company_id': self.company.id,
+            'invoice_repartition_line_ids': [
+                (0, 0, {'repartition_type': 'base', 'factor_percent': 100.0}),
+                (0, 0, {'repartition_type': 'tax', 'factor_percent': 100.0,
+                        'account_id': vat_account.id}),
+            ],
+            'refund_repartition_line_ids': [
+                (0, 0, {'repartition_type': 'base', 'factor_percent': 100.0}),
+                (0, 0, {'repartition_type': 'tax', 'factor_percent': 100.0,
+                        'account_id': vat_account.id}),
+            ],
         })
         retention = self.env['account.tax'].create({
             'name': 'UAT finance retention 1', 'amount_type': 'percent', 'amount': -1.0,
@@ -114,19 +130,25 @@ class TestQuotationFinanceControls(SavepointCase):
                 'code': 'UATFS',
                 'type': 'sale',
                 'company_id': order.company_id.id,
+                'default_account_id': self.product.product_tmpl_id.property_account_income_id.id,
             })
         invoice_values = order._prepare_invoice()
         invoice_values['journal_id'] = journal.id
         invoice = self.env['account.move'].create(invoice_values)
-        invoice.write({'invoice_line_ids': [(0, 0, line._prepare_invoice_line())
-                                            for line in order.order_line
-                                            if not line.display_type]})
+        invoice_lines = []
+        income_account = self.product.product_tmpl_id.property_account_income_id
+        for line in order.order_line.filtered(lambda item: not item.display_type):
+            values = line._prepare_invoice_line()
+            values['account_id'] = income_account.id
+            invoice_lines.append((0, 0, values))
+        invoice.write({'invoice_line_ids': invoice_lines})
         return invoice
 
     def test_issue_blocks_zero_price_until_authorized_foc_with_reason(self):
         order = self._order()
         order.write({'tax_treatment': 'cif_no_taxes'})
         line = self._line(order, price_unit=0.0)
+        line.write({'price_unit': 0.0})
         with self.assertRaises(UserError):
             order._check_finance_issue_requirements()
         line.write({'is_free_of_charge': True, 'free_of_charge_reason': 'Approved sample'})
