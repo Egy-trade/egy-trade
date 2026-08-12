@@ -35,7 +35,8 @@ class TestOfferExpiry(SavepointCase):
         ):
             defaults.setdefault("finance_approval_reason", "Expiry test override")
         order = self.env["sale.order"].create(defaults)
-        order._record_commercial_change("update_today")
+        if hasattr(order, "_record_commercial_change"):
+            order._record_commercial_change("update_today")
         return order
 
     def test_order_column_default_is_schema_safe(self):

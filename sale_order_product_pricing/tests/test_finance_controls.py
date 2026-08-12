@@ -152,7 +152,13 @@ class TestQuotationFinanceControls(SavepointCase):
         income_account = self.product.product_tmpl_id.property_account_income_id
         for line in order.order_line.filtered(lambda item: not item.display_type):
             values = line._prepare_invoice_line()
-            values['account_id'] = income_account.id
+            values.update({
+                'account_id': income_account.id,
+                # Draft quotations have qty_to_invoice == 0.  This focused
+                # accounting fixture intentionally invoices the ordered
+                # quantity without changing the quotation lifecycle state.
+                'quantity': line.product_uom_qty,
+            })
             invoice_lines.append((0, 0, values))
         invoice_values = order._prepare_invoice()
         invoice_values.update({
