@@ -477,7 +477,7 @@ class QuotationLifecycleCase(SavepointCase):
             ),
             (
                 "VAT 14%", "sale_order_product_pricing.sale_order_finance_controls_form",
-                "//field[@name='apply_vat']",
+                "//field[@name='apply_vat'][@string='VAT 14%']",
                 ("selected by default", "genuine vat exemption", "reason below", "quotation total"),
             ),
             (
