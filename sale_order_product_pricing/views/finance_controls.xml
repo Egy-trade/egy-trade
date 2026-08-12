@@ -1,16 +1,47 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
   <data>
+    <!--
+      Taxes are selected once for the quotation.  The model owns tax application
+      and access checks; this compact header only exposes the two business
+      decisions and their audit/review state.
+    -->
     <record id="sale_order_finance_controls_form" model="ir.ui.view">
-      <field name="name">sale.order.finance.controls.form</field>
+      <field name="name">sale.order.global.tax.selection.form</field>
       <field name="model">sale.order</field>
       <field name="inherit_id" ref="sale.view_order_form"/>
       <field name="arch" type="xml">
         <xpath expr="//field[@name='payment_term_id']" position="after">
-          <field name="tax_treatment" groups="sale_order_product_pricing.quotation_manager_group,sales_team.group_sale_manager,account.group_account_manager"
-                 attrs="{'readonly': [('state', '!=', 'draft')]}"
-                 help="Selects the Finance-controlled tax policy for this quotation. Finance, Quotation, Sales, or Accounting Managers may change it; Standard applies configured VAT and retention while CIF removes taxes, so confirm the commercial terms and select the required treatment before adding or issuing lines."/>
-          <field name="finance_approval_required" invisible="1"/>
+          <group string="Taxes" col="4">
+            <field name="apply_vat" string="VAT 14%"
+                   groups="sales_team.group_sale_salesman,sale_order_product_pricing.quotation_specialist_group"
+                   attrs="{'readonly': [('state', '!=', 'draft')]}"
+                   help="Selected by default. Clear only for a genuine VAT exemption and state the reason below. The proposed quotation total uses Odoo's existing tax setup."/>
+            <field name="apply_withholding" string="1% Withholding"
+                   groups="sales_team.group_sale_salesman,sale_order_product_pricing.quotation_specialist_group"
+                   attrs="{'readonly': [('state', '!=', 'draft')]}"
+                   help="Select when 1% is deducted from the customer's payment. This only proposes the tax on the quotation; accounting is handled later through the normal invoice process."/>
+          </group>
+          <field name="vat_exemption_reason" string="VAT exemption reason"
+                 placeholder="Why is this quotation VAT-exempt?"
+                 attrs="{'invisible': [('apply_vat', '=', True)], 'readonly': [('state', '!=', 'draft')]}"
+                 help="Required whenever VAT 14% is not selected. A Quotation Manager or Sales Manager must approve the exception before issuing the offer."/>
+          <group attrs="{'invisible': [('apply_vat', '=', True)]}">
+            <field name="vat_exemption_requested_by" readonly="1"/>
+            <field name="vat_exemption_requested_at" readonly="1"/>
+          </group>
+          <field name="tax_selection_review_required" invisible="1"/>
+          <div class="alert alert-warning" role="alert"
+               attrs="{'invisible': [('tax_selection_review_required', '=', False)]}">
+            This draft has a legacy or mixed tax selection. Review it before issuing an offer.
+          </div>
+        </xpath>
+
+        <!-- Line taxes remain transparent but are not an item-by-item control. -->
+        <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='tax_id']" position="attributes">
+          <attribute name="readonly">1</attribute>
+          <attribute name="optional">show</attribute>
+          <attribute name="help">Read-only. Use the Taxes controls in the quotation header to apply VAT and withholding globally.</attribute>
         </xpath>
         <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='price_unit']" position="after">
           <field name="is_free_of_charge" optional="hide"
@@ -18,16 +49,21 @@
           <field name="free_of_charge_reason" optional="hide"
                  help="Required reason for the authorized zero-price exception; resolve it before Issue Offer PDF."/>
         </xpath>
+
+        <!-- Keep the existing non-tax exception process, but remove its Finance/CIF framing. -->
         <xpath expr="//notebook" position="inside">
-          <page string="Finance Controls" groups="sale_order_product_pricing.quotation_manager_group,sales_team.group_sale_manager">
+          <page string="Commercial Exception Approval" name="commercial_exception_approval"
+                groups="sale_order_product_pricing.quotation_manager_group,sales_team.group_sale_manager">
             <group>
-              <field name="finance_approval_required" readonly="1"
-                     help="Shows that one or more current commercial exceptions need manager approval before Issue Offer PDF."/>
-              <field name="finance_approval_reason" placeholder="State the approval or self-approval reason."
-                     help="Manager's audit reason. It is mandatory for self-approval and retained with the approval evidence."/>
-              <button name="action_approve_finance_requirements" type="object" string="Approve Finance Requirements" class="btn-primary"
+              <field name="finance_approval_required" readonly="1" string="Approval required"
+                     help="Shows whether a current commercial exception, including a VAT exemption, still needs management approval before Issue Offer PDF."/>
+              <field name="finance_approval_reason" string="Approval reason"
+                     placeholder="State the approval reason."
+                     help="The approving manager's reason is retained with the approval evidence."/>
+              <button name="action_approve_finance_requirements" type="object"
+                      string="Approve Commercial Exceptions" class="btn-primary"
                       attrs="{'invisible': [('state', '!=', 'draft')]}"
-                      help="Quotation or Sales Management approves every current exception before Issue Offer PDF. Approval records the manager's evidence and any later commercial change invalidates it; review the resulting status, then issue only when no requirement remains."/>
+                      help="Quotation or Sales Management approves the current commercial exceptions before Issue Offer PDF. Changing the exception invalidates its approval."/>
             </group>
             <field name="finance_approval_ids" readonly="1">
               <tree create="0" edit="0" delete="0">
@@ -36,22 +72,101 @@
               </tree>
             </field>
           </page>
+          <page string="Withholding Evidence" name="withholding_evidence"
+                groups="account.group_account_manager"
+                attrs="{'invisible': [('apply_withholding', '=', False)]}">
+            <field name="withholding_evidence_ids" readonly="1">
+              <tree create="0" edit="0" delete="0">
+                <field name="tax_id"/>
+                <field name="expected_amount"/>
+                <field name="currency_id" invisible="1"/>
+                <field name="responsible_id"/>
+                <field name="status"/>
+                <field name="payment_remittance_date"/>
+              </tree>
+            </field>
+          </page>
         </xpath>
       </field>
     </record>
+
+    <record id="sale_order_withholding_evidence_tree" model="ir.ui.view">
+      <field name="name">sale.order.withholding.evidence.tree</field>
+      <field name="model">sale.order.withholding.evidence</field>
+      <field name="arch" type="xml">
+        <tree string="Withholding Evidence" create="0" delete="0">
+          <field name="order_id"/>
+          <field name="partner_id"/>
+          <field name="tax_id"/>
+          <field name="expected_amount"/>
+          <field name="currency_id" invisible="1"/>
+          <field name="responsible_id"/>
+          <field name="status"/>
+          <field name="payment_remittance_date"/>
+        </tree>
+      </field>
+    </record>
+
+    <record id="sale_order_withholding_evidence_form" model="ir.ui.view">
+      <field name="name">sale.order.withholding.evidence.form</field>
+      <field name="model">sale.order.withholding.evidence</field>
+      <field name="arch" type="xml">
+        <form string="Customer Withholding Evidence" create="0" delete="0">
+          <header>
+            <button name="action_mark_received" type="object" string="Mark Evidence Received"
+                    class="btn-primary" attrs="{'invisible': [('status', '!=', 'pending')]}"
+                    help="Close this task after attaching the customer's withholding evidence."/>
+            <field name="status" widget="statusbar" statusbar_visible="pending,received,waived,cancelled"/>
+          </header>
+          <sheet>
+            <group>
+              <group string="Expected Withholding">
+                <field name="order_id"/>
+                <field name="partner_id"/>
+                <field name="invoice_id"/>
+                <field name="activity_id" readonly="1"/>
+                <field name="tax_id"/>
+                <field name="expected_basis"/>
+                <field name="expected_amount"/>
+                <field name="currency_id" invisible="1"/>
+                <field name="responsible_id"/>
+              </group>
+              <group string="Customer Evidence">
+                <field name="evidence_attachment_ids" widget="many2many_binary"
+                       attrs="{'readonly': [('status', '!=', 'pending')]}"/>
+                <field name="remittance_reference" attrs="{'readonly': [('status', '!=', 'pending')]}"/>
+                <field name="payment_remittance_date" attrs="{'readonly': [('status', '!=', 'pending')]}"/>
+                <field name="closure_reason" readonly="1"/>
+                <field name="closed_by" readonly="1"/>
+                <field name="closed_at" readonly="1"/>
+              </group>
+            </group>
+          </sheet>
+        </form>
+      </field>
+    </record>
+
+    <record id="action_sale_order_withholding_evidence" model="ir.actions.act_window">
+      <field name="name">Withholding Evidence</field>
+      <field name="res_model">sale.order.withholding.evidence</field>
+      <field name="view_mode">tree,form</field>
+      <field name="groups_id" eval="[(4, ref('account.group_account_manager'))]"/>
+    </record>
+
     <record id="res_config_settings_finance_controls" model="ir.ui.view">
-      <field name="name">res.config.settings.finance.controls</field>
+      <field name="name">res.config.settings.quotation.tax.configuration</field>
       <field name="model">res.config.settings</field>
       <field name="inherit_id" ref="sale.res_config_settings_view_form"/>
       <field name="arch" type="xml">
         <xpath expr="//div[@data-key='sale_management']/div[hasclass('o_settings_container')][2]" position="inside">
-          <div class="col-12 col-lg-6 o_setting_box">
-            <div class="o_setting_right_pane"><div class="o_form_label">Quotation Finance Controls</div>
-              <div class="text-muted">Configure accounting-owned taxes and the normal commercial terms. Tax accounts and reporting tags remain on the configured tax records.</div>
+          <div class="col-12 col-lg-6 o_setting_box" groups="account.group_account_manager">
+            <div class="o_setting_right_pane">
+              <div class="o_form_label">Quotation VAT and Withholding</div>
+              <div class="text-muted">Select the existing sales taxes used by the quotation Taxes selector. This page does not create or modify accounting taxes, accounts, tags, or repartition rules.</div>
               <field name="quotation_vat_tax_id"/>
               <field name="quotation_retention_tax_id"
-                     help="Sets the Finance-configured negative withholding tax for Standard quotations. Finance or Accounting Managers select it; it deducts the configured retention after VAT and uses its account and report tags, so choose a validated retention tax before using the Standard treatment."/>
-              <field name="quotation_standard_payment_term_id"/><field name="quotation_standard_incoterm_id"/>
+                     help="Select the existing negative withholding tax configured by Finance or Accounting Managers. It deducts the expected withholding from the quotation total; verify its accounting setup before using this selector."/>
+              <field name="quotation_withholding_responsible_id"/>
             </div>
           </div>
         </xpath>

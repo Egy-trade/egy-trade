@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 {
     "name": "Sale Revision History",
-    "version": "16.0.2.2.0",
+    "version": "16.0.2.3.0",
     "author": "PPTS [India] Pvt.Ltd.",
     "website": "http://www.pptssolutions.com",
     "sequence": 0,
@@ -20,6 +20,7 @@ Quotation sale revision history
         'views/sale_order_views.xml',
         'wizard/revision_reason.xml',
         'wizard/commercial_change.xml',
+        'wizard/withholding_confirmation.xml',
     ],
     # Revision History is part of the controlled pricing workflow.  Install it
     # automatically wherever that workflow is installed so the feature cannot

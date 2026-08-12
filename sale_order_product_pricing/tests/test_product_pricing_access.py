@@ -646,6 +646,42 @@ class TestProductPricingAccess(SavepointCase):
         confirm = preview_root.xpath("//button[@name='action_confirm_apply']")
         self.assertEqual(len(confirm), 1)
         self.assertTrue(confirm[0].get('help'))
+
+    def test_global_tax_selector_replaces_cif_and_line_tax_editing(self):
+        """Keep the quotation-level tax UX independent of item tax edits."""
+        view = self.env.ref(
+            'sale_order_product_pricing.sale_order_finance_controls_form'
+        )
+        root = etree.fromstring(view.arch_db.encode())
+
+        self.assertTrue(root.xpath("//field[@name='apply_vat']"))
+        self.assertTrue(root.xpath("//field[@name='apply_withholding']"))
+        self.assertTrue(root.xpath("//field[@name='vat_exemption_reason']"))
+        self.assertTrue(root.xpath(
+            "//field[@name='tax_selection_review_required'][@invisible='1']"
+        ))
+        self.assertTrue(root.xpath(
+            "//field[@name='tax_id'][@readonly='1']"
+        ))
+        self.assertFalse(root.xpath("//*[contains(@string, 'Finance Controls')]"))
+        self.assertFalse(root.xpath("//*[contains(@string, 'CIF')]"))
+
+        approval_page = root.xpath(
+            "//page[@name='commercial_exception_approval']"
+        )
+        self.assertEqual(len(approval_page), 1)
+        self.assertTrue(approval_page[0].xpath(
+            ".//button[@name='action_approve_finance_requirements']"
+        ))
+        evidence_page = root.xpath("//page[@name='withholding_evidence']")
+        self.assertEqual(len(evidence_page), 1)
+        self.assertEqual(
+            evidence_page[0].get('groups'), 'account.group_account_manager'
+        )
+        self.assertTrue(evidence_page[0].xpath(
+            ".//field[@name='withholding_evidence_ids']"
+        ))
+
     def test_assigned_salesperson_can_crud_draft_lines_but_unassigned_cannot(self):
         order = self.env['sale.order'].with_user(self.basic_user).create({
             'partner_id': self.partner.id,

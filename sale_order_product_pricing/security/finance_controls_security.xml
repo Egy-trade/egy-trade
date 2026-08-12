@@ -22,5 +22,13 @@
       <field name="perm_read" eval="True"/><field name="perm_write" eval="False"/>
       <field name="perm_create" eval="False"/><field name="perm_unlink" eval="False"/>
     </record>
+    <record id="withholding_evidence_account_manager_rule" model="ir.rule">
+      <field name="name">Accounting Managers: company withholding evidence</field>
+      <field name="model_id" ref="model_sale_order_withholding_evidence"/>
+      <field name="groups" eval="[(4, ref('account.group_account_manager'))]"/>
+      <field name="domain_force">[('order_id.company_id', 'in', company_ids)]</field>
+      <field name="perm_read" eval="True"/><field name="perm_write" eval="True"/>
+      <field name="perm_create" eval="True"/><field name="perm_unlink" eval="False"/>
+    </record>
   </data>
 </odoo>

@@ -7,7 +7,9 @@
             <field name="arch" type="xml">
                 
                 <xpath expr="//form/header" position="inside">
-                    <button name="action_approve" id="action_approve"  string="Approve" class="btn-primary" type="object" attrs="{'invisible': [('state', 'not in', ['waiting_approve'])]}"/>
+                    <button name="action_approve" id="action_approve" string="Approve" class="btn-primary" type="object"
+                            groups="sales_team.group_sale_manager"
+                            attrs="{'invisible': [('state', '!=', 'waiting')]}"/>
 
 
                 </xpath>
@@ -23,8 +25,8 @@
         <field name="res_model">sale.order</field>
         <field name="view_id" ref="sale.view_quotation_tree_with_onboarding"/>
         <field name="view_mode">tree,kanban,form,calendar,pivot,graph,activity</field>
-        <field name="domain">[('state', '=', 'waiting_approve')]</field>
-        <field name="context">{'default_state': 'waiting_approve'}</field>
+        <field name="domain">[('state', '=', 'waiting')]</field>
+        <field name="context">{}</field>
         
     </record>
 	

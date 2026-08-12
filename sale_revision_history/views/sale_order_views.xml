@@ -114,6 +114,11 @@
                         <field name="sales_responsibility_accepted_at" readonly="1"/>
                         <field name="sales_responsibility_accepted_by" readonly="1"/>
                         <field name="issued_without_sales_acceptance" readonly="1"/>
+                        <field name="withholding_confirmation" readonly="1"/>
+                        <field name="withholding_confirmation_at" readonly="1"/>
+                        <field name="withholding_confirmation_by" readonly="1"/>
+                        <field name="retention_only_revision" readonly="1"/>
+                        <field name="retention_only_source_id" readonly="1"/>
                         <field name="active" invisible="1"/>
                         <button name="action_open_revision_history" type="object"
                                 string="Open Revision History" class="oe_link"

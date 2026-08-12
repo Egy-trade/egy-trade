@@ -19,6 +19,7 @@ from odoo.addons.sale_order_product_pricing.models.sale_order import (
 )
 from odoo.addons.sale_order_product_pricing.models.finance_controls import (
     _is_finance_internal,
+    _RETENTION_REVISION_TOKEN,
 )
 
 
@@ -26,6 +27,7 @@ _REVISION_INTERNAL_TOKEN = object()
 _LIFECYCLE_INTERNAL_TOKEN = object()
 _LIFECYCLE_INITIALIZING_TOKEN = object()
 _LIFECYCLE_CONFIRMING_TOKEN = object()
+_WITHHOLDING_CONFIRMATION_TOKEN = object()
 _REVISION_SYSTEM_FIELDS = {
     "current_revision_id",
     "revision_number",
@@ -38,6 +40,11 @@ _REVISION_SYSTEM_FIELDS = {
     "restoration_date",
     "restoration_author_id",
     "restoration_difference_summary",
+    "withholding_confirmation",
+    "withholding_confirmation_at",
+    "withholding_confirmation_by",
+    "retention_only_revision",
+    "retention_only_source_id",
 }
 
 
@@ -62,14 +69,29 @@ def _is_lifecycle_confirming(env):
     ) is _LIFECYCLE_CONFIRMING_TOKEN
 
 
+def _is_withholding_confirmation(env):
+    """True only for the in-process confirmation wizard action.
+
+    A Python object token cannot be supplied through an HTTP/RPC context, so a
+    caller cannot use ``action_confirm`` to bypass the mandatory dialog.
+    """
+    return env.context.get(
+        "_withholding_confirmation_token"
+    ) is _WITHHOLDING_CONFIRMATION_TOKEN
+
+
 _COMMERCIAL_ORDER_FIELDS = {
     "partner_id", "partner_invoice_id", "partner_shipping_id", "pricelist_id",
     "currency_id", "payment_term_id", "fiscal_position_id", "incoterm",
     "incoterm_id", "client_order_ref", "note", "user_id",
     "quotation_specialist_id", "sale_order_template_id", "sale_order_option_ids",
     "warehouse_id", "commitment_date", "offer_expiry_days",
-    "order_line", "tax_treatment", "ks_enable_discount", "ks_global_discount_type",
-    "ks_global_discount_rate",
+    "validity_date", "offer_date", "order_line", "apply_vat", "vat_exemption_reason",
+    "apply_withholding", "ks_enable_discount", "ks_global_discount_type",
+    "ks_global_discount_rate", "discount_type", "discount_rate",
+    "product_pricing", "global_factor", "currency_estimate_id",
+    "currency_rate_estimate", "currency_rate_inverse",
+    "change_currency_rate_type", "change_currency_rate",
 }
 _COMMERCIAL_LINE_FIELDS = {
     "sn", "sequence", "display_type", "product_id", "name", "product_uom_qty",
@@ -171,6 +193,189 @@ class SaleOrder(models.Model):
         string="Issued Without Sales Acceptance", readonly=True, copy=False,
         help="KPI flag: the offer was issued before assigned Sales accepted responsibility.",
     )
+    withholding_confirmation = fields.Selection(
+        [("yes", "Customer confirmed 1% withholding"),
+         ("no", "Customer did not confirm 1% withholding")],
+        string="Withholding Confirmation", readonly=True, copy=False,
+    )
+    withholding_confirmation_at = fields.Datetime(
+        string="Withholding Confirmed At", readonly=True, copy=False,
+    )
+    withholding_confirmation_by = fields.Many2one(
+        "res.users", string="Withholding Confirmed By", readonly=True, copy=False,
+    )
+    retention_only_revision = fields.Boolean(
+        string="System Retention-only Revision", readonly=True, copy=False,
+        help="A system-generated revision where 1% withholding was the only changed term.",
+    )
+    retention_only_source_id = fields.Many2one(
+        "sale.order", string="Retention-only Source", readonly=True, copy=False,
+    )
+
+    def _commercial_fingerprint(self):
+        """Stable comparison of every agreed commercial value except withholding.
+
+        This deliberately includes VAT selection/reason, counterparties, terms,
+        product rows, optional products and price-origin evidence.  Calculated
+        totals and ``apply_withholding`` are omitted: both necessarily change in
+        a valid withholding-only revision.
+        """
+        self.ensure_one()
+        def ref(record):
+            return record.id or False
+        configured_withholding = getattr(
+            self.company_id, "quotation_retention_tax_id", self.env["account.tax"],
+        )
+        effective_tax = getattr(self, "_quotation_effective_tax", None)
+        withholding_tax = (
+            effective_tax(configured_withholding)
+            if effective_tax else configured_withholding
+        )
+        lines = []
+        for line in self.order_line.sorted(lambda item: (item.sequence, item.id)):
+            lines.append({
+                "sequence": line.sequence, "display_type": line.display_type or False,
+                "product": ref(line.product_id), "name": line.name or "",
+                "quantity": line.product_uom_qty, "uom": ref(line.product_uom),
+                "price_unit": line.price_unit, "discount": line.discount,
+                "discount_2": getattr(line, "discount_2", 0.0),
+                "discount_3": getattr(line, "discount_3", 0.0),
+                "non_withholding_tax_ids": sorted((line.tax_id - withholding_tax).ids),
+                "sn": getattr(line, "sn", False) or False,
+                "purchase_price_estimate": getattr(line, "purchase_price_estimate", 0.0),
+                "factor": getattr(line, "factor", 0.0),
+                "line_factor": getattr(line, "line_factor", 0.0),
+                "price_origin": getattr(line, "price_origin", False) or False,
+                "price_origin_label": getattr(line, "price_origin_label", False) or False,
+                "pricing_eligible": getattr(line, "pricing_eligible", False),
+                "pricing_warning": getattr(line, "pricing_warning", False) or False,
+                "pricing_evidence": getattr(line, "pricing_evidence", False) or False,
+                "pricing_audit_hash": getattr(line, "pricing_audit_hash", False) or False,
+                "pricing_reprice_required": getattr(line, "pricing_reprice_required", False),
+                "is_free_of_charge": getattr(line, "is_free_of_charge", False),
+                "free_of_charge_reason": getattr(line, "free_of_charge_reason", False) or False,
+                "free_of_charge_authorized_by": ref(getattr(line, "free_of_charge_authorized_by", self.env["res.users"])),
+                "free_of_charge_authorized_at": str(getattr(line, "free_of_charge_authorized_at", False) or ""),
+            })
+        options = []
+        for option in self.sale_order_option_ids.sorted(lambda item: (item.sequence, item.id)):
+            options.append({
+                "sequence": option.sequence, "product": ref(option.product_id),
+                "name": option.name or "", "quantity": option.quantity,
+                "uom": ref(option.uom_id), "price_unit": option.price_unit,
+                "discount": getattr(option, "discount", 0.0),
+            })
+        return {
+            "partner": ref(self.partner_id), "partner_invoice": ref(self.partner_invoice_id),
+            "partner_shipping": ref(self.partner_shipping_id), "currency": ref(self.currency_id),
+            "pricelist": ref(self.pricelist_id), "fiscal_position": ref(self.fiscal_position_id),
+            "payment_term": ref(self.payment_term_id), "incoterm": ref(self.incoterm),
+            "warehouse": ref(self.warehouse_id), "salesperson": ref(self.user_id),
+            "company": ref(self.company_id),
+            "quotation_specialist": ref(getattr(self, "quotation_specialist_id", self.env["res.users"])),
+            "client_order_ref": self.client_order_ref or "", "note": self.note or "",
+            "offer_date": str(self.offer_date or ""), "validity_date": str(self.validity_date or ""),
+            "offer_expiry_days": getattr(self, "offer_expiry_days", 0),
+            "commitment_date": str(self.commitment_date or ""),
+            "template": ref(self.sale_order_template_id), "apply_vat": getattr(self, "apply_vat", True),
+            "vat_exemption_reason": getattr(self, "vat_exemption_reason", False) or False,
+            "product_pricing": getattr(self, "product_pricing", False),
+            "estimate_currency": ref(getattr(self, "currency_estimate_id", self.env["res.currency"])),
+            "estimate_rate": getattr(self, "currency_rate_estimate", 0.0),
+            "estimate_inverse_rate": getattr(self, "currency_rate_inverse", 0.0),
+            "rate_change_type": getattr(self, "change_currency_rate_type", False) or False,
+            "rate_change": getattr(self, "change_currency_rate", 0.0),
+            "global_factor": getattr(self, "global_factor", 0.0),
+            "global_discount_enabled": getattr(self, "ks_enable_discount", False),
+            "global_discount_type": getattr(self, "ks_global_discount_type", False) or False,
+            "global_discount_rate": getattr(self, "ks_global_discount_rate", 0.0),
+            "header_discount_type": getattr(self, "discount_type", False) or False,
+            "header_discount_rate": getattr(self, "discount_rate", 0.0),
+            "lines": lines, "options": options,
+        }
+
+    def _open_withholding_confirmation(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Confirm 1% Withholding"),
+            "res_model": "sale.order.withholding.confirmation",
+            "view_mode": "form",
+            "target": "new",
+            "context": {"default_sale_id": self.id},
+        }
+
+    def _confirm_withholding_decision(self, apply_withholding):
+        """Confirm an issued offer or issue a safe retention-only successor."""
+        self.ensure_one()
+        if not _is_withholding_confirmation(self.env):
+            raise AccessError(_(
+                "Withholding can only be confirmed through the mandatory confirmation dialog."
+            ))
+        self.check_access_rights("write")
+        self.check_access_rule("write")
+        self._lock_revision_source()
+        self.invalidate_cache(fnames=[
+            "state", "active", "current_revision_id",
+            "issued_offer_attachment_id", "apply_withholding",
+        ])
+        if (self.state != "sent" or not self.active or self.current_revision_id
+                or not self.issued_offer_attachment_id):
+            raise UserError(_(
+                "Only the active current issued offer can be confirmed. "
+                "Open the newest revision in this quotation family."
+            ))
+        current = bool(getattr(self, "apply_withholding", False))
+        decision = "yes" if apply_withholding else "no"
+        if current == apply_withholding:
+            self.with_context(_lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN).write({
+                "withholding_confirmation": decision,
+                "withholding_confirmation_at": fields.Datetime.now(),
+                "withholding_confirmation_by": self.env.user.id,
+            })
+            self.message_post(body=_("Customer withholding decision recorded by %(user)s: %(decision)s.") % {
+                "user": self.env.user.display_name,
+                "decision": _("1% withholding applies") if apply_withholding else _("1% withholding does not apply"),
+            })
+            return self.with_context(
+                _withholding_confirmation_token=_WITHHOLDING_CONFIRMATION_TOKEN,
+            ).action_confirm()
+
+        expected_fingerprint = self._commercial_fingerprint()
+        action = self.action_view_revision_wizard(
+            _("System-created retention-only revision after customer confirmation."),
+        )
+        revision = self.env["sale.order"].browse(action["res_id"]).exists()
+        if not revision or revision._commercial_fingerprint() != expected_fingerprint:
+            raise UserError(_(
+                "The proposed revision differs from the issued commercial terms. "
+                "Use the normal revision workflow and approval process."
+            ))
+        revision.with_context(
+            _retention_revision_token=_RETENTION_REVISION_TOKEN,
+            _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
+        ).action_apply_retention_only_revision(self, expected_fingerprint, apply_withholding)
+        revision.invalidate_cache()
+        if revision._commercial_fingerprint() != expected_fingerprint:
+            raise UserError(_(
+                "Only 1% withholding may change in an automatic retention-only revision."
+            ))
+        revision.with_context(_lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN).write({
+            "retention_only_revision": True,
+            "retention_only_source_id": self.id,
+            "withholding_confirmation": decision,
+            "withholding_confirmation_at": fields.Datetime.now(),
+            "withholding_confirmation_by": self.env.user.id,
+            "sales_responsibility_accepted": self.sales_responsibility_accepted,
+            "sales_responsibility_accepted_at": self.sales_responsibility_accepted_at,
+            "sales_responsibility_accepted_by": self.sales_responsibility_accepted_by.id,
+        })
+        revision.action_issue_offer_pdf()
+        revision.with_context(
+            _withholding_confirmation_token=_WITHHOLDING_CONFIRMATION_TOKEN,
+        ).action_confirm()
+        return {"type": "ir.actions.act_window", "res_model": "sale.order",
+                "res_id": revision.id, "view_mode": "form", "target": "current"}
 
     def _cairo_today(self):
         self.ensure_one()
@@ -388,10 +593,12 @@ class SaleOrder(models.Model):
         revision_internal = _is_revision_internal(self.env)
         sent_orders = self.filtered(lambda order: order.state == "sent")
         if sent_orders and lifecycle_confirming:
-            if set(vals) - {"state", "date_order"} or vals.get("state") != "sale":
+            if (set(vals) - {"state", "date_order"}
+                    or vals.get("state") not in {"sale", "waiting"}):
                 raise UserError(_(
-                    "Confirmation may only set the Sales Order state and standard confirmation "
-                    "date; commercial values cannot be changed at the same time."
+                    "Confirmation may only set the Sales Order state, approval-waiting "
+                    "state, and standard confirmation date; commercial values cannot be "
+                    "changed at the same time."
                 ))
         elif sent_orders and not (lifecycle_internal or revision_internal):
             raise UserError(_(
@@ -407,6 +614,7 @@ class SaleOrder(models.Model):
             and not lifecycle_internal
             and not revision_internal
             and not _is_pricing_internal(self.env)
+            and not _is_finance_internal(self.env)
         )
         if _REVISION_SYSTEM_FIELDS.intersection(vals) and not _is_revision_internal(self.env):
             raise AccessError(_("Revision history fields are managed by the system."))
@@ -456,17 +664,51 @@ class SaleOrder(models.Model):
     def action_confirm(self):
         """Acceptance may progress an issued offer, but never edits its terms."""
         if self.filtered(
-                lambda order: order.state != "sent" or not order.issued_offer_attachment_id):
+                lambda order: order.state != "sent" or not order.active
+                or order.current_revision_id or not order.issued_offer_attachment_id):
             raise UserError(_(
-                "Only an Offer PDF issued by this workflow can be confirmed. "
-                "Issue the quotation first."
+                "Only the active current Offer PDF issued by this workflow can be "
+                "confirmed. Open the newest revision or issue the quotation first."
             ))
-        return super(
+        if not _is_withholding_confirmation(self.env):
+            if len(self) != 1:
+                raise UserError(_("Confirm Sales Orders one at a time so withholding can be recorded."))
+            return self._open_withholding_confirmation()
+        result = super(
             SaleOrder, self.with_context(
                 _lifecycle_confirming_token=_LIFECYCLE_CONFIRMING_TOKEN,
                 _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
             ),
         ).action_confirm()
+        # A downstream double-validation module may return while leaving the
+        # order in an intermediate state.  Evidence is a confirmed-SO task,
+        # never a side effect of merely attempting confirmation.
+        evidence_hook = getattr(self, "_create_pending_withholding_evidence", None)
+        if evidence_hook and all(order.state == "sale" for order in self):
+            evidence_hook()
+        return result
+
+    def action_approve(self):
+        """Approve only a genuine second-step order after withholding was recorded."""
+        if not (
+                self.env.is_superuser()
+                or self.env.user.has_group("sales_team.group_sale_manager")):
+            raise AccessError(_("Only Sales Managers may approve a waiting Sales Order."))
+        self.check_access_rights("write")
+        self.check_access_rule("write")
+        if self.filtered(
+                lambda order: order.state != "waiting" or not order.active
+                or order.current_revision_id or not order.issued_offer_attachment_id
+                or order.withholding_confirmation not in {"yes", "no"}):
+            raise UserError(_(
+                "Approve is available only for the active current issued Sales Order "
+                "after the mandatory withholding decision was recorded."
+            ))
+        result = super().action_approve()
+        evidence_hook = getattr(self, "_create_pending_withholding_evidence", None)
+        if evidence_hook and all(order.state == "sale" for order in self):
+            evidence_hook()
+        return result
 
     def _ensure_revision_authorized(self):
         self.ensure_one()
@@ -1059,12 +1301,28 @@ class SaleOrderLine(models.Model):
 class SaleOrderOption(models.Model):
     _inherit = "sale.order.option"
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        order_ids = [vals.get("order_id") for vals in vals_list if vals.get("order_id")]
+        orders = self.env["sale.order"].browse(order_ids)
+        if orders.filtered(lambda order: order.state == "sent"):
+            raise UserError(_(
+                "Issued quotation optional products are immutable. Create a revision instead."
+            ))
+        if not (_is_lifecycle_internal(self.env) or _is_revision_internal(self.env)):
+            orders._ensure_daily_commercial_change_decided()
+        return super().create(vals_list)
+
     def write(self, vals):
         if self.mapped("order_id").filtered(lambda order: order.state == "sent"):
             raise UserError(_("Issued quotation optional products are immutable. Create a revision instead."))
+        if not (_is_lifecycle_internal(self.env) or _is_revision_internal(self.env)):
+            self.mapped("order_id")._ensure_daily_commercial_change_decided()
         return super().write(vals)
 
     def unlink(self):
         if self.mapped("order_id").filtered(lambda order: order.state == "sent"):
             raise UserError(_("Issued quotation optional products are immutable. Create a revision instead."))
+        if not (_is_lifecycle_internal(self.env) or _is_revision_internal(self.env)):
+            self.mapped("order_id")._ensure_daily_commercial_change_decided()
         return super().unlink()

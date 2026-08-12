@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="sale_order_withholding_confirmation_view_form" model="ir.ui.view">
+        <field name="name">sale.order.withholding.confirmation.form</field>
+        <field name="model">sale.order.withholding.confirmation</field>
+        <field name="arch" type="xml">
+            <form string="Confirm 1% Withholding">
+                <sheet>
+                    <group>
+                        <field name="sale_id" invisible="1"/>
+                        <field name="issued_withholding" readonly="1"/>
+                        <field name="decision" widget="radio"/>
+                    </group>
+                    <div class="alert alert-info">
+                        Before confirming this Sales Order, ask Finance or the customer whether 1% withholding applies and whether supporting withholding evidence will be provided. If the answer changes only 1% withholding, Odoo creates and attaches an updated revision automatically; it does not email it.
+                    </div>
+                </sheet>
+                <footer>
+                    <button name="action_confirm" string="Record and Confirm" type="object" class="btn-primary"/>
+                    <button string="Cancel" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

@@ -28,10 +28,11 @@ odoo-bin -d <DISPOSABLE_DB> --stop-after-init --test-enable \
 
 Create separate non-admin users for: Quotation Specialist (QS), Salesperson, Quotation Manager, Sales Manager, Product Pricing User, Lighting Designer, ordinary Employee, Procurement, and Finance/Accounting Manager. Do not reuse Administrator for role tests.
 
-Finance must configure:
+Before testing, Accounting must verify the existing configuration (do not create
+or change taxes, accounts, tax tags, or tax repartition rules during this UAT):
 
 - a 14% sales VAT tax;
-- a negative 1% sales withholding tax with the correct withholding account and tax-report tag;
+- the existing 1% sales withholding tax, including its rate, account and report tag;
 - standard payment terms and delivery terms;
 - Standard Discount enabled, company maximum at or below 30%, default personal cap, and individual caps;
 - the normal quotation-validity default (14 days).
@@ -66,7 +67,7 @@ Note: the daily control is a server-enforced transactional gate plus a **Record 
 | R07 | Manager, then assigned/unassigned Lighting Designers | Before release, inspect the drawing binary plus every projected free-text value (project name, internal reference, product description, drawing title, and filename) and confirm none contains prices, estimates, margins, vendors, client organization/contact, or other commercial data. Release it; test assigned access, then unassign/remove the designer and retry UI, direct URL, download, fields_get/search_read, and export. | Assigned designer sees only reviewed technical scope/drawings/products/descriptions/quantities/revision status. Unassigned/revoked designer sees no scope row or download and cannot access Sales quotation records. Structured commercial/contact fields are absent. Human content review is mandatory because the module does not sanitize free text or scan files. |
 | R08 | Ordinary Employee | Open Project Directory, then try Sales quotations, Technical Quotations/Drawings, documents, direct URLs, fields_get/search_read, and export. | Only project name, internal reference, client organization, stage, owner team, and latest activity are available through the directory; lines, contacts, documents, and commercial values stay inaccessible. |
 | R09 | Sales Manager | On an active draft/revision with a Historical-Unverified line, open Product Pricing and use Certify Origin with the required evidence/reason; repeat against an immutable Sent version. | Draft/revision certification records the verified origin and audit without changing the selling price; unauthorized users and Sent-version certification are rejected, and the Sent version remains unchanged. |
-| R10 | All roles | Hover each renamed/custom field and action. | Plain-language help explains purpose, authorized user, effect, and next action for Item #, estimates/origin, pricing eligibility/warning, Preview/Apply, factors, FOC, validity, tax treatment, retention, issue, revisions, and approvals. |
+| R10 | All roles | Hover each renamed/custom field and action. | Plain-language help explains purpose, authorized user, effect, and next action for Item #, estimates/origin, pricing eligibility/warning, Preview/Apply, factors, FOC, validity, VAT, withholding, issue, revisions, and approvals. |
 
 ## 4. Purchase Price Estimate and procurement
 
@@ -77,18 +78,25 @@ Note: the daily control is a server-enforced transactional gate plus a **Record 
 | P03 | Procurement | With zero estimate and no valid vendor price, generate RFQ and confirm. | Draft line is zero with Supplier Cost Required; confirmation is blocked. Entering positive cost without reason is blocked. Cost plus reason clears the flag, records user/time, and posts an audit. |
 | P04 | API user | Try to create/write PO provenance or clear Supplier Cost Required directly through import/RPC. | Protected source, estimate, and audit fields reject forgery/tampering. |
 
-## 5. VAT, CIF, invoices, and reporting
+## 5. Global VAT, withholding, confirmation, and invoices
 
 | ID | Tester | Action | Expected result |
 |---|---|---|---|
-| F01 | Finance | Standard policy, base 100, no discount. | Untaxed 100; VAT +14; retention -1; total 113. Both configured taxes are on every commercial line. |
-| F02 | Finance | Apply a 10% Universal Discount to base 100. | Tax base is 90; VAT 12.60; retention -0.90; total 101.70. |
-| F03 | Finance | Select CIF incoterm on a new quotation. | Tax Treatment defaults to CIF - No Taxes and all line taxes are empty. Direct line-tax edits are blocked. |
-| F04 | Finance | Create/post invoice from Standard quotation. | Invoice preserves treatment, retention tax reference, basis, and amount; negative withholding posts to configured account and appears with configured report tags. |
-| F05 | Finance | Create/post invoice from CIF quotation. | No VAT, retention, or retention tax reference is carried. |
-| F06 | Finance | Create a credit note/refund from F04. | VAT and withholding reverse to the same accounts/tags and reconciliation totals are correct. |
-| F07 | Finance | Repeat F01-F06 in EGP and one foreign currency, including fractional quantities/prices. | Company/transaction currency totals, rounding, tax bases, journal entries, PDF, and portal totals agree. |
-| F08 | API/Portal | Import draft values, attempt RPC bypasses, export permitted records, and view issued offer through portal. | Server controls match UI controls; confidential pricing/cost fields do not leak; portal PDF/totals equal the attached issued PDF. |
+| T01 | QS | Create a new quotation. | **VAT 14%** is selected; **1% Withholding** is clear. Odoo's existing VAT tax is proposed on every commercial line and totals update. |
+| T02 | QS | Add another product, section, and note line after selecting VAT. | The new commercial product line receives the same global tax selection. Sections and notes do not receive taxes. The line **Taxes** column is visible but cannot be edited. |
+| T03 | QS | Select 1% Withholding while VAT remains selected. | Both configured taxes are proposed globally; no Finance approval is requested. The total reflects Odoo's normal tax calculation. |
+| T04 | QS | Clear VAT, enter a genuine VAT-exemption reason, and leave withholding clear. | The draft is tax-free, the reason/audit requester/time are recorded, and Issue Offer PDF is blocked until a Quotation or Sales Manager approves the VAT exception. |
+| T05 | QS | Clear VAT, enter a reason, then select 1% Withholding. | Only the existing withholding tax is proposed. Manager approval is required because VAT is absent, not because withholding is selected. |
+| T06 | QS | Select neither VAT nor withholding. | No line taxes are proposed. The VAT-exemption reason and manager approval are still required before issue. |
+| T07 | Quotation/Sales Manager | Approve the current VAT exemption, then change VAT status, reason, customer, product, quantity, price, discount, payment term or delivery term. | The VAT approval is invalidated by a relevant change and Issue Offer PDF is blocked again until current exceptions are approved. Restoring VAT removes the VAT-exemption approval requirement. |
+| T08 | QS/Sales | Attempt to write `tax_id`, `apply_vat`, or `apply_withholding` through import/RPC or an alternate view; repeat after sending a quotation. | Individual line tax edits are rejected. Only authorized QS/Sales changes to draft header selectors succeed; sent quotation values cannot change. |
+| T09 | All roles | Choose CIF or change the incoterm. | CIF is absent as a tax treatment and the selected incoterm never adds or removes VAT/withholding. No **Finance Controls** tab is present. |
+| T10 | Sales/QS | From an issued quotation, confirm the Sales Order. | A mandatory confirmation popup asks whether 1% withholding applies. Cancelling makes no change. Choosing the answer already in the offer records the user/time and confirms normally. No draft invoice, `account.move`, journal entry or posting is created. |
+| T11 | Sales/QS | At confirmation, choose a withholding answer different from the issued offer while every other commercial term is unchanged. | Odoo creates the next revision, applies/removes only withholding, carries valid prior commercial/VAT approvals, generates and attaches an updated Offer PDF, then confirms the revised Sales Order. No new approval is requested. |
+| T12 | Sales/QS | Repeat T11 after changing price, quantity, discount, product, VAT status/reason, currency, payment term, delivery term, validity or customer. | Automatic carry-forward is rejected. Use the normal revision and approval workflow; no silent Sales Order rewrite occurs. |
+| T13 | Accounting | Open a confirmed order with 1% withholding. | The withholding-evidence item is visible only to Accounting. It links the Sales Order, expected amount/rate and later invoice; Sales/QS cannot see it. Cancelling the order closes the pending item without posting entries. |
+| T14 | Accounting | Use standard **Create Invoice** only after the confirmed order, then open the draft invoice. | The invoice inherits the final Sales Order taxes. Posting the invoice—not order confirmation—is when standard Odoo creates accounting entries. |
+| T15 | Accounting | Repeat T01-T14 in EGP and one foreign currency, including fractional quantities/prices and a Universal Discount. | Quotations/PDFs show the expected Odoo totals. The later invoice uses the same final taxes; accounting and tax-report reconciliation follows the existing configured taxes. |
 
 ## 6. Revisions and concurrency
 
@@ -106,9 +114,9 @@ Capture screenshots or exports for every row above and keep the server test log.
 - clean module upgrade and all automated tests passing;
 - non-admin role matrix proof;
 - historical price-origin migration reconciliation;
-- posted invoice/credit-note and tax-report reconciliation by Finance;
+- standard later-invoice and tax-report reconciliation by Accounting;
 - Odoo.sh warning/error review;
 - portal/API/import/RPC/export evidence;
 - rollback rehearsal on a disposable database.
 
-Record each case as `Pass`, `Fail`, or `Blocked`, with database/build SHA, user, timestamp, quotation number, and evidence link. Any failure requires a new build and full rerun of the affected section plus Q09-Q10, F01-F08, and V01-V04 regression gates.
+Record each case as `Pass`, `Fail`, or `Blocked`, with database/build SHA, user, timestamp, quotation number, and evidence link. Any failure requires a new build and full rerun of the affected section plus Q09-Q10, T01-T15, and V01-V04 regression gates.
