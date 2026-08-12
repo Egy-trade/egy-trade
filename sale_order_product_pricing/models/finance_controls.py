@@ -216,7 +216,12 @@ class SaleOrder(models.Model):
         requirements = {}
         lines = self.order_line.filtered(lambda line: not line.display_type)
         company = self.company_id
-        if any(line.price_origin == 'edited' for line in lines):
+        # An explicitly authorized zero-price FOC line already carries its own
+        # reason, actor and timestamp. Requiring a second manual-price approval
+        # would make the FOC authorization unusable at issue time.
+        if any(
+                line.price_origin == 'edited' and not line._is_authorized_foc()
+                for line in lines):
             requirements['manual_price'] = _('Manual selling price')
         assigned_caps = [
             (user.standard_discount_cap if 'standard_discount_cap' in user._fields
@@ -309,12 +314,7 @@ class SaleOrder(models.Model):
                 ) == 0
             )
             unauthorised = zero_price_lines.filtered(
-                lambda line: (
-                    not line.is_free_of_charge
-                    or not (line.free_of_charge_reason or '').strip()
-                    or not line.free_of_charge_authorized_by
-                    or not line.free_of_charge_authorized_at
-                )
+                lambda line: not line._is_authorized_foc()
             )
             if unauthorised:
                 raise UserError(_(
@@ -425,6 +425,19 @@ class SaleOrderLine(models.Model):
     )
     free_of_charge_authorized_by = fields.Many2one('res.users', readonly=True, copy=False)
     free_of_charge_authorized_at = fields.Datetime(readonly=True, copy=False)
+
+    def _is_authorized_foc(self):
+        self.ensure_one()
+        return bool(
+            float_compare(
+                self.price_unit, 0.0,
+                precision_rounding=self.order_id.currency_id.rounding,
+            ) == 0
+            and self.is_free_of_charge
+            and (self.free_of_charge_reason or '').strip()
+            and self.free_of_charge_authorized_by
+            and self.free_of_charge_authorized_at
+        )
 
     def _can_authorize_foc(self):
         user = self.env.user

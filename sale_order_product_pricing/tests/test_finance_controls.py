@@ -10,6 +10,8 @@ class TestQuotationFinanceControls(SavepointCase):
         super().setUpClass()
         cls.partner = cls.env.ref('base.res_partner_1')
         cls.company = cls.env.company
+        if not cls.env.user.email:
+            cls.env.user.email = 'finance.controls.admin@example.test'
         cls.product = cls.env['product.product'].create({
             'name': 'Quotation finance control product', 'sale_ok': True,
             'purchase_ok': True, 'list_price': 100.0,
@@ -62,6 +64,11 @@ class TestQuotationFinanceControls(SavepointCase):
             'name': 'UAT finance withholding receivable', 'code': 'UATFINRET',
             'account_type': 'asset_current', 'company_id': self.company.id,
         })
+        receivable_account = self.env['account.account'].create({
+            'name': 'UAT finance customer receivable', 'code': 'UATFINREC',
+            'account_type': 'asset_receivable', 'reconcile': True,
+            'company_id': self.company.id,
+        })
         vat_account = self.env['account.account'].create({
             'name': 'UAT finance VAT payable', 'code': 'UATFINVAT',
             'account_type': 'liability_current', 'company_id': self.company.id,
@@ -103,12 +110,18 @@ class TestQuotationFinanceControls(SavepointCase):
             'quotation_vat_tax_id': self.company.quotation_vat_tax_id.id,
             'quotation_retention_tax_id': self.company.quotation_retention_tax_id.id,
             'property_account_income_id': self.product.product_tmpl_id.property_account_income_id.id,
+            'property_account_receivable_id': self.partner.with_company(
+                self.company
+            ).property_account_receivable_id.id,
         }
         self.company.write({
             'quotation_vat_tax_id': vat.id,
             'quotation_retention_tax_id': retention.id,
         })
         self.product.product_tmpl_id.write({'property_account_income_id': income.id})
+        self.partner.with_company(self.company).write({
+            'property_account_receivable_id': receivable_account.id,
+        })
         return vat, retention, retention_account, tag, original
 
     def _restore_standard_tax_fixture(self, original):
@@ -118,6 +131,9 @@ class TestQuotationFinanceControls(SavepointCase):
         })
         self.product.product_tmpl_id.write({
             'property_account_income_id': original['property_account_income_id'],
+        })
+        self.partner.with_company(self.company).write({
+            'property_account_receivable_id': original['property_account_receivable_id'],
         })
 
     def _invoice_from_order(self, order):
@@ -132,17 +148,18 @@ class TestQuotationFinanceControls(SavepointCase):
                 'company_id': order.company_id.id,
                 'default_account_id': self.product.product_tmpl_id.property_account_income_id.id,
             })
-        invoice_values = order._prepare_invoice()
-        invoice_values['journal_id'] = journal.id
-        invoice = self.env['account.move'].create(invoice_values)
         invoice_lines = []
         income_account = self.product.product_tmpl_id.property_account_income_id
         for line in order.order_line.filtered(lambda item: not item.display_type):
             values = line._prepare_invoice_line()
             values['account_id'] = income_account.id
             invoice_lines.append((0, 0, values))
-        invoice.write({'invoice_line_ids': invoice_lines})
-        return invoice
+        invoice_values = order._prepare_invoice()
+        invoice_values.update({
+            'journal_id': journal.id,
+            'invoice_line_ids': invoice_lines,
+        })
+        return self.env['account.move'].create(invoice_values)
 
     def test_issue_blocks_zero_price_until_authorized_foc_with_reason(self):
         order = self._order()
@@ -154,7 +171,10 @@ class TestQuotationFinanceControls(SavepointCase):
         line.write({'is_free_of_charge': True, 'free_of_charge_reason': 'Approved sample'})
         self.assertEqual(line.free_of_charge_authorized_by, self.env.user)
         self.assertTrue(line.free_of_charge_authorized_at)
+        self.assertNotIn('manual_price', order._finance_requirement_codes())
         self.assertTrue(order._check_finance_issue_requirements())
+        line.write({'price_unit': 1.0})
+        self.assertIn('manual_price', order._finance_requirement_codes())
 
     def test_foc_and_direct_tax_import_bypasses_are_rejected(self):
         order = self._order()
@@ -176,16 +196,30 @@ class TestQuotationFinanceControls(SavepointCase):
         """Do not break optional modules such as sale_account_taxcloud."""
         old_vat = self.company.quotation_vat_tax_id
         old_retention = self.company.quotation_retention_tax_id
+        ordinary_tax = self.env['account.tax'].create({
+            'name': 'Ordinary unconfigured-company VAT test',
+            'amount_type': 'percent',
+            'amount': 5.0,
+            'type_tax_use': 'sale',
+            'company_id': self.company.id,
+        })
+        replacement_tax = self.env['account.tax'].create({
+            'name': 'Ordinary unconfigured-company replacement tax test',
+            'amount_type': 'percent',
+            'amount': 7.0,
+            'type_tax_use': 'sale',
+            'company_id': self.company.id,
+        })
         self.company.write({
             'quotation_vat_tax_id': False,
             'quotation_retention_tax_id': False,
         })
         try:
             order = self._order()
-            line = self._line(order, tax_id=[(6, 0, [old_vat.id])])
-            self.assertEqual(line.tax_id, old_vat)
-            line.write({'tax_id': [(6, 0, [old_retention.id])]})
-            self.assertEqual(line.tax_id, old_retention)
+            line = self._line(order, tax_id=[(6, 0, [ordinary_tax.id])])
+            self.assertEqual(line.tax_id, ordinary_tax)
+            line.write({'tax_id': [(6, 0, [replacement_tax.id])]})
+            self.assertEqual(line.tax_id, replacement_tax)
         finally:
             self.company.write({
                 'quotation_vat_tax_id': old_vat.id,
