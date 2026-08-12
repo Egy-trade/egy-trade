@@ -448,6 +448,12 @@ class TestProductPricingAccess(SavepointCase):
         self.assertFalse(line.exists())
 
     def test_standard_discount_requires_verified_pricelist_and_uses_30_percent_cap(self):
+        if 'standard_discount_enabled' in self.env.company._fields:
+            self.env.company.write({
+                'standard_discount_enabled': True,
+                'standard_discount_maximum': 30.0,
+            })
+            self.basic_user.write({'standard_discount_cap': 30.0})
         order = self._order(owner=self.basic_user)
         line = self._line(order)
         self.assertTrue(line.price_origin_verified)
@@ -578,6 +584,8 @@ class TestProductPricingAccess(SavepointCase):
             line.with_user(self.sales_manager).write({'name': 'Sent mutation'})
 
     def test_manager_cannot_certify_historical_origin_on_archived_draft(self):
+        if 'active' not in self.env['sale.order']._fields:
+            self.skipTest('Revision history is not installed in this module-only database.')
         order = self._order(owner=self.basic_user)
         line = self._line(order)
         line.sudo().with_context(

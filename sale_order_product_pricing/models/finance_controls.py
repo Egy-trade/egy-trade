@@ -89,6 +89,7 @@ class SaleOrder(models.Model):
         help='Reason recorded when approving a quotation yourself, or when approving an exceptional quotation.')
     finance_approval_required = fields.Boolean(
         compute='_compute_finance_approval_required',
+        compute_sudo=True,
         help=(
             'True when the current commercial terms require manager approval '
             'before Issue Offer PDF. Resolve or approve every listed exception.'
@@ -213,9 +214,10 @@ class SaleOrder(models.Model):
 
     def _finance_requirement_codes(self):
         self.ensure_one()
+        order = self.sudo()
         requirements = {}
-        lines = self.order_line.filtered(lambda line: not line.display_type)
-        company = self.company_id
+        lines = order.order_line.filtered(lambda line: not line.display_type)
+        company = order.company_id
         # An explicitly authorized zero-price FOC line already carries its own
         # reason, actor and timestamp. Requiring a second manual-price approval
         # would make the FOC authorization unusable at issue time.
@@ -226,7 +228,7 @@ class SaleOrder(models.Model):
         assigned_caps = [
             (user.standard_discount_cap if 'standard_discount_cap' in user._fields
              else getattr(user, 'max_discount', 0.0)) or 0.0
-            for user in (self.user_id | self.quotation_specialist_id)
+            for user in (order.user_id | order.quotation_specialist_id)
         ]
         company_cap = (
             company.standard_discount_maximum if 'standard_discount_maximum' in company._fields
@@ -238,15 +240,15 @@ class SaleOrder(models.Model):
                 or line.discount > personal_cap
                 for line in lines):
             requirements['discount_override'] = _('Discount override')
-        if company.quotation_standard_payment_term_id and self.payment_term_id != company.quotation_standard_payment_term_id:
+        if company.quotation_standard_payment_term_id and order.payment_term_id != company.quotation_standard_payment_term_id:
             requirements['nonstandard_payment_terms'] = _('Nonstandard payment terms')
-        if company.quotation_standard_incoterm_id and self.incoterm != company.quotation_standard_incoterm_id:
+        if company.quotation_standard_incoterm_id and order.incoterm != company.quotation_standard_incoterm_id:
             requirements['nonstandard_delivery_terms'] = _('Nonstandard delivery terms')
-        if self.offer_expiry_days != company.quotation_expiry_days_default:
+        if order.offer_expiry_days != company.quotation_expiry_days_default:
             requirements['validity_override'] = _('Validity override')
         eur = self.env.ref('base.EUR')
-        order_date = fields.Date.to_date(self.date_order) or fields.Date.context_today(self)
-        untaxed_eur = self.currency_id._convert(self.amount_untaxed, eur, company, order_date)
+        order_date = fields.Date.to_date(order.date_order) or fields.Date.context_today(order)
+        untaxed_eur = order.currency_id._convert(order.amount_untaxed, eur, company, order_date)
         if untaxed_eur >= 100000.0:
             requirements['high_value'] = _('Untaxed EUR-equivalent value of EUR 100,000 or more')
         return requirements
@@ -326,7 +328,7 @@ class SaleOrder(models.Model):
                     'Issue Offer PDF is blocked: every zero-price line must be marked Free of Charge with a reason by an authorized Pricing User, Quotation Manager, or Sales Manager.'
                 ))
             requirements = order._finance_requirement_codes()
-            approved = set(order.finance_approval_ids.filtered(
+            approved = set(order.sudo().finance_approval_ids.filtered(
                 lambda approval: not approval.invalidated
             ).mapped('code'))
             missing = [label for code, label in requirements.items() if code not in approved]

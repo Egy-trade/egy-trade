@@ -63,7 +63,6 @@ class SaleOrder(models.Model):
         "res.users",
         string="Allowed Salespeople",
         compute="_compute_allowed_salesperson_ids",
-        compute_sudo=True,
         help=(
             "Active internal users who hold the Sales user permission. This "
             "technical list limits the Salesperson selector for draft quotations."
@@ -112,7 +111,7 @@ class SaleOrder(models.Model):
             # Populate the non-stored selector cache under sudo so restrictive
             # sale.order record rules do not make the compute silently miss a
             # perfectly readable assigned quotation.
-            order.sudo().allowed_salesperson_ids = [(6, 0, salespeople.ids)]
+            order.allowed_salesperson_ids = [(6, 0, salespeople.ids)]
 
     def _sync_technical_scopes(self):
         Scope = self.env["quotation.technical.scope"].sudo()
