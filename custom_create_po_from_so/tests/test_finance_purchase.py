@@ -80,6 +80,15 @@ class TestPurchaseEstimateControls(SavepointCase):
         self.assertNotAlmostEqual(order.currency_rate_inverse, order.currency_rate_estimate)
         self.assertAlmostEqual(values['price_unit'], expected)
         self.assertNotAlmostEqual(values['price_unit'], wrong_rate_price)
+        self.assertAlmostEqual(values['purchase_estimate_rate'], order.currency_rate_inverse)
+
+        mto_values = self.env['purchase.order.line']._decorate_procurement_purchase_values(
+            self.env, {'sale_line_id': sale_line.id}, purchase, {},
+        )
+        self.assertAlmostEqual(mto_values['price_unit'], expected)
+        self.assertAlmostEqual(
+            mto_values['purchase_estimate_rate'], order.currency_rate_inverse,
+        )
 
     def test_mto_procurement_carries_the_source_sale_line(self):
         sale_line = self._sale_line(25.0)
@@ -195,3 +204,21 @@ class TestPurchaseEstimateControls(SavepointCase):
         audit_count = len(purchase.message_ids)
         line.write({'price_unit': 21.0})
         self.assertEqual(len(purchase.message_ids), audit_count)
+
+    def test_supplier_cost_audit_fields_cannot_be_supplied_on_public_create(self):
+        purchase = self._purchase_order()
+        base_values = {
+            'order_id': purchase.id, 'product_id': self.product.id,
+            'name': self.product.display_name, 'product_qty': 1.0,
+            'product_uom': self.product.uom_po_id.id, 'price_unit': 10.0,
+        }
+        forged_values = {
+            'supplier_cost_required': True,
+            'supplier_cost_recorded_by': self.env.user.id,
+            'supplier_cost_recorded_at': fields.Datetime.now(),
+        }
+        for field_name, value in forged_values.items():
+            with self.subTest(field_name=field_name), self.assertRaises(AccessError):
+                self.env['purchase.order.line'].create(dict(base_values, **{
+                    field_name: value,
+                }))

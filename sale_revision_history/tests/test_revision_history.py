@@ -238,7 +238,9 @@ class RevisionHistoryCase(SavepointCase):
 
         for state in ("draft", "sale", "cancel"):
             order = self._sent_order()
-            order.sudo().write({"state": state})
+            order.sudo().with_context(
+                _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
+            ).write({"state": state})
             with self.assertRaises(UserError):
                 order.action_view_revision_wizard("Wrong state")
 
@@ -259,9 +261,11 @@ class RevisionHistoryCase(SavepointCase):
         self.assertFalse(source.current_revision_id)
         self.assertFalse(source.revision_reason)
 
-        with self.assertRaises(AccessError):
+        # The sent-version immutability guard is authoritative before the
+        # narrower revision-metadata guard on an issued quotation.
+        with self.assertRaises(UserError):
             source.write({"revision_reason": "Forged"})
-        with self.assertRaises(AccessError):
+        with self.assertRaises(UserError):
             source.with_context(_revision_internal_token=True).write({
                 "revision_number": 99,
             })
@@ -282,7 +286,7 @@ class RevisionHistoryCase(SavepointCase):
             self.env,
             source.action_view_revision_wizard("Protected history"),
         )
-        with self.assertRaises(AccessError):
+        with self.assertRaises(UserError):
             source.with_context(active_test=False).write({"active": True})
         with self.assertRaises(AccessError):
             revision.write({"active": False})
@@ -307,6 +311,7 @@ class RevisionHistoryCase(SavepointCase):
 
         # Preview/Apply only reprices after an authorized pricing input changes
         # on the draft successor; it never silently rewrites the exact copy.
+        revision._record_commercial_change("update_today")
         revision_line.write({"product_uom_qty": 3.0})
         self.assertTrue(revision_line.pricing_reprice_pending)
         action = revision.action_preview_product_pricing()
@@ -378,6 +383,7 @@ class RevisionHistoryCase(SavepointCase):
             self.env,
             original.with_user(self.owner).action_view_revision_wizard('Draft alternative'),
         )
+        current_draft.with_user(self.owner)._record_commercial_change('update_today')
         current_draft.order_line.with_user(self.owner).write({
             'name': 'Same total, different commercial description',
         })

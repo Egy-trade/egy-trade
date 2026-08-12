@@ -128,6 +128,8 @@ class TestQuotationFinanceControls(SavepointCase):
             self._line(order, price_unit=0.0, is_free_of_charge=True)
         line = self._line(order, tax_id=[(6, 0, [])])
         self.assertFalse(line.tax_id)
+        with self.assertRaises(UserError):
+            line.write({'tax_id': [(6, 0, [])]})
         with self.assertRaises(AccessError):
             line.write({'free_of_charge_authorized_by': self.env.user.id})
         with self.assertRaises(AccessError):
@@ -193,6 +195,11 @@ class TestQuotationFinanceControls(SavepointCase):
             'name': 'Quotation retention 1 test', 'amount_type': 'percent', 'amount': -1.0,
             'type_tax_use': 'sale', 'company_id': self.company.id,
             'invoice_repartition_line_ids': [
+                (0, 0, {'repartition_type': 'base', 'factor_percent': 100.0}),
+                (0, 0, {'repartition_type': 'tax', 'factor_percent': 100.0,
+                        'account_id': account.id, 'tag_ids': [(6, 0, [tag.id])]}),
+            ],
+            'refund_repartition_line_ids': [
                 (0, 0, {'repartition_type': 'base', 'factor_percent': 100.0}),
                 (0, 0, {'repartition_type': 'tax', 'factor_percent': 100.0,
                         'account_id': account.id, 'tag_ids': [(6, 0, [tag.id])]}),
@@ -295,7 +302,15 @@ class TestQuotationFinanceControls(SavepointCase):
                 lambda move_line: move_line.tax_repartition_line_id.tax_id == retention
             )
             self.assertAlmostEqual(invoice.amount_untaxed, 90.03)
+            self.assertEqual(
+                invoice.quotation_retention_basis,
+                invoice.currency_id.round(invoice.amount_untaxed),
+            )
             self.assertAlmostEqual(invoice.quotation_retention_amount, -0.90)
+            self.assertEqual(
+                invoice.quotation_retention_amount,
+                invoice.currency_id.round(-0.9003),
+            )
             self.assertAlmostEqual(retention_line.balance, 0.90)
             self.assertAlmostEqual(invoice.amount_total, 101.73)
         finally:

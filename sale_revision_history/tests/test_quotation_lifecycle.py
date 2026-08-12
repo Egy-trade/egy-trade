@@ -46,8 +46,14 @@ class QuotationLifecycleCase(SavepointCase):
 
     def test_manual_item_number_is_not_computed_or_copied_by_add_below(self):
         order = self._draft()
-        self._update_today(order)
         source = order.order_line
+        initial_line_ids = order.order_line.ids
+        decision_action = source.action_add_below()
+        self.assertEqual(decision_action["res_model"], "quotation.commercial.change")
+        self.assertEqual(decision_action["target"], "new")
+        self.assertEqual(order.order_line.ids, initial_line_ids)
+
+        self._update_today(order)
         action = source.action_add_below()
         added = self.env["sale.order.line"].browse(action["context"]["focus_line_id"])
         self.assertEqual(source.sn, "A-01")
@@ -65,8 +71,14 @@ class QuotationLifecycleCase(SavepointCase):
     def test_daily_gate_update_today_keeps_date_order_and_audits(self):
         order = self._draft()
         original_date_order = order.date_order
-        with self.assertRaises(UserError):
+        original_note = order.note
+        # The HTTP/RPC request transaction rolls a rejected write back. Mirror
+        # that boundary explicitly because this direct ORM test catches the
+        # exception inside the surrounding SavepointCase transaction.
+        with self.assertRaises(UserError), self.env.cr.savepoint():
             order.write({"note": "Commercial change without a decision"})
+        order.invalidate_cache(fnames=["note"])
+        self.assertEqual(order.note, original_note)
         self._update_today(order)
         order.write({"note": "Commercial change after Update Today"})
         self.assertEqual(order.date_order, original_date_order)

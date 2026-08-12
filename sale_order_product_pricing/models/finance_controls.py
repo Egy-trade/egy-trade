@@ -501,12 +501,14 @@ class AccountMove(models.Model):
     def _compute_quotation_retention(self):
         for move in self:
             refund_sign = -1.0 if move.move_type in ('out_refund', 'in_refund') else 1.0
-            move.quotation_retention_basis = (
+            basis = (
                 refund_sign * move.amount_untaxed
                 if move.quotation_retention_tax_id else 0.0
             )
-            move.quotation_retention_amount = (
-                move.quotation_retention_basis * (move.quotation_retention_tax_id.amount / 100.0)
+            move.quotation_retention_basis = move.currency_id.round(basis)
+            retention_amount = (
+                basis * (move.quotation_retention_tax_id.amount / 100.0)
                 if move.quotation_retention_tax_id and move.quotation_retention_tax_id.amount_type == 'percent'
                 else 0.0
             )
+            move.quotation_retention_amount = move.currency_id.round(retention_amount)

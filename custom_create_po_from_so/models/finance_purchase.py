@@ -43,7 +43,7 @@ class SaleOrderLine(models.Model):
             'source_sale_line_id': self.id,
             'purchase_estimate_amount': estimate,
             'purchase_estimate_currency_id': self.order_id.currency_estimate_id.id,
-            'purchase_estimate_rate': self.order_id.currency_rate_estimate,
+            'purchase_estimate_rate': self.order_id.currency_rate_inverse,
             '_finance_purchase_provenance_token': _PURCHASE_PROVENANCE_TOKEN,
         })
         if estimate > 0.0:
@@ -119,7 +119,7 @@ class PurchaseOrderLine(models.Model):
             'source_sale_line_id': sale_line.id,
             'purchase_estimate_amount': estimate,
             'purchase_estimate_currency_id': sale_line.order_id.currency_estimate_id.id,
-            'purchase_estimate_rate': sale_line.order_id.currency_rate_estimate,
+            'purchase_estimate_rate': sale_line.order_id.currency_rate_inverse,
             '_finance_purchase_provenance_token': _PURCHASE_PROVENANCE_TOKEN,
         })
         if estimate > 0.0:
@@ -181,8 +181,16 @@ class PurchaseOrderLine(models.Model):
                 'purchase_estimate_amount', 'purchase_estimate_currency_id',
                 'purchase_estimate_rate',
             }
+            audit_fields = {
+                'supplier_cost_required', 'supplier_cost_recorded_by',
+                'supplier_cost_recorded_at',
+            }
             if provenance_fields.intersection(vals) and provenance_token is not _PURCHASE_PROVENANCE_TOKEN:
                 raise AccessError(_('Quotation purchase-estimate provenance is system-managed and cannot be supplied through RPC/import.'))
+            if (audit_fields.intersection(vals) and
+                    provenance_token is not _PURCHASE_PROVENANCE_TOKEN and
+                    not _is_supplier_cost_internal(self.env)):
+                raise AccessError(_('Supplier Cost Required audit fields are system-managed and cannot be supplied through RPC/import.'))
             sale_line = self._purchase_line_from_values(self.env, vals)
             if provenance_token is _PURCHASE_PROVENANCE_TOKEN and sale_line:
                 purchase_order = self.env['purchase.order'].browse(vals.get('order_id'))
@@ -195,10 +203,6 @@ class PurchaseOrderLine(models.Model):
                     ).rounding,
             ) <= 0:
                 vals['supplier_cost_required'] = True
-            elif not _is_supplier_cost_internal(self.env):
-                vals.pop('supplier_cost_required', None)
-                vals.pop('supplier_cost_recorded_by', None)
-                vals.pop('supplier_cost_recorded_at', None)
             prepared.append(vals)
         return super().create(prepared)
 
