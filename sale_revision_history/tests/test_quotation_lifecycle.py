@@ -32,6 +32,43 @@ class QuotationLifecycleCase(SavepointCase):
             "quotation_retention_tax_id": cls.withholding_tax.id,
             "quotation_withholding_responsible_id": cls.env.user.id,
         })
+        cls.receivable_account = cls.env["account.account"].create({
+            "name": "Lifecycle Test Receivable",
+            "code": "LTREC",
+            "account_type": "asset_receivable",
+            "reconcile": True,
+            "company_id": cls.env.company.id,
+        })
+        cls.income_account = cls.env["account.account"].create({
+            "name": "Lifecycle Test Sales",
+            "code": "LTINC",
+            "account_type": "income",
+            "company_id": cls.env.company.id,
+        })
+        cls.env["account.journal"].create({
+            "name": "Lifecycle Test Sales Journal",
+            "code": "LTSJ",
+            "type": "sale",
+            "company_id": cls.env.company.id,
+            "default_account_id": cls.income_account.id,
+        })
+        cls.tax_account = cls.env["account.account"].create({
+            "name": "Lifecycle Test Tax",
+            "code": "LTTAX",
+            "account_type": "liability_current",
+            "company_id": cls.env.company.id,
+        })
+        for tax in cls.vat_tax | cls.withholding_tax:
+            tax.invoice_repartition_line_ids.filtered(
+                lambda line: line.repartition_type == "tax"
+            ).account_id = cls.tax_account
+            tax.refund_repartition_line_ids.filtered(
+                lambda line: line.repartition_type == "tax"
+            ).account_id = cls.tax_account
+        cls.partner.with_company(cls.env.company).property_account_receivable_id = (
+            cls.receivable_account
+        )
+        cls.product.property_account_income_id = cls.income_account
         cls.salesperson = cls.env["res.users"].create({
             "name": "Lifecycle Salesperson",
             "login": "lifecycle.salesperson@example.test",
