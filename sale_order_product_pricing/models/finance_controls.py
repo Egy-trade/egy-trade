@@ -428,6 +428,47 @@ class SaleOrder(models.Model):
             })
         return True
 
+    def _carry_retention_only_foc_evidence_from(self, source_order):
+        """Preserve system-owned FOC evidence on an identical cloned offer.
+
+        The authorization actor/time fields are deliberately ``copy=False``.
+        They may be restored only after the lifecycle fingerprint has proved
+        that the copied commercial lines (including FOC flag and reason) are
+        otherwise identical.
+        """
+        if not _is_retention_revision_internal(self.env):
+            raise AccessError(_('FOC evidence carry-forward is available only from the controlled confirmation workflow.'))
+        self.ensure_one()
+        source_order.ensure_one()
+        source_lines = source_order.order_line.sorted(
+            lambda line: (line.sequence, line.display_type or '', line.product_id.id, line.name or '')
+        )
+        target_lines = self.order_line.sorted(
+            lambda line: (line.sequence, line.display_type or '', line.product_id.id, line.name or '')
+        )
+        if len(source_lines) != len(target_lines):
+            raise ValidationError(_('FOC evidence cannot be carried to a different set of commercial lines.'))
+        for source_line, target_line in zip(source_lines, target_lines):
+            identity_matches = (
+                source_line.sequence == target_line.sequence
+                and source_line.display_type == target_line.display_type
+                and source_line.product_id == target_line.product_id
+                and source_line.name == target_line.name
+                and source_line.product_uom_qty == target_line.product_uom_qty
+                and source_line.product_uom == target_line.product_uom
+                and source_line.price_unit == target_line.price_unit
+                and source_line.is_free_of_charge == target_line.is_free_of_charge
+                and source_line.free_of_charge_reason == target_line.free_of_charge_reason
+            )
+            if not identity_matches:
+                raise ValidationError(_('FOC evidence cannot be carried to a different commercial line.'))
+            if source_line._is_authorized_foc():
+                target_line.with_context(_finance_internal_token=_FINANCE_INTERNAL_TOKEN).write({
+                    'free_of_charge_authorized_by': source_line.free_of_charge_authorized_by.id,
+                    'free_of_charge_authorized_at': source_line.free_of_charge_authorized_at,
+                })
+        return True
+
     def action_apply_retention_only_revision(self, source_order, expected_fingerprint, apply_withholding):
         """Change only withholding on a freshly copied successor.
 
@@ -456,6 +497,7 @@ class SaleOrder(models.Model):
             'apply_withholding': apply_withholding,
         })
         self._apply_quotation_tax_selection()
+        self._carry_retention_only_foc_evidence_from(source_order)
         self._carry_retention_only_approvals_from(source_order)
         return True
 
@@ -622,7 +664,7 @@ class SaleOrderLine(models.Model):
             for vals in vals_list:
                 if {'free_of_charge_authorized_by', 'free_of_charge_authorized_at'}.intersection(vals):
                     raise AccessError(_('Free of Charge authorization evidence is system-managed.'))
-                if vals.get('is_free_of_charge'):
+                if vals.get('is_free_of_charge') and not _is_retention_revision_internal(self.env):
                     if not self._can_authorize_foc():
                         raise AccessError(_('Only an authorized Pricing User, Quotation Manager, or Sales Manager may mark a line Free of Charge.'))
                     if not (vals.get('free_of_charge_reason') or '').strip():

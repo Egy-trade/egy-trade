@@ -17,6 +17,7 @@ class QuotationLifecycleCase(SavepointCase):
         cls.partner = cls.env.ref("base.res_partner_1")
         cls.product = cls.env["product.product"].create({
             "name": "Lifecycle product", "sale_ok": True, "list_price": 100.0,
+            "invoice_policy": "order",
         })
         cls.vat_tax = cls.env["account.tax"].create({
             "name": "Lifecycle VAT 14%", "amount": 14.0, "amount_type": "percent",
@@ -258,6 +259,8 @@ class QuotationLifecycleCase(SavepointCase):
         before_moves = self.env["account.move"].search_count([
             ("invoice_origin", "=", order.name),
         ])
+        before_all_moves = self.env["account.move"].search_count([])
+        before_move_lines = self.env["account.move.line"].search_count([])
         self.env["sale.order.withholding.confirmation"].with_context(
             **action["context"],
         ).create({"sale_id": order.id, "decision": "no"}).action_confirm()
@@ -266,6 +269,19 @@ class QuotationLifecycleCase(SavepointCase):
         self.assertEqual(self.env["account.move"].search_count([
             ("invoice_origin", "=", order.name),
         ]), before_moves)
+        self.assertEqual(self.env["account.move"].search_count([]), before_all_moves)
+        self.assertEqual(
+            self.env["account.move.line"].search_count([]), before_move_lines,
+        )
+
+        # Invoicing remains a later, explicit standard Odoo action.  When it
+        # is performed, the final Sales Order line tax selection is inherited.
+        invoice = order._create_invoices()
+        self.assertEqual(invoice.state, "draft")
+        invoice_product_line = invoice.invoice_line_ids.filtered(
+            lambda line: line.product_id == self.product
+        )
+        self.assertEqual(invoice_product_line.tax_ids, order.order_line.tax_id)
 
     def test_direct_confirmation_service_call_cannot_bypass_wizard(self):
         order = self._draft()
@@ -274,6 +290,15 @@ class QuotationLifecycleCase(SavepointCase):
             order.action_issue_offer_pdf()
         with self.assertRaises(AccessError):
             order._confirm_withholding_decision(False)
+
+    def test_withholding_audit_fields_are_system_managed(self):
+        order = self._draft()
+        with self.assertRaises(AccessError):
+            order.write({"withholding_confirmation": "no"})
+        order.with_context(
+            _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
+        ).write({"withholding_confirmation": "no"})
+        self.assertEqual(order.withholding_confirmation, "no")
 
     def test_discount_approve_cannot_bypass_withholding_dialog(self):
         order = self._draft()
@@ -308,6 +333,31 @@ class QuotationLifecycleCase(SavepointCase):
         self.assertTrue(revision.issued_offer_attachment_id)
         self.assertEqual(revision.withholding_confirmation, "yes")
         self.assertTrue(revision.withholding_evidence_ids)
+
+    def test_retention_only_revision_preserves_free_of_charge_authorization(self):
+        order = self._draft(apply_withholding=False)
+        self._update_today(order)
+        order.order_line.write({
+            "price_unit": 0.0,
+            "is_free_of_charge": True,
+            "free_of_charge_reason": "Approved sample",
+        })
+        self.assertTrue(order.order_line._is_authorized_foc())
+        report_service = self.env["ir.actions.report"]
+        with patch.object(
+                type(report_service), "_render_qweb_pdf",
+                return_value=(b"%PDF-test", "pdf")):
+            order.action_issue_offer_pdf()
+            self.env["sale.order.withholding.confirmation"].create({
+                "sale_id": order.id, "decision": "yes",
+            }).action_confirm()
+        revision = order.current_revision_id
+        self.assertEqual(revision.state, "sale")
+        self.assertTrue(revision.order_line._is_authorized_foc())
+        self.assertEqual(
+            revision.order_line.free_of_charge_authorized_by,
+            order.order_line.free_of_charge_authorized_by,
+        )
 
     def test_retention_confirmation_refuses_non_wizard_and_non_matching_copy(self):
         order = self._draft()

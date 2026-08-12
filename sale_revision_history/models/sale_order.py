@@ -246,16 +246,12 @@ class SaleOrder(models.Model):
                 "factor": getattr(line, "factor", 0.0),
                 "line_factor": getattr(line, "line_factor", 0.0),
                 "price_origin": getattr(line, "price_origin", False) or False,
-                "price_origin_label": getattr(line, "price_origin_label", False) or False,
-                "pricing_eligible": getattr(line, "pricing_eligible", False),
-                "pricing_warning": getattr(line, "pricing_warning", False) or False,
-                "pricing_evidence": getattr(line, "pricing_evidence", False) or False,
-                "pricing_audit_hash": getattr(line, "pricing_audit_hash", False) or False,
-                "pricing_reprice_required": getattr(line, "pricing_reprice_required", False),
+                "price_origin_verified": getattr(line, "price_origin_verified", False),
+                "price_origin_evidence": getattr(line, "price_origin_evidence", False) or False,
+                "price_reference": getattr(line, "price_reference", 0.0),
+                "price_currency": ref(getattr(line, "price_currency_id", self.env["res.currency"])),
                 "is_free_of_charge": getattr(line, "is_free_of_charge", False),
                 "free_of_charge_reason": getattr(line, "free_of_charge_reason", False) or False,
-                "free_of_charge_authorized_by": ref(getattr(line, "free_of_charge_authorized_by", self.env["res.users"])),
-                "free_of_charge_authorized_at": str(getattr(line, "free_of_charge_authorized_at", False) or ""),
             })
         options = []
         for option in self.sale_order_option_ids.sorted(lambda item: (item.sequence, item.id)):
@@ -342,7 +338,9 @@ class SaleOrder(models.Model):
             ).action_confirm()
 
         expected_fingerprint = self._commercial_fingerprint()
-        action = self.action_view_revision_wizard(
+        action = self.with_context(
+            _retention_revision_token=_RETENTION_REVISION_TOKEN,
+        ).action_view_revision_wizard(
             _("System-created retention-only revision after customer confirmation."),
         )
         revision = self.env["sale.order"].browse(action["res_id"]).exists()
@@ -616,7 +614,8 @@ class SaleOrder(models.Model):
             and not _is_pricing_internal(self.env)
             and not _is_finance_internal(self.env)
         )
-        if _REVISION_SYSTEM_FIELDS.intersection(vals) and not _is_revision_internal(self.env):
+        if (_REVISION_SYSTEM_FIELDS.intersection(vals)
+                and not (revision_internal or lifecycle_internal)):
             raise AccessError(_("Revision history fields are managed by the system."))
         if "active" in vals and not _is_revision_internal(self.env):
             revision_records = self.filtered(
@@ -1098,6 +1097,8 @@ class SaleOrder(models.Model):
             "_revision_internal_token": _REVISION_INTERNAL_TOKEN,
             "_pricing_internal_token": _PRICING_INTERNAL_TOKEN,
         }
+        if self.env.context.get("_retention_revision_token") is _RETENTION_REVISION_TOKEN:
+            internal_context["_retention_revision_token"] = _RETENTION_REVISION_TOKEN
         # The exact clone includes pricing and specialist fields that ordinary
         # assigned Salespeople cannot read/write directly because of field
         # groups.  Authorization is complete above; sudo is scoped to this
