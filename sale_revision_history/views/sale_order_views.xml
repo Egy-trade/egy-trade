@@ -74,7 +74,7 @@
                         string="Issue Offer PDF" class="btn-primary"
                         confirm="Issue and lock this exact customer Offer PDF? Changes afterwards require a revision. If Sales responsibility is unaccepted, issuing still proceeds but records the exception and notifies Sales and Sales Managers."
                         attrs="{'invisible': ['|', ('state', '!=', 'draft'), ('active', '=', False)]}"
-                        help="Generates and attaches the customer PDF, records who issued which version and when, then marks the offer Sent and locks it."/>
+                        help="Assigned Sales or QS, or quotation/sales management, issues the customer Offer PDF. It attaches the exact version, records actor and time, then marks the offer Sent and locks it; review the confirmation and create a revision for any later change."/>
                 <button name="action_accept_sales_responsibility" type="object"
                         string="Accept Sales Responsibility" class="btn-secondary"
                         attrs="{'invisible': ['|', '|', ('state', '!=', 'draft'), ('active', '=', False), ('sales_responsibility_accepted', '=', True)]}"

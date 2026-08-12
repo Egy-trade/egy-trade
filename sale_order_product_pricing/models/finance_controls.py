@@ -401,6 +401,19 @@ class SaleOrder(models.Model):
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
+    @staticmethod
+    def _uses_controlled_tax_policy(order):
+        """Keep standard Odoo tax behavior until Finance enables this policy."""
+        return bool(
+            order and (
+                order.tax_treatment == 'cif_no_taxes'
+                or (
+                    order.company_id.quotation_vat_tax_id
+                    and order.company_id.quotation_retention_tax_id
+                )
+            )
+        )
+
     is_free_of_charge = fields.Boolean(string='Free of Charge', copy=True,
                                         help='Authorized exception for a zero selling-price line.')
     free_of_charge_reason = fields.Text(
@@ -436,7 +449,8 @@ class SaleOrderLine(models.Model):
             for vals in vals_list:
                 if {'free_of_charge_authorized_by', 'free_of_charge_authorized_at'}.intersection(vals):
                     raise AccessError(_('Free of Charge authorization evidence is system-managed.'))
-                if 'tax_id' in vals:
+                order = self.env['sale.order'].browse(vals.get('order_id')).exists()
+                if 'tax_id' in vals and self._uses_controlled_tax_policy(order):
                     # Product onchange/import values cannot select a tax policy.
                     # The header applies the configured taxes below instead.
                     vals.pop('tax_id')
@@ -468,7 +482,9 @@ class SaleOrderLine(models.Model):
         if not _is_finance_internal(self.env):
             if {'free_of_charge_authorized_by', 'free_of_charge_authorized_at'}.intersection(vals):
                 raise AccessError(_('Free of Charge authorization evidence is system-managed.'))
-            if 'tax_id' in vals:
+            if 'tax_id' in vals and any(
+                    self._uses_controlled_tax_policy(order)
+                    for order in self.mapped('order_id')):
                 raise UserError(_('Direct line-tax edits are restricted. Change Tax Treatment on the quotation header.'))
             if {'is_free_of_charge', 'free_of_charge_reason'}.intersection(vals) and not self._can_authorize_foc():
                 raise AccessError(_('Only an authorized Pricing User, Quotation Manager, or Sales Manager may change Free of Charge details.'))

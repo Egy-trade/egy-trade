@@ -68,7 +68,7 @@
                 <attribute name="help">Global Factor copied to this eligible line for the Product Pricing calculation. Review it in Preview before applying any price.</attribute>
             </xpath>
             <xpath expr="//page[@name='product_pricing']//field[@name='line_factor']" position="attributes">
-                <attribute name="help">Line Factor adjusts only this eligible line. Product Pricing users review it in Preview; it does not change a quoted price until Apply.</attribute>
+                <attribute name="help">Line Factor adjusts only this eligible line. Product Pricing users review it in Preview before applying; it does not change a quoted price until Apply.</attribute>
             </xpath>
             <xpath expr="//page[@name='product_pricing']//field[@name='price_origin_display']" position="attributes">
                 <attribute name="help">Price Origin shows how the current selling price was established. Historical-Unverified requires manager certification; Manual Price remains protected from Product Pricing Apply.</attribute>

@@ -13,7 +13,7 @@
     'author': "Abdullah/OIT-Solution",
     'website': "https://www.oit-solution.com",
     'category': 'Sales',
-    'version': '16.0.2.6.0',
+    'version': '16.0.2.7.0',
 
     # any module necessary for this one to work correctly
     'depends': ['base', 'sale', 'sale_management', 'account', 'egy-trade_custom', 'universal_discount', 'sale_stock', 'sale_discount_total'],

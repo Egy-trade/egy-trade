@@ -488,7 +488,42 @@ class TestProductPricingAccess(SavepointCase):
         self.assertTrue(manager_line.price_origin_verified)
         self.assertEqual(manager_line.price_origin_evidence, 'manual_edit')
 
-    def test_manager_can_certify_locked_historical_origin_without_changing_price(self):
+    def test_manager_can_certify_active_draft_historical_origin_and_audits(self):
+        order = self._order(owner=self.basic_user)
+        line = self._line(order)
+        original_price = line.price_unit
+        line.sudo().with_context(
+            _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+        ).write({
+            'price_origin': 'historical_unverified',
+            'price_origin_verified': False,
+            'price_origin_evidence': 'legacy_unverified',
+            'pricing_warning': 'Manager review required.',
+        })
+
+        with self.assertRaises(UserError):
+            line.with_user(self.basic_user).action_reclassify_historical_origin()
+        action = line.with_user(self.sales_manager).action_reclassify_historical_origin()
+        self.assertEqual(action['res_model'], 'sale.order.price.origin.reclassify')
+        wizard = self.env[action['res_model']].with_user(self.sales_manager).create({
+            'line_id': line.id,
+            'new_origin': 'product_pricing',
+            'reason': 'Signed pricing worksheet PP-001 matches this line.',
+        })
+        wizard.action_confirm()
+
+        self.assertEqual(line.price_unit, original_price)
+        self.assertEqual(line.price_origin, 'product_pricing')
+        self.assertTrue(line.price_origin_verified)
+        self.assertEqual(line.price_origin_evidence, 'manager_reclassified')
+        self.assertFalse(line.pricing_warning)
+        self.assertTrue(self.env['sale.order.pricing.audit'].search([
+            ('order_id', '=', order.id),
+            ('line_id', '=', line.id),
+            ('reason', 'ilike', 'Signed pricing worksheet PP-001'),
+        ]))
+
+    def test_manager_cannot_certify_historical_origin_on_immutable_sent_line(self):
         order = self._order(owner=self.basic_user)
         line = self._line(order)
         original_price = line.price_unit
@@ -502,20 +537,18 @@ class TestProductPricingAccess(SavepointCase):
         })
         self._set_sent(order)
 
-        with self.assertRaises(UserError):
-            line.with_user(self.basic_user).action_reclassify_historical_origin()
         action = line.with_user(self.sales_manager).action_reclassify_historical_origin()
-        self.assertEqual(action['res_model'], 'sale.order.price.origin.reclassify')
         wizard = self.env[action['res_model']].with_user(self.sales_manager).create({
             'line_id': line.id,
             'new_origin': 'product_pricing',
-            'reason': 'Signed pricing worksheet PP-001 matches this line.',
+            'reason': 'Sent records must remain immutable.',
         })
         with self.assertRaises(UserError):
             wizard.action_confirm()
 
         self.assertEqual(line.price_unit, original_price)
         self.assertEqual(line.price_origin, 'historical_unverified')
+        self.assertFalse(line.price_origin_verified)
         with self.assertRaises(UserError):
             line.with_user(self.sales_manager).write({'name': 'Sent mutation'})
 

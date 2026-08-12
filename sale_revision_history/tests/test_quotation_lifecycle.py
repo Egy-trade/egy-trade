@@ -275,6 +275,99 @@ class QuotationLifecycleCase(SavepointCase):
         )
         self.assertEqual(len(item_fields), 1)
 
+    def test_named_custom_control_help_has_purpose_role_effect_and_next_action(self):
+        cases = (
+            (
+                "Item #", "sale_revision_history.sale_order_item_number_once",
+                "//attribute[@name='help']",
+                ("item reference", "quotation specialist", "never generated", "before saving"),
+            ),
+            (
+                "Purchase Price Estimate", "sale_order_product_pricing.sale_order_role_guidance",
+                "//xpath[contains(@expr, 'purchase_price_estimate')]/attribute[@name='help']",
+                ("expected supplier cost", "product pricing users", "used by product pricing", "before preview"),
+            ),
+            (
+                "Price Origin", "sale_order_product_pricing.sale_order_product_pricing_form",
+                "//field[@name='price_origin_label']",
+                ("shows whether", "sales and quotation specialists", "sales manager certifies", "review it before"),
+            ),
+            (
+                "Pricing Eligible", "sale_order_product_pricing.sale_order_role_guidance",
+                "//xpath[contains(@expr, 'pricing_eligible')]/attribute[@name='help']",
+                ("whether this line can be calculated", "product pricing users", "included in apply", "preview again"),
+            ),
+            (
+                "Pricing Warning", "sale_order_product_pricing.sale_order_role_guidance",
+                "//xpath[contains(@expr, 'pricing_warning')]/attribute[@name='help']",
+                ("why a line will be skipped", "product pricing users", "prevents an unsafe apply", "preview again"),
+            ),
+            (
+                "Preview", "sale_order_product_pricing.sale_order_product_pricing_form",
+                "//button[@name='action_preview_product_pricing']",
+                ("calculate and explain", "product pricing users", "without changing", "confirm apply"),
+            ),
+            (
+                "Apply", "sale_order_product_pricing.sale_order_pricing_preview_form",
+                "//button[@name='action_confirm_apply']",
+                ("apply this reviewed proposal", "product pricing users", "updates only", "preview again"),
+            ),
+            (
+                "Global Factor", "sale_order_product_pricing.sale_order_role_guidance",
+                "//xpath[contains(@expr, 'global_factor')]/attribute[@name='help']",
+                ("default multiplier", "product pricing users", "non-mutating result", "then apply"),
+            ),
+            (
+                "Line Factor", "sale_order_product_pricing.sale_order_role_guidance",
+                "//xpath[contains(@expr, 'line_factor')]/attribute[@name='help']",
+                ("adjusts only", "product pricing users", "does not change", "before applying"),
+            ),
+            (
+                "Free of Charge", "sale_order_product_pricing.sale_order_finance_controls_form",
+                "//field[@name='is_free_of_charge']",
+                ("zero-price exception", "pricing user or quotation/sales manager", "marks it", "before issue offer pdf"),
+            ),
+            (
+                "Days of Expiry", "sale_order_product_pricing.sale_order_offer_expiry_form",
+                "//field[@name='offer_expiry_days']",
+                ("number of days", "quotation, sales, or accounting managers", "changes the offer validity", "before saving"),
+            ),
+            (
+                "Tax Treatment", "sale_order_product_pricing.sale_order_finance_controls_form",
+                "//field[@name='tax_treatment']",
+                ("tax policy", "finance, quotation, sales, or accounting managers", "standard applies", "before adding or issuing"),
+            ),
+            (
+                "Retention", "sale_order_product_pricing.res_config_settings_finance_controls",
+                "//field[@name='quotation_retention_tax_id']",
+                ("withholding tax", "finance or accounting managers", "deducts", "before using"),
+            ),
+            (
+                "Issue Offer PDF", "sale_revision_history.sale_order_view_form",
+                "//button[@name='action_issue_offer_pdf']",
+                ("customer offer pdf", "assigned sales or qs", "marks the offer sent", "create a revision"),
+            ),
+            (
+                "Create Revision", "sale_revision_history.sale_order_view_form",
+                "//button[@name='action_revision']",
+                ("creates the next draft", "assigned sales or qs", "source remains locked", "mandatory reason"),
+            ),
+            (
+                "Approval", "sale_order_product_pricing.sale_order_finance_controls_form",
+                "//button[@name='action_approve_finance_requirements']",
+                ("approves every current exception", "quotation or sales management", "invalidates it", "then issue"),
+            ),
+        )
+        for label, view_xmlid, xpath, required_fragments in cases:
+            root = etree.fromstring(self.env.ref(view_xmlid).arch_db.encode())
+            nodes = root.xpath(xpath)
+            self.assertEqual(len(nodes), 1, "%s help target" % label)
+            node = nodes[0]
+            help_text = node.text if node.tag == "attribute" else node.get("help")
+            normalized = " ".join((help_text or "").lower().split())
+            for fragment in required_fragments:
+                self.assertIn(fragment, normalized, "%s help missing %r" % (label, fragment))
+
     def test_history_action_is_limited_to_one_family_and_includes_current_draft(self):
         order = self._draft()
         revision = self.env["sale.order"].browse(

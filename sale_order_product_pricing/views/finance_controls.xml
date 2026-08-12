@@ -27,7 +27,7 @@
                      help="Manager's audit reason. It is mandatory for self-approval and retained with the approval evidence."/>
               <button name="action_approve_finance_requirements" type="object" string="Approve Finance Requirements" class="btn-primary"
                       attrs="{'invisible': [('state', '!=', 'draft')]}"
-                      help="Quotation or Sales Management approves every current exception. Any later commercial change invalidates the approval."/>
+                      help="Quotation or Sales Management approves every current exception before Issue Offer PDF. Approval records the manager's evidence and any later commercial change invalidates it; review the resulting status, then issue only when no requirement remains."/>
             </group>
             <field name="finance_approval_ids" readonly="1">
               <tree create="0" edit="0" delete="0">

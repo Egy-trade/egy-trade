@@ -137,6 +137,26 @@ class TestQuotationFinanceControls(SavepointCase):
                 order, free_of_charge_authorized_by=self.env.user.id,
             )
 
+    def test_unconfigured_company_preserves_standard_odoo_line_tax_behavior(self):
+        """Do not break optional modules such as sale_account_taxcloud."""
+        old_vat = self.company.quotation_vat_tax_id
+        old_retention = self.company.quotation_retention_tax_id
+        self.company.write({
+            'quotation_vat_tax_id': False,
+            'quotation_retention_tax_id': False,
+        })
+        try:
+            order = self._order()
+            line = self._line(order, tax_id=[(6, 0, [old_vat.id])])
+            self.assertEqual(line.tax_id, old_vat)
+            line.write({'tax_id': [(6, 0, [old_retention.id])]})
+            self.assertEqual(line.tax_id, old_retention)
+        finally:
+            self.company.write({
+                'quotation_vat_tax_id': old_vat.id,
+                'quotation_retention_tax_id': old_retention.id,
+            })
+
     def test_salesperson_selecting_cif_gets_safe_no_tax_default_and_audit(self):
         cif = self.env['account.incoterms'].search([('code', '=', 'CIF')], limit=1)
         if not cif:
