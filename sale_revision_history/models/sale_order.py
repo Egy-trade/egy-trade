@@ -464,6 +464,7 @@ class SaleOrder(models.Model):
         return super(
             SaleOrder, self.with_context(
                 _lifecycle_confirming_token=_LIFECYCLE_CONFIRMING_TOKEN,
+                _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
             ),
         ).action_confirm()
 

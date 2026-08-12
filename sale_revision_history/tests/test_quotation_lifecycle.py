@@ -18,10 +18,20 @@ class QuotationLifecycleCase(SavepointCase):
         cls.product = cls.env["product.product"].create({
             "name": "Lifecycle product", "sale_ok": True, "list_price": 100.0,
         })
+        cls.salesperson = cls.env["res.users"].create({
+            "name": "Lifecycle Salesperson",
+            "login": "lifecycle.salesperson@example.test",
+            "email": "lifecycle.salesperson@example.test",
+            "groups_id": [(6, 0, [
+                cls.env.ref("base.group_user").id,
+                cls.env.ref("sales_team.group_sale_salesman").id,
+            ])],
+        })
 
     def _draft(self, **extra):
         values = {
             "partner_id": self.partner.id,
+            "user_id": self.salesperson.id,
             "global_factor": 1.40,
             # Lifecycle tests exercise issue/locking, not Standard-tax policy.
             # CIF keeps the integrated finance gate deterministic without
@@ -229,7 +239,7 @@ class QuotationLifecycleCase(SavepointCase):
         self.assertEqual(accepted.sales_responsibility_accepted_by, self.env.user)
 
     def test_accepted_sales_responsibility_issues_without_exception_flag_or_audit(self):
-        order = self._draft(user_id=self.env.user.id)
+        order = self._draft(user_id=self.salesperson.id)
         order.action_accept_sales_responsibility()
         report_service = self.env["ir.actions.report"]
         with patch.object(
@@ -250,7 +260,7 @@ class QuotationLifecycleCase(SavepointCase):
                 self.env.ref("sales_team.group_sale_manager").id,
             ])],
         })
-        order = self._draft(user_id=self.env.user.id)
+        order = self._draft(user_id=self.salesperson.id)
         report_service = self.env["ir.actions.report"]
         with patch.object(
                 type(report_service), "_render_qweb_pdf",

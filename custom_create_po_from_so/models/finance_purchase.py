@@ -204,7 +204,22 @@ class PurchaseOrderLine(models.Model):
             ) <= 0:
                 vals['supplier_cost_required'] = True
             prepared.append(vals)
-        return super().create(prepared)
+        lines = super().create(prepared)
+        # Keep the generated audit flag authoritative even if another
+        # purchase-line create override normalizes readonly values.
+        unresolved = lines.filtered(
+            lambda line: line.source_sale_line_id
+            and not line.purchase_estimate_amount
+            and float_compare(
+                line.price_unit, 0.0,
+                precision_rounding=line.order_id.currency_id.rounding,
+            ) <= 0
+        )
+        if unresolved:
+            unresolved.with_context(
+                _supplier_cost_internal_token=_SUPPLIER_COST_INTERNAL_TOKEN,
+            ).write({'supplier_cost_required': True})
+        return lines
 
     def write(self, vals):
         vals = dict(vals)
