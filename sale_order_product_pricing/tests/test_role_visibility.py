@@ -51,7 +51,8 @@ class TestQuotationRoleVisibility(SavepointCase):
         })
         # Every following commercial line/header mutation is made only after
         # the required Cairo-day Update Today decision has been recorded.
-        order._record_commercial_change("update_today")
+        if hasattr(order, "_record_commercial_change"):
+            order._record_commercial_change("update_today")
         self.env["sale.order.line"].create({
             "order_id": order.id, "product_id": self.product.id,
             "name": self.product.display_name, "product_uom_qty": 1.0,

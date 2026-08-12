@@ -41,8 +41,13 @@ class ProductPricingCase(SavepointCase):
             'product_pricing': True,
             'user_id': self.pricing_user.id,
         })
-        order._record_commercial_change('update_today')
+        self._record_commercial_change_if_available(order)
         return order
+
+    @staticmethod
+    def _record_commercial_change_if_available(order):
+        if hasattr(order, '_record_commercial_change'):
+            order._record_commercial_change('update_today')
 
     def _line(self, order, product=None, cost=50.0, price=None):
         product = product or self.product
@@ -279,7 +284,7 @@ class ProductPricingCase(SavepointCase):
             form.partner_id = self.partner
             form.product_pricing = True
         order = form.save()
-        order.with_user(self.pricing_user)._record_commercial_change('update_today')
+        self._record_commercial_change_if_available(order.with_user(self.pricing_user))
         line = self._line(order)
         self._preview(order)
         self.assertEqual(order.order_line, line)

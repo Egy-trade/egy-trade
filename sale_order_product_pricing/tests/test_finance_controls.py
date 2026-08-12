@@ -394,6 +394,7 @@ class TestQuotationFinanceControls(SavepointCase):
         try:
             order = self._order()
             line = self._line(order, price_unit=100.03)
+            line.write({'price_unit': 100.03})
             order.write({'tax_treatment': 'standard'})
             line.write({'discount_2': 10.0})
             invoice = self._invoice_from_order(order)

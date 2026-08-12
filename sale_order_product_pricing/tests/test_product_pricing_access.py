@@ -6,7 +6,6 @@ from odoo import fields
 from odoo.exceptions import AccessError, UserError, ValidationError
 
 from ..models.sale_order import _PRICING_INTERNAL_TOKEN
-from odoo.addons.sale_revision_history.models.sale_order import _LIFECYCLE_INTERNAL_TOKEN
 from odoo.tests.common import SavepointCase
 
 
@@ -76,8 +75,13 @@ class TestProductPricingAccess(SavepointCase):
         if owner == self.quotation_specialist:
             values['quotation_specialist_id'] = owner.id
         order = self.env['sale.order'].create(values)
-        order._record_commercial_change('update_today')
+        self._record_commercial_change_if_available(order)
         return order
+
+    @staticmethod
+    def _record_commercial_change_if_available(order):
+        if hasattr(order, '_record_commercial_change'):
+            order._record_commercial_change('update_today')
 
     def _line(self, order):
         return self.env['sale.order.line'].create({
@@ -101,9 +105,15 @@ class TestProductPricingAccess(SavepointCase):
 
     @staticmethod
     def _set_sent(order):
-        order.with_context(
-            _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
-        ).write({'state': 'sent'})
+        if 'issued_offer_attachment_id' in order._fields:
+            from odoo.addons.sale_revision_history.models.sale_order import (
+                _LIFECYCLE_INTERNAL_TOKEN,
+            )
+            order.with_context(
+                _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
+            ).write({'state': 'sent'})
+        else:
+            order.write({'state': 'sent'})
 
     def _apply(self, order):
         action = self._preview(order)
@@ -114,7 +124,7 @@ class TestProductPricingAccess(SavepointCase):
         order = self._order(owner=self.quotation_specialist)
         order.with_user(self.quotation_specialist).write({'user_id': self.env.user.id})
         revision = order.copy({'state': 'draft'})
-        revision._record_commercial_change('update_today')
+        self._record_commercial_change_if_available(revision)
         revision.with_user(self.quotation_specialist).write({'user_id': self.env.user.id})
 
         for state in ('sent', 'sale'):
@@ -134,7 +144,7 @@ class TestProductPricingAccess(SavepointCase):
             'user_id': self.quotation_specialist.id,
             'quotation_specialist_id': False,
         })
-        order._record_commercial_change('update_today')
+        self._record_commercial_change_if_available(order)
 
         order.with_user(self.quotation_specialist).write({'user_id': self.pricing_user.id})
 
@@ -146,7 +156,9 @@ class TestProductPricingAccess(SavepointCase):
             'partner_id': self.partner.id,
             'user_id': self.quotation_specialist.id,
         })
-        order.with_user(self.quotation_specialist)._record_commercial_change('update_today')
+        self._record_commercial_change_if_available(
+            order.with_user(self.quotation_specialist)
+        )
         line = self.env['sale.order.line'].with_user(self.quotation_specialist).create({
             'order_id': order.id,
             'product_id': self.product.id,
@@ -581,7 +593,7 @@ class TestProductPricingAccess(SavepointCase):
             'partner_id': self.partner.id,
             'user_id': self.basic_user.id,
         })
-        order.with_user(self.basic_user)._record_commercial_change('update_today')
+        self._record_commercial_change_if_available(order.with_user(self.basic_user))
         line = self.env['sale.order.line'].with_user(self.basic_user).create({
             'order_id': order.id,
             'product_id': self.product.id,
@@ -621,7 +633,9 @@ class TestProductPricingAccess(SavepointCase):
             'user_id': self.quotation_specialist.id,
             'quotation_specialist_id': self.quotation_specialist.id,
         })
-        order.with_user(self.quotation_specialist)._record_commercial_change('update_today')
+        self._record_commercial_change_if_available(
+            order.with_user(self.quotation_specialist)
+        )
         order.with_user(self.quotation_specialist).write({
             'order_line': [(0, 0, {
                 'product_id': self.product.id,

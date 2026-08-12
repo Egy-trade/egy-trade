@@ -9,7 +9,6 @@ from odoo.exceptions import UserError, ValidationError
 from odoo.tests.common import SavepointCase
 
 from ..models.sale_order_offer_dates import _OFFER_DATE_INTERNAL_TOKEN
-from odoo.addons.sale_revision_history.models.sale_order import _LIFECYCLE_INTERNAL_TOKEN
 
 
 class TestOfferExpiry(SavepointCase):
@@ -38,6 +37,18 @@ class TestOfferExpiry(SavepointCase):
         if hasattr(order, "_record_commercial_change"):
             order._record_commercial_change("update_today")
         return order
+
+    @staticmethod
+    def _set_sent(order):
+        if "issued_offer_attachment_id" in order._fields:
+            from odoo.addons.sale_revision_history.models.sale_order import (
+                _LIFECYCLE_INTERNAL_TOKEN,
+            )
+            order.with_context(
+                _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
+            ).write({"state": "sent"})
+        else:
+            order.write({"state": "sent"})
 
     def test_order_column_default_is_schema_safe(self):
         field = self.env["sale.order"]._fields["offer_expiry_days"]
@@ -119,9 +130,7 @@ class TestOfferExpiry(SavepointCase):
             order.date_order,
             order.validity_date,
         )
-        order.with_context(
-            _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
-        ).write({"state": "sent"})
+        self._set_sent(order)
 
         with self.assertRaises(UserError):
             order.write({"offer_expiry_days": 10})
@@ -159,7 +168,9 @@ class TestOfferExpiry(SavepointCase):
             "validity_date": old_offer_date + timedelta(days=1),
         })
 
-        copied = source.copy()
+        # The role policy validates assigned salespeople independently; this
+        # date-focused copy fixture deliberately leaves the copy unassigned.
+        copied = source.copy({"user_id": False})
         expected_offer_date = fields.Date.context_today(copied)
         self.assertEqual(copied.offer_expiry_days, 8)
         self.assertEqual(copied.offer_date, expected_offer_date)
