@@ -122,10 +122,10 @@ class TestProductPricingAccess(SavepointCase):
 
     def test_quotation_specialist_can_change_salesperson_only_on_draft_or_revision(self):
         order = self._order(owner=self.quotation_specialist)
-        order.with_user(self.quotation_specialist).write({'user_id': self.env.user.id})
+        order.with_user(self.quotation_specialist).write({'user_id': self.other_sales_user.id})
         revision = order.copy({'state': 'draft'})
         self._record_commercial_change_if_available(revision)
-        revision.with_user(self.quotation_specialist).write({'user_id': self.env.user.id})
+        revision.with_user(self.quotation_specialist).write({'user_id': self.other_sales_user.id})
 
         for state in ('sent', 'sale'):
             locked_order = self._order(owner=self.quotation_specialist)

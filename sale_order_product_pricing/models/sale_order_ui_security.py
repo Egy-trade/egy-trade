@@ -406,10 +406,10 @@ class SaleOrderLine(models.Model):
             override_lines = self.env["sale.order.line"].concat(*[
                 line for line, _ceiling, _reason in standard_discount_overrides
             ]) if standard_discount_overrides else self.env["sale.order.line"]
-            (self - override_lines).with_context(
+            (self - override_lines).sudo().with_context(
                 _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
             ).write({"standard_discount_override_used": False})
-            override_lines.with_context(
+            override_lines.sudo().with_context(
                 _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
             ).write({"standard_discount_override_used": True})
         if not _is_pricing_internal(self.env) and standard_discount_overrides:
@@ -480,10 +480,10 @@ class SaleOrderLine(models.Model):
             override_lines = self.env["sale.order.line"].concat(*[
                 line for line, _ceiling, _reason in overrides
             ]) if overrides else self.env["sale.order.line"]
-            (lines - override_lines).with_context(
+            (lines - override_lines).sudo().with_context(
                 _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
             ).write({"standard_discount_override_used": False})
-            override_lines.with_context(
+            override_lines.sudo().with_context(
                 _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
             ).write({"standard_discount_override_used": True})
         return lines

@@ -185,7 +185,8 @@ class SaleOrder(models.Model):
         for incoming in vals_list:
             vals = dict(incoming)
             if is_specialist:
-                if vals.get("quotation_specialist_id") not in (False, self.env.user.id):
+                requested_specialist = vals.get("quotation_specialist_id")
+                if requested_specialist and requested_specialist != self.env.user.id:
                     raise AccessError(_(
                         "A Quotation Specialist may only create a quotation assigned to themselves."
                     ))

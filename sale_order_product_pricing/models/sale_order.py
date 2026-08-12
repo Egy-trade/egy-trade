@@ -1029,6 +1029,8 @@ class SaleOrderPriceOriginReclassify(models.TransientModel):
         line = self.line_id
         if not line.exists() or line.price_origin != 'historical_unverified' or line.price_origin_verified:
             raise UserError(_('This historical line changed while the dialog was open. Reopen it and try again.'))
+        if line.order_id.state != 'draft':
+            raise UserError(_('Historical Price Origin can only be certified on an active draft quotation or revision.'))
         reason = (self.reason or '').strip()
         if not reason:
             raise UserError(_('Evidence and Reason are required.'))
