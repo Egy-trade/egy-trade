@@ -15,9 +15,13 @@ def migrate(cr, version):
     from odoo.addons.sale_order_product_pricing.models.finance_controls import _FINANCE_INTERNAL_TOKEN
 
     env = Environment(cr, SUPERUSER_ID, {})
-    drafts = env['sale.order'].with_context(active_test=False).search([
-        ('state', '=', 'draft'), ('active', '=', True),
-    ])
+    draft_domain = [('state', '=', 'draft')]
+    # ``active`` is added by the optional revision-history module.  Pricing
+    # must remain independently upgradeable on databases that do not install
+    # that extension.
+    if 'active' in env['sale.order']._fields:
+        draft_domain.append(('active', '=', True))
+    drafts = env['sale.order'].with_context(active_test=False).search(draft_domain)
     for order in drafts:
         configured = order.company_id.quotation_vat_tax_id | order.company_id.quotation_retention_tax_id
         lines = order.order_line.filtered(lambda line: not line.display_type)

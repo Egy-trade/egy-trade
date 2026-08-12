@@ -661,7 +661,8 @@ class TestProductPricingAccess(SavepointCase):
             "//field[@name='tax_selection_review_required'][@invisible='1']"
         ))
         self.assertTrue(root.xpath(
-            "//field[@name='tax_id'][@readonly='1']"
+            "//xpath[contains(@expr, \"field[@name='tax_id']\")]"
+            "/attribute[@name='readonly' and normalize-space()='1']"
         ))
         self.assertFalse(root.xpath("//*[contains(@string, 'Finance Controls')]"))
         self.assertFalse(root.xpath("//*[contains(@string, 'CIF')]"))

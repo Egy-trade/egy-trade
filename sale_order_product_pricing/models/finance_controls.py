@@ -340,7 +340,11 @@ class SaleOrder(models.Model):
         for order in self:
             order.check_access_rights('write')
             order.check_access_rule('write')
-            if (order.state != 'draft' or not order.active
+            # ``active`` and ``current_revision_id`` are supplied by the
+            # optional lifecycle module, which is installed after this module
+            # on a clean database.  Keep the approval gate valid both with and
+            # without that extension loaded.
+            if (order.state != 'draft' or not getattr(order, 'active', True)
                     or getattr(order, 'current_revision_id', False)):
                 raise UserError(_(
                     'Commercial exceptions may be approved only on the active current draft.'
@@ -435,7 +439,8 @@ class SaleOrder(models.Model):
             raise AccessError(_('A retention-only revision can only be made by the controlled confirmation workflow.'))
         self.ensure_one()
         source_order = source_order.exists()
-        if not source_order or source_order.state != 'sent' or not self.active or self.state != 'draft':
+        if (not source_order or source_order.state != 'sent'
+                or not getattr(self, 'active', True) or self.state != 'draft'):
             raise ValidationError(_('A retention-only revision requires an issued offer and its active draft successor.'))
         if getattr(source_order, 'current_revision_id', self) != self:
             raise ValidationError(_('The draft is not the current successor of the issued offer.'))

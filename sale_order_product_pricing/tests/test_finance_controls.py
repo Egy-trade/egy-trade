@@ -178,9 +178,9 @@ class TestQuotationTaxSelection(SavepointCase):
         line.write({'product_uom_qty': 2.0})
         self.assertTrue(approval.invalidated)
 
-    def test_approval_is_rejected_outside_active_draft(self):
+    def test_approval_is_rejected_outside_draft(self):
         order = self._order(apply_vat=False, vat_exemption_reason='Exempt client')
-        order.write({'active': False})
+        order.write({'state': 'sent'})
         with self.assertRaises(UserError):
             order.action_approve_finance_requirements()
 
