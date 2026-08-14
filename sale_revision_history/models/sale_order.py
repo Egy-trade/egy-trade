@@ -214,6 +214,25 @@ class SaleOrder(models.Model):
         a valid withholding-only revision.
         """
         self.ensure_one()
+
+        def ordered(records):
+            """Order virtual onchange records without comparing ``NewId`` objects."""
+            def key(index_and_record):
+                index, record = index_and_record
+                record_id = record.id
+                # Odoo's in-memory onchange rows use NewId objects, which
+                # cannot be ordered against persisted integer ids.  The
+                # recordset order is the stable tie-breaker for those rows.
+                return (
+                    record.sequence or 0,
+                    record_id if type(record_id) is int else 0,
+                    index,
+                )
+
+            return (record for _index, record in sorted(
+                enumerate(records), key=key,
+            ))
+
         def ref(record):
             return record.id or False
         configured_withholding = getattr(
@@ -225,7 +244,7 @@ class SaleOrder(models.Model):
             if effective_tax else configured_withholding
         )
         lines = []
-        for line in self.order_line.sorted(lambda item: (item.sequence, item.id)):
+        for line in ordered(self.order_line):
             lines.append({
                 "sequence": line.sequence, "display_type": line.display_type or False,
                 "product": ref(line.product_id), "name": line.name or "",
@@ -247,7 +266,7 @@ class SaleOrder(models.Model):
                 "free_of_charge_reason": getattr(line, "free_of_charge_reason", False) or False,
             })
         options = []
-        for option in self.sale_order_option_ids.sorted(lambda item: (item.sequence, item.id)):
+        for option in ordered(self.sale_order_option_ids):
             options.append({
                 "sequence": option.sequence, "product": ref(option.product_id),
                 "name": option.name or "", "quantity": option.quantity,

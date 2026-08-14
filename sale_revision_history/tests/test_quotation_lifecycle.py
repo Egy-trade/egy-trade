@@ -137,6 +137,26 @@ class QuotationLifecycleCase(SavepointCase):
         self.assertEqual(order.date_order, original_date_order)
         self.assertEqual(order.note, "Commercial change without a daily decision")
 
+    def test_vat_change_fingerprint_handles_virtual_onchange_lines(self):
+        """Approval recomputation must support Odoo's NewId line records."""
+        order = self.env["sale.order"].new({
+            "partner_id": self.partner.id,
+            "apply_vat": True,
+            "order_line": [(0, 0, {
+                "product_id": self.product.id,
+                "name": self.product.display_name,
+                "product_uom_qty": 1.0,
+                "price_unit": 100.0,
+            })],
+        })
+        before = order._commercial_fingerprint()
+        order.apply_vat = False
+        order.vat_exemption_reason = "Exempt customer"
+        after = order._commercial_fingerprint()
+
+        self.assertNotEqual(before, after)
+        self.assertIsInstance(order.finance_approval_required, bool)
+
     def test_direct_line_orm_create_write_unlink_are_free_in_draft_and_lock_sent(self):
         order = self._draft()
         source = order.order_line
