@@ -282,6 +282,25 @@ class QuotationLifecycleCase(SavepointCase):
             )),
             expected_totals,
         )
+        # The legacy currency indicator is display-only. Reading it must not
+        # persist a matching/not-matching flag through sale.order.write on a
+        # locked Sent offer.
+        if "currency_rate_now" in order._fields:
+            issued_fingerprint = order._commercial_fingerprint()
+            issued_write_date = order.write_date
+            self.assertTrue(order.currency_rate_confirm)
+            order.invalidate_cache(["currency_rate_now", "currency_state"])
+            currency_display = order.read([
+                "currency_rate_now", "currency_state",
+            ])[0]
+            self.assertIn(
+                currency_display["currency_state"],
+                (False, "match", "not_match"),
+            )
+            self.assertEqual(order.state, "sent")
+            self.assertEqual(order._commercial_fingerprint(), issued_fingerprint)
+            order.invalidate_cache(["write_date"])
+            self.assertEqual(order.write_date, issued_write_date)
         with self.assertRaises(UserError):
             order.write({"note": "RPC mutation"})
         with self.assertRaises(UserError):

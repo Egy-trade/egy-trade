@@ -6,7 +6,11 @@ class SaleOrder(models.Model):
 
     currency_rate_now = fields.Char(compute='_compute_currency_rate_now')
     currency_rate_confirm = fields.Char()
-    currency_state = fields.Selection([('match', 'Matching'), ('not_match', 'Not Matching')])
+    currency_state = fields.Selection(
+        [('match', 'Matching'), ('not_match', 'Not Matching')],
+        compute='_compute_currency_rate_now',
+        readonly=True,
+    )
     currency_is_default = fields.Boolean(compute='_check_default_currency_func')
 
     # def action_confirm(self):
@@ -25,16 +29,26 @@ class SaleOrder(models.Model):
 
         return super(SaleOrder, self).create(vals_list)
 
+    @api.depends(
+        'currency_id',
+        'currency_id.rate_ids.name',
+        'currency_id.rate_ids.inverse_company_rate',
+        'currency_rate_confirm',
+    )
     def _compute_currency_rate_now(self):
         for rec in self:
-            rate = rec.currency_id.rate_ids.filtered(
-                lambda l: l.name == max([x.name for x in rec.currency_id.rate_ids]))
-            rec.currency_rate_now = rate.inverse_company_rate if rate else 0
-            if rec.currency_rate_now and rec.currency_rate_confirm:
-                if float(rec.currency_rate_now) == float(rec.currency_rate_confirm):
-                    rec.currency_state = 'match'
-                else:
-                    rec.currency_state = 'not_match'
+            rate = rec.currency_id.rate_ids.sorted(
+                key=lambda line: (line.name, line.id), reverse=True,
+            )[:1]
+            current_rate = rate.inverse_company_rate if rate else 0
+            rec.currency_rate_now = current_rate
+            rec.currency_state = False
+            if current_rate and rec.currency_rate_confirm:
+                rec.currency_state = (
+                    'match'
+                    if float(current_rate) == float(rec.currency_rate_confirm)
+                    else 'not_match'
+                )
 
     def action_update_prices(self):
         res = super(SaleOrder, self).action_update_prices()
