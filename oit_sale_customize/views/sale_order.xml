@@ -21,7 +21,8 @@
             <xpath expr="//form/sheet/notebook/page/group" position="before">
                 <div class="ks_container">
                     <label for="terms_conditions_id" string="Terms / Conditions:"/>
-                    <field name="terms_conditions_id"/>
+                    <field name="terms_conditions_id"
+                           attrs="{'readonly': [('state', '!=', 'draft')]}"/>
                 </div>
             </xpath>
         </field>

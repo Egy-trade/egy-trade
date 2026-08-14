@@ -66,7 +66,9 @@ class SaleOrder(models.Model):
     def _onchange_terms_conditions_id(self):
         """ terms_conditions_id """
         for rec in self:
-            if rec.terms_conditions_id:
-                rec.write({
-                    'note': rec.terms_conditions_id.name
-                })
+            if rec.state == 'draft' and rec.terms_conditions_id:
+                # Onchange records are virtual form records.  Persisting here
+                # re-enters Sale Order write guards while merely opening a
+                # sent offer; assignment lets the client preview the note and
+                # persists only through a later permitted form save.
+                rec.note = rec.terms_conditions_id.name
