@@ -8,6 +8,9 @@ from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests.common import SavepointCase
 
 from ..models.sale_order import _LIFECYCLE_INTERNAL_TOKEN
+from odoo.addons.sale_order_product_pricing.models.sale_order import (
+    _PRICING_INTERNAL_TOKEN,
+)
 
 
 class QuotationLifecycleCase(SavepointCase):
@@ -364,6 +367,86 @@ class QuotationLifecycleCase(SavepointCase):
         )
         self.assertEqual(len(carried), 1)
         self.assertEqual(carried.carried_from_approval_id, source_approval)
+
+    def test_retention_only_copy_preserves_issued_dates_and_vat_exception(self):
+        """A delayed VAT-exempt offer must remain a byte-for-term clone.
+
+        ``offer_date`` is deliberately copy=False for ordinary new drafts.
+        Retention confirmation is different: it changes only 1% withholding,
+        including for legacy historical-unverified price-origin lines.
+        """
+        order = self._draft(
+            apply_vat=False,
+            vat_exemption_reason="Customer exemption certificate on file",
+            quotation_specialist_id=self.quotation_specialist.id,
+        )
+        estimate_currency = self.env["res.currency"].search([
+            ("id", "!=", self.env.company.currency_id.id),
+            ("active", "=", True),
+        ], limit=1)
+        self.assertTrue(estimate_currency)
+        rate_values = {
+            "currency_id": estimate_currency.id,
+            "company_id": self.env.company.id,
+            "name": "2024-01-15",
+            "rate": 0.5,
+        }
+        existing_rate = self.env["res.currency.rate"].search([
+            ("currency_id", "=", estimate_currency.id),
+            ("company_id", "=", self.env.company.id),
+            ("name", "=", "2024-01-15"),
+        ], limit=1)
+        if existing_rate:
+            existing_rate.write({"rate": rate_values["rate"]})
+        else:
+            self.env["res.currency.rate"].create(rate_values)
+        order.write({
+            "date_order": "2024-01-15 09:30:00",
+            "offer_date": "2024-01-15",
+            "validity_date": "2024-01-29",
+            "commitment_date": "2024-02-01 09:30:00",
+            "currency_estimate_id": estimate_currency.id,
+        })
+        order.order_line.sudo().with_context(
+            _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+        ).write({
+            "price_origin": "historical_unverified",
+            "price_origin_verified": False,
+            "price_origin_evidence": "legacy_unverified",
+        })
+        issued_fingerprint = order._commercial_fingerprint()
+        order.action_accept_sales_responsibility()
+        order.with_user(self.quotation_manager).action_approve_quotation_requirements()
+        self.assertEqual(
+            set(order.finance_approval_ids.mapped("code")),
+            {"quotation_manager", "vat_exemption"},
+        )
+        report_service = self.env["ir.actions.report"]
+        with patch.object(
+                type(report_service), "_render_qweb_pdf",
+                return_value=(b"%PDF-test", "pdf")):
+            order.action_issue_offer_pdf()
+            self.env["sale.order.withholding.confirmation"].create({
+                "sale_id": order.id, "decision": "yes",
+            }).action_confirm()
+        revision = order.current_revision_id
+        self.assertTrue(revision.apply_withholding)
+        self.assertFalse(revision.apply_vat)
+        self.assertEqual(revision.vat_exemption_reason, order.vat_exemption_reason)
+        self.assertEqual(revision.date_order, order.date_order)
+        self.assertEqual(revision.offer_date, order.offer_date)
+        self.assertEqual(revision.validity_date, order.validity_date)
+        self.assertEqual(revision.commitment_date, order.commitment_date)
+        self.assertEqual(
+            revision.currency_rate_estimate, order.currency_rate_estimate,
+        )
+        self.assertEqual(
+            revision.currency_rate_inverse, order.currency_rate_inverse,
+        )
+        self.assertEqual(revision._commercial_fingerprint(), issued_fingerprint)
+        self.assertEqual(
+            revision.order_line.price_origin, "historical_unverified",
+        )
 
     def test_retention_only_revision_preserves_free_of_charge_authorization(self):
         order = self._draft(apply_withholding=False)

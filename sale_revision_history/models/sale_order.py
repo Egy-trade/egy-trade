@@ -21,6 +21,9 @@ from odoo.addons.sale_order_product_pricing.models.finance_controls import (
     _is_finance_internal,
     _RETENTION_REVISION_TOKEN,
 )
+from odoo.addons.sale_order_product_pricing.models.sale_order_offer_dates import (
+    _RETENTION_DATE_COPY_TOKEN,
+)
 
 
 _REVISION_INTERNAL_TOKEN = object()
@@ -1054,17 +1057,18 @@ class SaleOrder(models.Model):
         family_name = source._revision_family_root(family)
         next_number = source._next_revision_number(family)
         historical = family - source
+        retention_only = (
+            self.env.context.get("_retention_revision_token")
+            is _RETENTION_REVISION_TOKEN
+        )
         internal_context = {
             "_revision_internal_token": _REVISION_INTERNAL_TOKEN,
             "_pricing_internal_token": _PRICING_INTERNAL_TOKEN,
         }
-        if self.env.context.get("_retention_revision_token") is _RETENTION_REVISION_TOKEN:
+        if retention_only:
             internal_context["_retention_revision_token"] = _RETENTION_REVISION_TOKEN
-        # The exact clone includes pricing and specialist fields that ordinary
-        # assigned Salespeople cannot read/write directly because of field
-        # groups.  Authorization is complete above; sudo is scoped to this
-        # mechanical copy and keeps the initiating user's uid for attribution.
-        revision = source.sudo().with_context(**internal_context).copy(default={
+            internal_context["_retention_date_copy_token"] = _RETENTION_DATE_COPY_TOKEN
+        copy_defaults = {
             "name": "%s-%02d" % (family_name, next_number),
             "state": "draft",
             "active": True,
@@ -1074,7 +1078,27 @@ class SaleOrder(models.Model):
             "revision_reason": False,
             "revision_date": False,
             "revision_author_id": False,
-        })
+        }
+        if retention_only:
+            # A retention-only successor must retain the issued commercial
+            # snapshot exactly.  The date module normally assigns a new draft
+            # today's Offer Date, and standard Sale may default date_order;
+            # either value can change expiry/rate evidence before the
+            # withholding-only comparison runs.
+            copy_defaults.update({
+                "date_order": source.date_order,
+                "offer_date": source.offer_date,
+                "validity_date": source.validity_date,
+                "offer_expiry_days": source.offer_expiry_days,
+                "commitment_date": source.commitment_date,
+            })
+        # The exact clone includes pricing and specialist fields that ordinary
+        # assigned Salespeople cannot read/write directly because of field
+        # groups.  Authorization is complete above; sudo is scoped to this
+        # mechanical copy and keeps the initiating user's uid for attribution.
+        revision = source.sudo().with_context(**internal_context).copy(
+            default=copy_defaults,
+        )
 
         # Authorization was checked against the source above.  Sudo is limited
         # to system-owned family metadata, including relinking inactive history

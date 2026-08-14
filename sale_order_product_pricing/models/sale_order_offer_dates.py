@@ -10,6 +10,7 @@ from .sale_order import _is_pricing_internal
 
 
 _OFFER_DATE_INTERNAL_TOKEN = object()
+_RETENTION_DATE_COPY_TOKEN = object()
 
 
 def _is_offer_date_internal(env):
@@ -17,6 +18,18 @@ def _is_offer_date_internal(env):
     return env.context.get(
         "_offer_date_internal_token"
     ) is _OFFER_DATE_INTERNAL_TOKEN
+
+
+def _is_retention_date_copy(env):
+    """True only for the lifecycle's automatic withholding-only clone.
+
+    This is intentionally a private object token, not a context boolean: an
+    RPC/import caller cannot make an ordinary new quotation inherit a prior
+    issued offer's commercial dates.
+    """
+    return env.context.get(
+        "_retention_date_copy_token"
+    ) is _RETENTION_DATE_COPY_TOKEN
 
 
 class ResCompany(models.Model):
@@ -119,6 +132,7 @@ class SaleOrder(models.Model):
             if (
                 vals.get("state", "draft") == "draft"
                 and vals.get("active", True)
+                and not _is_retention_date_copy(self.env)
             ):
                 offer_date = fields.Date.context_today(
                     self.with_company(company).with_context(tz="Africa/Cairo")
