@@ -29,6 +29,8 @@ class TestQuotationTaxSelection(SavepointCase):
             cls.company.quotation_vat_tax_id,
             cls.company.quotation_retention_tax_id,
             cls.company.quotation_withholding_responsible_id,
+            cls.company.quotation_high_value_threshold,
+            cls.company.quotation_high_value_approver_group_id,
         )
         cls.company.write({
             'quotation_vat_tax_id': cls.vat.id,
@@ -40,6 +42,36 @@ class TestQuotationTaxSelection(SavepointCase):
             'login': 'quotation.tax.employee@example.test',
             'groups_id': [(6, 0, [cls.env.ref('base.group_user').id])],
         })
+        cls.qs = cls.env['res.users'].create({
+            'name': 'Quotation Specialist approval test',
+            'login': 'quotation.qs.approval@example.test',
+            'groups_id': [(6, 0, [
+                cls.env.ref('base.group_user').id,
+                cls.env.ref('sales_team.group_sale_salesman').id,
+                cls.env.ref('sale_order_product_pricing.quotation_specialist_group').id,
+            ])],
+        })
+        cls.manager = cls.env['res.users'].create({
+            'name': 'Quotation Manager approval test',
+            'login': 'quotation.manager.approval@example.test',
+            'groups_id': [(6, 0, [
+                cls.env.ref('base.group_user').id,
+                cls.env.ref('sale_order_product_pricing.quotation_manager_group').id,
+            ])],
+        })
+        cls.high_value_group = cls.env['res.groups'].create({
+            'name': 'High Value Approver test group',
+            'category_id': cls.env.ref('base.module_category_sales_sales').id,
+        })
+        cls.high_value_user = cls.env['res.users'].create({
+            'name': 'High Value approver test',
+            'login': 'quotation.high.value@example.test',
+            'groups_id': [(6, 0, [
+                cls.env.ref('base.group_user').id,
+                cls.env.ref('sales_team.group_sale_salesman').id,
+                cls.high_value_group.id,
+            ])],
+        })
 
     @classmethod
     def tearDownClass(cls):
@@ -47,6 +79,8 @@ class TestQuotationTaxSelection(SavepointCase):
             'quotation_vat_tax_id': cls.old_taxes[0].id,
             'quotation_retention_tax_id': cls.old_taxes[1].id,
             'quotation_withholding_responsible_id': cls.old_taxes[2].id,
+            'quotation_high_value_threshold': cls.old_taxes[3],
+            'quotation_high_value_approver_group_id': cls.old_taxes[4].id,
         })
         super().tearDownClass()
 
@@ -111,11 +145,7 @@ class TestQuotationTaxSelection(SavepointCase):
         order = self._order(apply_withholding=True)
         self._line(order)
         order._create_pending_withholding_evidence()
-        evidence = order.withholding_evidence_ids
-        self.assertEqual(len(evidence), 1)
-        self.assertEqual(evidence.tax_id, self.withholding)
-        self.assertAlmostEqual(evidence.expected_amount, 1.0)
-        self.assertTrue(evidence.activity_id)
+        self.assertFalse(order.withholding_evidence_ids)
 
     def test_ambiguous_migrated_tax_selection_blocks_issue(self):
         order = self._order()
@@ -146,26 +176,127 @@ class TestQuotationTaxSelection(SavepointCase):
         with self.assertRaises(ValidationError):
             order.write({'vat_exemption_reason': False})
 
-    def test_expiry_override_is_still_a_finance_requirement(self):
+    def test_expiry_override_is_not_an_approval_requirement(self):
         order = self._order()
         target_days = order.company_id.quotation_expiry_days_default + 1
-        with self.assertRaises(ValidationError):
-            order.write({'offer_expiry_days': target_days})
-        order.write({
-            'offer_expiry_days': target_days,
-            'finance_approval_reason': 'Client tender requires longer validity.',
-        })
-        self.assertIn('validity_override', order._finance_requirement_codes())
+        order.write({'offer_expiry_days': target_days})
+        self.assertNotIn('validity_override', order._quotation_issue_requirement_codes())
 
-    def test_high_value_is_still_a_finance_requirement(self):
+    def test_high_value_is_configured_and_includes_the_boundary(self):
+        self.company.write({
+            'quotation_high_value_threshold': 100.0,
+            'quotation_high_value_approver_group_id': self.high_value_group.id,
+        })
+        order = self._order(user_id=self.high_value_user.id)
+        self._line(order).write({'price_unit': 100.0})
+        self.assertIn('high_value', order._quotation_issue_requirement_codes())
+        self.company.write({
+            'quotation_high_value_threshold': 0.0,
+            'quotation_high_value_approver_group_id': False,
+        })
+
+    def test_manager_approves_qs_and_vat_off_from_one_snapshot(self):
+        order = self._order(
+            quotation_specialist_id=self.qs.id,
+            apply_vat=False,
+            vat_exemption_reason='Customer supplied an exemption certificate.',
+        )
+        self._line(order)
+        with self.assertRaises(UserError):
+            order._check_quotation_issue_approval_requirements()
+        self.assertFalse(
+            order.with_user(self.employee).can_approve_quotation_requirements
+        )
+        self.assertTrue(
+            order.with_user(self.manager).can_approve_quotation_requirements
+        )
+        order.with_user(self.manager).action_approve_quotation_requirements()
+        approvals = order.finance_approval_ids.filtered(lambda approval: not approval.invalidated)
+        self.assertEqual(set(approvals.mapped('code')), {'quotation_manager', 'vat_exemption'})
+        self.assertTrue(all(approval.snapshot_fingerprint for approval in approvals))
+        self.assertTrue(order._check_quotation_issue_approval_requirements())
+
+    def test_manager_cannot_approve_high_value_but_configured_user_can(self):
+        self.company.write({
+            'quotation_high_value_threshold': 100.0,
+            'quotation_high_value_approver_group_id': self.high_value_group.id,
+        })
+        order = self._order(user_id=self.high_value_user.id)
+        self._line(order).write({'price_unit': 100.0})
+        with self.assertRaises(AccessError):
+            order.with_user(self.manager).action_approve_quotation_requirements()
+        self.assertFalse(
+            order.with_user(self.manager).can_approve_quotation_requirements
+        )
+        self.assertTrue(
+            order.with_user(self.high_value_user).can_approve_quotation_requirements
+        )
+        order.with_user(self.high_value_user).action_approve_quotation_requirements()
+        self.assertEqual(
+            order.finance_approval_ids.filtered(lambda approval: not approval.invalidated).mapped('code'),
+            ['high_value'],
+        )
+        self.assertTrue(order._check_quotation_issue_approval_requirements())
+        self.company.write({
+            'quotation_high_value_threshold': 0.0,
+            'quotation_high_value_approver_group_id': False,
+        })
+
+    def test_high_value_uses_company_currency_at_quotation_date(self):
         eur = self.env.ref('base.EUR')
         pricelist = self.env['product.pricelist'].create({
-            'name': 'Quotation finance high value test', 'currency_id': eur.id,
+            'name': 'Quotation normalized high value test', 'currency_id': eur.id,
         })
         order = self._order(pricelist_id=pricelist.id)
-        line = self._line(order)
-        line.write({'price_unit': 100000.0})
-        self.assertIn('high_value', order._finance_requirement_codes())
+        self._line(order).write({'price_unit': 101.0})
+        converted = order._high_value_amount_company_currency()
+        self.company.write({'quotation_high_value_threshold': converted})
+        self.assertTrue(order._is_high_value_quotation())
+        self.company.write({'quotation_high_value_threshold': 0.0})
+
+    def test_legacy_state_actions_cannot_bypass_standard_workflow(self):
+        order = self._order()
+        states = dict(self.env['sale.order']._fields['state'].selection)
+        self.assertNotIn('approve', states)
+        self.assertNotIn('waiting', states)
+        self.assertNotIn('waiting_approve', states)
+        with self.assertRaises(UserError):
+            order.action_to_approve()
+        with self.assertRaises(UserError):
+            order.action_approve()
+
+    def test_direct_approval_record_creation_cannot_forge_approval(self):
+        order = self._order()
+        with self.assertRaises(AccessError):
+            self.env['sale.order.finance.approval'].create({
+                'order_id': order.id,
+                'code': 'high_value',
+                'label': 'Forged',
+                'approver_id': self.env.user.id,
+                'reason': 'Forged through RPC',
+                'snapshot_fingerprint': 'forged',
+            })
+
+    def test_ordinary_employee_cannot_read_approval_audit_rows(self):
+        order = self._order()
+        self.env['sale.order.finance.approval'].with_context(
+            _finance_internal_token=_FINANCE_INTERNAL_TOKEN,
+        ).create({
+            'order_id': order.id,
+            'code': 'quotation_manager',
+            'label': 'Test evidence',
+            'approver_id': self.env.user.id,
+            'reason': 'Test evidence only',
+            'snapshot_fingerprint': order._quotation_approval_snapshot(),
+        })
+        with self.assertRaises(AccessError):
+            self.env['sale.order.finance.approval'].with_user(self.employee).search([])
+
+    def test_ordinary_user_cannot_approve_quotation_requirements(self):
+        order = self._order(apply_vat=False, vat_exemption_reason='Exempt client')
+        self._line(order)
+        with self.assertRaises(AccessError):
+            order.with_user(self.employee).action_approve_quotation_requirements()
 
     def test_commercial_quantity_change_invalidates_existing_approval(self):
         order = self._order(apply_vat=False, vat_exemption_reason='Exempt client')
@@ -180,17 +311,20 @@ class TestQuotationTaxSelection(SavepointCase):
 
     def test_approval_is_rejected_outside_draft(self):
         order = self._order(apply_vat=False, vat_exemption_reason='Exempt client')
-        order.write({'state': 'sent'})
+        if 'issued_offer_attachment_id' in order._fields:
+            from odoo.addons.sale_revision_history.models.sale_order import (
+                _LIFECYCLE_INTERNAL_TOKEN,
+            )
+            order.with_context(
+                _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
+            ).write({'state': 'sent'})
+        else:
+            order.write({'state': 'sent'})
         with self.assertRaises(UserError):
             order.action_approve_finance_requirements()
 
-    def test_closed_evidence_details_are_immutable(self):
+    def test_withholding_does_not_create_quote_side_evidence_on_confirmation_path(self):
         order = self._order(apply_withholding=True)
         self._line(order)
         order._create_pending_withholding_evidence()
-        evidence = order.withholding_evidence_ids
-        evidence.with_context(_finance_internal_token=_FINANCE_INTERNAL_TOKEN).write({
-            'status': 'received',
-        })
-        with self.assertRaises(AccessError):
-            evidence.write({'remittance_reference': 'rewritten'})
+        self.assertFalse(order.withholding_evidence_ids)

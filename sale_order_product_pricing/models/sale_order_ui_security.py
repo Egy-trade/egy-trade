@@ -17,7 +17,6 @@ from .sale_order import (
 _ORDER_PRICING_FIELDS = {
     "order_line",
     "pricing_line_ids",
-    "pricelist_id",
     "currency_id",
     "product_pricing",
     "currency_estimate_id",
@@ -29,6 +28,7 @@ _ORDER_PRICING_FIELDS = {
     "ks_global_discount_rate",
 }
 _ORDER_STATE_LOCKED_FIELDS = _ORDER_PRICING_FIELDS | {
+    "pricelist_id",
     "partner_id",
     "partner_invoice_id",
     "partner_shipping_id",
@@ -165,6 +165,12 @@ class SaleOrder(models.Model):
 
     def write(self, vals):
         vals = dict(vals)
+        if 'pricelist_id' in vals and vals['pricelist_id'] and not _is_pricing_internal(self.env):
+            pricelist = self.env['product.pricelist'].browse(vals['pricelist_id']).exists()
+            if not pricelist or not pricelist.active:
+                raise ValidationError(_(
+                    'Select an active Sales Pricelist. Archived pricelists cannot be used on a quotation.'
+                ))
         if (
                 "user_id" in vals
                 and self.env.user.has_group(
@@ -183,7 +189,10 @@ class SaleOrder(models.Model):
             ))
         if _ORDER_STATE_LOCKED_FIELDS.intersection(vals) and not _is_pricing_internal(self.env):
             self._ensure_pricing_editable()
-        editor_fields = (_ORDER_PRICING_FIELDS - {"order_line"}).intersection(vals)
+        # QS/Sales may select an active sales pricelist on a normal draft.  The
+        # pricing model below protects Product Pricing/manual amounts and only
+        # refreshes verified Odoo-pricelist lines after that change.
+        editor_fields = (_ORDER_PRICING_FIELDS - {"order_line", "pricelist_id"}).intersection(vals)
         if editor_fields and not _is_pricing_internal(self.env):
             self._ensure_price_editor_access()
         if "user_id" in vals:

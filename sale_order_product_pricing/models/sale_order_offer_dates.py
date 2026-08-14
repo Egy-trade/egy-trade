@@ -55,8 +55,8 @@ class SaleOrder(models.Model):
         readonly=True,
         copy=False,
         help=(
-            "Commercial offer date. It changes only after the user records the "
-            "first commercial-change decision for the Cairo business day."
+            "Commercial offer date recorded when the draft is created. Changing "
+            "Days of Expiry recalculates the expiration date without refreshing the page."
         ),
     )
     offer_expiry_days = fields.Integer(
@@ -153,10 +153,9 @@ class SaleOrder(models.Model):
 
         result = super().write(vals)
 
-        # Changing Days of Expiry is the one direct date operation.  A normal
-        # commercial save must go through the daily-change decision in
-        # sale_revision_history; merely viewing or saving unrelated metadata
-        # never mutates an offer date or the standard Odoo ``date_order``.
+        # Changing Days of Expiry recalculates only the expiration date.
+        # Viewing or saving unrelated fields never mutates the offer date or
+        # the standard Odoo ``date_order``.
         if "offer_expiry_days" in vals:
             for order in self.filtered(
                 lambda item: item.state == "draft" and getattr(item, "active", True)

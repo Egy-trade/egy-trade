@@ -278,12 +278,24 @@ class TestProductPricingAccess(SavepointCase):
         self.assertEqual(forged_downpayment.price_unit, self.product.list_price)
         self.assertFalse(forged_downpayment.is_downpayment)
 
-    def test_quotation_specialist_cannot_change_pricelist(self):
+    def test_quotation_specialist_can_change_active_pricelist_without_repricing_protected_lines(self):
         order = self._order(owner=self.quotation_specialist)
-        with self.assertRaises(AccessError):
-            order.with_user(self.quotation_specialist).write({
-                'pricelist_id': self.env.ref('product.list0').id,
-            })
+        line = self._line(order)
+        line.with_user(self.sales_manager).write({'price_unit': 125.0})
+        order.with_user(self.quotation_specialist).write({
+            'pricelist_id': self.env.ref('product.list0').id,
+        })
+        self.assertEqual(order.pricelist_id, self.env.ref('product.list0'))
+        self.assertAlmostEqual(line.price_unit, 125.0)
+        self.assertEqual(line.price_origin, 'edited')
+
+    def test_quotation_specialist_cannot_select_archived_pricelist(self):
+        order = self._order(owner=self.quotation_specialist)
+        archived = self.env['product.pricelist'].create({
+            'name': 'Archived sales pricelist test', 'active': False,
+        })
+        with self.assertRaises(ValidationError):
+            order.with_user(self.quotation_specialist).write({'pricelist_id': archived.id})
 
     def test_state_lock_blocks_pricing_user_after_send_or_confirmation(self):
         order = self._order()
@@ -627,9 +639,15 @@ class TestProductPricingAccess(SavepointCase):
         root = etree.fromstring(view.arch_db.encode())
         pricing_page = root.xpath("//page[@name='product_pricing']")
         self.assertEqual(len(pricing_page), 1)
-        self.assertEqual(
-            len(pricing_page[0].xpath(".//field[@name='pricing_line_ids']")), 1
-        )
+        input_grid = pricing_page[0].xpath(".//field[@name='pricing_line_ids']")
+        self.assertEqual(len(input_grid), 1)
+        self.assertIn("product_pricing", input_grid[0].get('attrs'))
+        self.assertTrue(input_grid[0].xpath(".//field[@name='purchase_price_estimate']"))
+        self.assertTrue(input_grid[0].xpath(".//field[@name='factor']"))
+        self.assertTrue(input_grid[0].xpath(".//field[@name='line_factor']"))
+        self.assertFalse(input_grid[0].xpath(".//field[@name='price_unit']"))
+        self.assertFalse(input_grid[0].xpath(".//field[@name='price_reference']"))
+        self.assertFalse(input_grid[0].xpath(".//field[@name='estimate_unit_price']"))
         self.assertFalse(pricing_page[0].xpath(".//field[@name='order_line']"))
         self.assertTrue(
             root.xpath("//field[@name='price_origin_label'][@optional='show']")
@@ -667,21 +685,45 @@ class TestProductPricingAccess(SavepointCase):
         self.assertFalse(root.xpath("//*[contains(@string, 'Finance Controls')]"))
         self.assertFalse(root.xpath("//*[contains(@string, 'CIF')]"))
 
-        approval_page = root.xpath(
-            "//page[@name='commercial_exception_approval']"
-        )
-        self.assertEqual(len(approval_page), 1)
-        self.assertTrue(approval_page[0].xpath(
-            ".//button[@name='action_approve_finance_requirements']"
+        self.assertTrue(root.xpath(
+            "//button[@name='action_approve_quotation_requirements']"
         ))
-        evidence_page = root.xpath("//page[@name='withholding_evidence']")
-        self.assertEqual(len(evidence_page), 1)
+        approval_button = root.xpath(
+            "//button[@name='action_approve_quotation_requirements']"
+        )[0]
+        self.assertFalse(approval_button.get('groups'))
+        self.assertIn('finance_approval_required', approval_button.get('attrs'))
+        self.assertNotIn('apply_vat', approval_button.get('attrs'))
+        self.assertFalse(root.xpath(
+            "//group[contains(@attrs, 'apply_vat')]//button[@name='action_approve_quotation_requirements']"
+        ))
+        self.assertTrue(root.xpath(
+            "//field[@name='finance_approval_required'][@invisible='1']"
+        ))
+        self.assertTrue(root.xpath(
+            "//field[@name='can_approve_quotation_requirements'][@invisible='1']"
+        ))
+        self.assertIn(
+            'can_approve_quotation_requirements', approval_button.get('attrs')
+        )
+        self.assertFalse(root.xpath("//page[@name='withholding_evidence']"))
+        self.assertFalse(root.xpath("//field[@name='withholding_evidence_ids']"))
+
+    def test_high_value_settings_are_sales_management_configuration(self):
+        view = self.env.ref(
+            'sale_order_product_pricing.res_config_settings_finance_controls'
+        )
+        root = etree.fromstring(view.arch_db.encode())
+        box = root.xpath(
+            "//div[@class='col-12 col-lg-6 o_setting_box'][.//field[@name='quotation_high_value_threshold']]"
+        )
+        self.assertEqual(len(box), 1)
         self.assertEqual(
-            evidence_page[0].get('groups'), 'account.group_account_manager'
+            box[0].get('groups'),
+            'sale_order_product_pricing.quotation_manager_group,sales_team.group_sale_manager,base.group_system',
         )
-        self.assertTrue(evidence_page[0].xpath(
-            ".//field[@name='withholding_evidence_ids']"
-        ))
+        self.assertTrue(box[0].xpath(".//field[@name='quotation_high_value_approver_group_id']"))
+        self.assertNotIn('account.group_account_manager', box[0].get('groups'))
 
     def test_assigned_salesperson_can_crud_draft_lines_but_unassigned_cannot(self):
         order = self.env['sale.order'].with_user(self.basic_user).create({

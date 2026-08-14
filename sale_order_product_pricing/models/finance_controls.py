@@ -39,10 +39,18 @@ class ResCompany(models.Model):
     quotation_withholding_responsible_id = fields.Many2one(
         'res.users', string='Withholding Evidence Responsible',
         help='Accounting user responsible for collecting customer withholding evidence.')
-    quotation_standard_payment_term_id = fields.Many2one(
-        'account.payment.term', string='Standard Quotation Payment Terms')
-    quotation_standard_incoterm_id = fields.Many2one(
-        'account.incoterms', string='Standard Quotation Delivery Terms')
+    quotation_high_value_threshold = fields.Monetary(
+        string='High-value quotation threshold', currency_field='currency_id', default=0.0,
+        help=(
+            'Untaxed quotation value at or above this amount requires the configured '
+            'High-Value Approver approval before Issue Offer PDF. Set to zero to disable '
+            'the high-value gate until the company has chosen a threshold.'
+        ),
+    )
+    quotation_high_value_approver_group_id = fields.Many2one(
+        'res.groups', string='High-Value Approver Group',
+        help='Users in this group may approve high-value quotations for this company.',
+    )
 
 
 class ResConfigSettings(models.TransientModel):
@@ -52,10 +60,10 @@ class ResConfigSettings(models.TransientModel):
     quotation_retention_tax_id = fields.Many2one(related='company_id.quotation_retention_tax_id', readonly=False)
     quotation_withholding_responsible_id = fields.Many2one(
         related='company_id.quotation_withholding_responsible_id', readonly=False)
-    quotation_standard_payment_term_id = fields.Many2one(
-        related='company_id.quotation_standard_payment_term_id', readonly=False)
-    quotation_standard_incoterm_id = fields.Many2one(
-        related='company_id.quotation_standard_incoterm_id', readonly=False)
+    quotation_high_value_threshold = fields.Monetary(
+        related='company_id.quotation_high_value_threshold', readonly=False)
+    quotation_high_value_approver_group_id = fields.Many2one(
+        related='company_id.quotation_high_value_approver_group_id', readonly=False)
 
 
 class SaleOrderFinanceApproval(models.Model):
@@ -69,6 +77,7 @@ class SaleOrderFinanceApproval(models.Model):
     approver_id = fields.Many2one('res.users', required=True, readonly=True)
     approval_date = fields.Datetime(required=True, readonly=True, default=fields.Datetime.now)
     reason = fields.Text(required=True)
+    snapshot_fingerprint = fields.Text(required=True, readonly=True, copy=False, default='')
     invalidated = fields.Boolean(readonly=True, default=False)
     invalidated_reason = fields.Char(readonly=True)
     invalidated_date = fields.Datetime(readonly=True)
@@ -179,14 +188,15 @@ class SaleOrder(models.Model):
     finance_approval_ids = fields.One2many('sale.order.finance.approval', 'order_id', readonly=True, copy=False)
     finance_approval_reason = fields.Text(help='Reason recorded for a manager approval.')
     finance_approval_required = fields.Boolean(compute='_compute_finance_approval_required', compute_sudo=True)
+    can_approve_quotation_requirements = fields.Boolean(
+        compute='_compute_can_approve_quotation_requirements',
+        help='True only when the current user may approve at least one pending requirement.',
+    )
     withholding_evidence_ids = fields.One2many('sale.order.withholding.evidence', 'order_id', readonly=True, copy=False)
 
     def _quotation_manager(self):
         user = self.env.user
         return self.env.is_superuser() or user.has_group('sale_order_product_pricing.quotation_manager_group') or user.has_group('sales_team.group_sale_manager')
-
-    def _finance_manager(self):
-        return self._quotation_manager() or self.env.user.has_group('account.group_account_manager')
 
     def _can_select_quotation_taxes(self):
         return (
@@ -258,13 +268,6 @@ class SaleOrder(models.Model):
                 ))
             vals.setdefault('apply_vat', True)
             vals.setdefault('apply_withholding', False)
-            company = self.env['res.company'].browse(vals.get('company_id')) or self.env.company
-            days = vals.get('offer_expiry_days', company.quotation_expiry_days_default)
-            if days != company.quotation_expiry_days_default:
-                if not self._finance_manager():
-                    raise AccessError(_('Only Quotation, Sales, or Accounting Managers may override Days of Expiry.'))
-                if not (vals.get('finance_approval_reason') or '').strip():
-                    raise ValidationError(_('A stated reason is required for a Days of Expiry override.'))
             if not vals['apply_vat'] and not (vals.get('vat_exemption_reason') or '').strip():
                 raise ValidationError(_('A VAT exemption reason is required when 14% VAT is not selected.'))
             if not vals['apply_vat']:
@@ -276,54 +279,97 @@ class SaleOrder(models.Model):
         for order in orders:
             if (order.apply_vat and order.company_id.quotation_vat_tax_id) or (order.apply_withholding and order.company_id.quotation_retention_tax_id):
                 order._apply_quotation_tax_selection()
-            if order.offer_expiry_days != order.company_id.quotation_expiry_days_default:
-                order.message_post(body=_('Days of Expiry overridden to %(days)s by %(user)s: %(reason)s') % {
-                    'days': order.offer_expiry_days, 'user': self.env.user.display_name,
-                    'reason': order.finance_approval_reason,
-                })
         return orders
 
-    @api.onchange('offer_expiry_days')
-    def _onchange_finance_offer_expiry_days(self):
-        for order in self:
-            if order.offer_expiry_days != order.company_id.quotation_expiry_days_default:
-                return {'warning': {
-                    'title': _('Validity override'),
-                    'message': _('Only a Quotation, Sales, or Accounting Manager may override Days of Expiry. State the reason before saving.'),
-                }}
-
-    def _finance_requirement_codes(self):
+    def _is_qs_prepared_quote(self):
+        """A QS assignment or QS creator requires manager sign-off before issue."""
         self.ensure_one()
-        order = self.sudo()
+        return bool(
+            self.quotation_specialist_id
+            or (self.create_uid and self.create_uid.has_group(
+                'sale_order_product_pricing.quotation_specialist_group'
+            ))
+        )
+
+    def _high_value_amount_company_currency(self):
+        self.ensure_one()
+        order_date = fields.Date.to_date(self.date_order) or fields.Date.context_today(self)
+        return self.currency_id._convert(
+            self.amount_untaxed, self.company_id.currency_id, self.company_id, order_date,
+        )
+
+    def _is_high_value_quotation(self):
+        self.ensure_one()
+        threshold = self.company_id.quotation_high_value_threshold
+        return bool(threshold > 0 and self._high_value_amount_company_currency() >= threshold)
+
+    def _quotation_issue_requirement_codes(self):
+        """Return the only approvals that can block Issue Offer PDF.
+
+        Payment terms, incoterms, expiry, manual prices, discounts and
+        withholding remain commercial/accounting monitoring data.  They must
+        not silently become Finance approval blockers again.
+        """
+        self.ensure_one()
         requirements = {}
-        lines = order.order_line.filtered(lambda line: not line.display_type)
-        if any(line.price_origin == 'edited' and not line._is_authorized_foc() for line in lines):
-            requirements['manual_price'] = _('Manual selling price')
-        assigned_caps = [(getattr(user, 'standard_discount_cap', getattr(user, 'max_discount', 0.0)) or 0.0)
-                         for user in (order.user_id | order.quotation_specialist_id)]
-        company_cap = getattr(order.company_id, 'standard_discount_maximum', 30.0) or 0.0
-        if any(line.standard_discount_override_used or line.discount > min(max(assigned_caps or [0.0]), company_cap, 30.0) for line in lines):
-            requirements['discount_override'] = _('Discount override')
-        if order.company_id.quotation_standard_payment_term_id and order.payment_term_id != order.company_id.quotation_standard_payment_term_id:
-            requirements['nonstandard_payment_terms'] = _('Nonstandard payment terms')
-        if order.company_id.quotation_standard_incoterm_id and order.incoterm != order.company_id.quotation_standard_incoterm_id:
-            requirements['nonstandard_delivery_terms'] = _('Nonstandard delivery terms')
-        if order.offer_expiry_days != order.company_id.quotation_expiry_days_default:
-            requirements['validity_override'] = _('Validity override')
-        eur = self.env.ref('base.EUR')
-        order_date = fields.Date.to_date(order.date_order) or fields.Date.context_today(order)
-        if order.currency_id._convert(order.amount_untaxed, eur, order.company_id, order_date) >= 100000.0:
-            requirements['high_value'] = _('Untaxed EUR-equivalent value of EUR 100,000 or more')
-        if not order.apply_vat:
+        if self._is_qs_prepared_quote():
+            requirements['quotation_manager'] = _('Quotation Manager approval for QS quotation')
+        if not self.apply_vat:
             requirements['vat_exemption'] = _('VAT exemption')
+        if self._is_high_value_quotation():
+            requirements['high_value'] = _(
+                'High-value quotation: untaxed value of %(amount)s %(currency)s or more'
+            ) % {
+                'amount': self.company_id.quotation_high_value_threshold,
+                'currency': self.company_id.currency_id.name,
+            }
         return requirements
 
-    @api.depends('apply_vat', 'vat_exemption_reason', 'order_line.price_origin', 'order_line.discount',
-                 'order_line.standard_discount_override_used', 'payment_term_id', 'incoterm',
-                 'offer_expiry_days', 'amount_untaxed', 'currency_id', 'finance_approval_ids.invalidated')
+    # Compatibility for dependent modules.  New code uses the neutral name.
+    def _finance_requirement_codes(self):
+        return self._quotation_issue_requirement_codes()
+
+    @api.depends('apply_vat', 'vat_exemption_reason', 'quotation_specialist_id', 'create_uid',
+                 'amount_untaxed', 'currency_id', 'date_order',
+                 'company_id.quotation_high_value_threshold',
+                 'finance_approval_ids', 'finance_approval_ids.invalidated',
+                 'finance_approval_ids.snapshot_fingerprint')
     def _compute_finance_approval_required(self):
         for order in self:
-            order.finance_approval_required = bool(order._finance_requirement_codes())
+            requirements = set(order._quotation_issue_requirement_codes())
+            if not requirements:
+                order.finance_approval_required = False
+                continue
+            snapshot = order._quotation_approval_snapshot()
+            approved = set(order.sudo().finance_approval_ids.filtered(
+                lambda approval: not approval.invalidated
+                and approval.snapshot_fingerprint == snapshot
+            ).mapped('code'))
+            order.finance_approval_required = bool(requirements - approved)
+
+    @api.depends(
+        'apply_vat', 'quotation_specialist_id', 'create_uid',
+        'amount_untaxed', 'currency_id', 'date_order',
+        'company_id.quotation_high_value_threshold',
+        'company_id.quotation_high_value_approver_group_id',
+    )
+    @api.depends_context('uid')
+    def _compute_can_approve_quotation_requirements(self):
+        for order in self:
+            order.can_approve_quotation_requirements = any(
+                order._can_approve_requirement(code)
+                for code in order._quotation_issue_requirement_codes()
+            )
+
+    def _quotation_approval_snapshot(self):
+        """Commercial snapshot used as immutable approval evidence.
+
+        The existing retention-only fingerprint intentionally omits
+        withholding, so toggling only withholding carries approvals forward.
+        """
+        self.ensure_one()
+        canonical = getattr(self, '_commercial_fingerprint', lambda: False)()
+        return repr(canonical or self._retention_only_fingerprint())
 
     def _invalidate_finance_approvals(self, reason):
         approvals = self.sudo().mapped('finance_approval_ids').filtered(lambda approval: not approval.invalidated)
@@ -334,35 +380,76 @@ class SaleOrder(models.Model):
             for order in self:
                 order.message_post(body=_('Quotation approvals invalidated: %s') % reason)
 
-    def action_approve_finance_requirements(self):
-        if not self._quotation_manager():
-            raise AccessError(_('Only Quotation Managers and Sales Managers may approve quotation exceptions.'))
+    def _lock_quotation_approval_rows(self):
+        """Serialize approve clicks before checking/creating immutable evidence."""
+        if self.ids:
+            self.env.cr.execute(
+                'SELECT id FROM sale_order WHERE id IN %s FOR UPDATE', [tuple(self.ids)]
+            )
+
+    def _can_approve_requirement(self, code):
+        self.ensure_one()
+        if code == 'high_value':
+            group = self.company_id.quotation_high_value_approver_group_id
+            return bool(group and (self.env.is_superuser() or self.env.user in group.users))
+        return self._quotation_manager()
+
+    def action_approve_quotation_requirements(self):
+        """Create server-derived immutable approval snapshots.
+
+        The method accepts no client-provided requirement, approver or snapshot,
+        so it cannot be forged through RPC/import calls.
+        """
         for order in self:
             order.check_access_rights('write')
             order.check_access_rule('write')
+            order._lock_quotation_approval_rows()
             # ``active`` and ``current_revision_id`` are supplied by the
             # optional lifecycle module, which is installed after this module
             # on a clean database.  Keep the approval gate valid both with and
             # without that extension loaded.
             if (order.state != 'draft' or not getattr(order, 'active', True)
                     or getattr(order, 'current_revision_id', False)):
-                raise UserError(_(
-                    'Commercial exceptions may be approved only on the active current draft.'
+                raise UserError(_('Quotation approvals may be recorded only on the active current draft.'))
+            requirements = order._quotation_issue_requirement_codes()
+            if 'high_value' in requirements and not order.company_id.quotation_high_value_approver_group_id:
+                raise ValidationError(_(
+                    'Configure a High-Value Approver Group before approving a high-value quotation.'
                 ))
-            requirements = order._finance_requirement_codes()
-            current = order.sudo().finance_approval_ids.filtered(lambda approval: not approval.invalidated)
+            if requirements and not any(
+                    order._can_approve_requirement(code) for code in requirements):
+                raise AccessError(_('You are not an eligible approver for this quotation.'))
+            snapshot = order._quotation_approval_snapshot()
+            current = order.sudo().finance_approval_ids.filtered(
+                lambda approval: not approval.invalidated
+                and approval.snapshot_fingerprint == snapshot
+            )
             approved = set(current.mapped('code'))
             for code, label in requirements.items():
-                if code not in approved:
-                    reason = order.vat_exemption_reason if code == 'vat_exemption' else order.finance_approval_reason
-                    if not (reason or '').strip():
-                        raise ValidationError(_('A reason is required before approving %(label)s.') % {'label': label})
-                    self.env['sale.order.finance.approval'].sudo().with_context(_finance_internal_token=_FINANCE_INTERNAL_TOKEN).create({
-                        'order_id': order.id, 'code': code, 'label': label, 'approver_id': self.env.user.id, 'reason': reason,
-                    })
+                if code in approved or not order._can_approve_requirement(code):
+                    continue
+                # VAT already has a mandatory business reason.  Ordinary QS
+                # and high-value sign-off must be quick: the immutable
+                # snapshot and approver/time are the approval evidence, while
+                # a manager may still add an optional note.
+                reason = (
+                    order.vat_exemption_reason if code == 'vat_exemption'
+                    else (order.finance_approval_reason or _('Approval recorded.'))
+                )
+                self.env['sale.order.finance.approval'].sudo().with_context(
+                    _finance_internal_token=_FINANCE_INTERNAL_TOKEN,
+                ).create({
+                    'order_id': order.id, 'code': code, 'label': label,
+                    'approver_id': self.env.user.id, 'reason': reason,
+                    'snapshot_fingerprint': snapshot,
+                })
         return True
 
-    def _check_finance_issue_requirements(self):
+    # Existing views and optional lifecycle code call this historical method.
+    def action_approve_finance_requirements(self):
+        return self.action_approve_quotation_requirements()
+
+    def _check_quotation_issue_approval_requirements(self):
         for order in self:
             if order.tax_selection_review_required:
                 raise UserError(_(
@@ -378,19 +465,25 @@ class SaleOrder(models.Model):
                 raise UserError(_('Issue Offer PDF is blocked: commercial line taxes must match the quotation Taxes selection.'))
             if not order.apply_vat and not (order.vat_exemption_reason or '').strip():
                 raise UserError(_('Issue Offer PDF is blocked: enter the VAT exemption reason.'))
-            if order.apply_withholding and not order.company_id.quotation_withholding_responsible_id:
-                raise UserError(_(
-                    'Issue Offer PDF is blocked: configure the Accounting user responsible '
-                    'for collecting customer withholding evidence.'
-                ))
             if lines.filtered(lambda line: float_compare(line.price_unit, 0.0, precision_rounding=order.currency_id.rounding) == 0 and not line._is_authorized_foc()):
                 raise UserError(_('Issue Offer PDF is blocked: every zero-price line must be authorized Free of Charge.'))
-            requirements = order._finance_requirement_codes()
-            approved = set(order.sudo().finance_approval_ids.filtered(lambda approval: not approval.invalidated).mapped('code'))
+            requirements = order._quotation_issue_requirement_codes()
+            if 'high_value' in requirements and not order.company_id.quotation_high_value_approver_group_id:
+                raise UserError(_('Issue Offer PDF is blocked: configure the High-Value Approver Group.'))
+            snapshot = order._quotation_approval_snapshot()
+            approved = set(order.sudo().finance_approval_ids.filtered(
+                lambda approval: not approval.invalidated
+                and approval.snapshot_fingerprint == snapshot
+            ).mapped('code'))
             missing = [label for code, label in requirements.items() if code not in approved]
             if missing:
                 raise UserError(_('Issue Offer PDF requires approval for: %s.') % ', '.join(missing))
         return True
+
+    # Compatibility hook for the lifecycle module while it moves to the
+    # quotation-neutral method name.
+    def _check_finance_issue_requirements(self):
+        return self._check_quotation_issue_approval_requirements()
 
     def _retention_only_fingerprint(self):
         self.ensure_one()
@@ -420,11 +513,19 @@ class SaleOrder(models.Model):
         )
         if source_order.state != 'sent' or self.state != 'draft' or not same_commercial_offer:
             raise ValidationError(_('Approval carry-forward is allowed only for a retention-only revision of the same commercial offer.'))
-        source_approvals = source_order.sudo().finance_approval_ids.filtered(lambda approval: not approval.invalidated)
+        allowed_codes = {'quotation_manager', 'vat_exemption', 'high_value'}
+        source_snapshot = source_order._quotation_approval_snapshot()
+        source_approvals = source_order.sudo().finance_approval_ids.filtered(
+            lambda approval: not approval.invalidated
+            and approval.code in allowed_codes
+            and approval.snapshot_fingerprint == source_snapshot
+        )
+        snapshot = self._quotation_approval_snapshot()
         for approval in source_approvals:
             self.env['sale.order.finance.approval'].sudo().with_context(_finance_internal_token=_FINANCE_INTERNAL_TOKEN).create({
                 'order_id': self.id, 'code': approval.code, 'label': approval.label, 'approver_id': approval.approver_id.id,
-                'approval_date': approval.approval_date, 'reason': approval.reason, 'carried_from_approval_id': approval.id,
+                'approval_date': approval.approval_date, 'reason': approval.reason,
+                'snapshot_fingerprint': snapshot, 'carried_from_approval_id': approval.id,
             })
         return True
 
@@ -498,52 +599,16 @@ class SaleOrder(models.Model):
         })
         self._apply_quotation_tax_selection()
         self._carry_retention_only_foc_evidence_from(source_order)
-        self._carry_retention_only_approvals_from(source_order)
         return True
 
     def _create_pending_withholding_evidence(self):
-        for order in self:
-            if not order.apply_withholding or order.withholding_evidence_ids.filtered(lambda task: task.status == 'pending'):
-                continue
-            tax = order._validate_quotation_tax(order.company_id.quotation_retention_tax_id, -1.0, _('negative 1% withholding'))
-            amount = order.currency_id.round(abs(order.amount_untaxed * tax.amount / 100.0))
-            responsible = order.company_id.quotation_withholding_responsible_id
-            evidence = self.env['sale.order.withholding.evidence'].sudo().with_context(
-                _finance_internal_token=_FINANCE_INTERNAL_TOKEN).create({
-                'order_id': order.id, 'responsible_id': responsible.id,
-                'tax_id': tax.id, 'expected_basis': order.currency_id.round(order.amount_untaxed), 'expected_amount': amount,
-            })
-            if responsible:
-                activity = self.env['mail.activity'].sudo().create({
-                    'activity_type_id': self.env.ref('mail.mail_activity_data_todo').id,
-                    'res_model_id': self.env['ir.model']._get_id('sale.order'),
-                    'res_id': order.id,
-                    'user_id': responsible.id,
-                    'summary': _('Collect customer 1% withholding evidence'),
-                    'note': _(
-                        'Collect the customer withholding certificate and remittance '
-                        'reference, then close the Withholding Evidence record.'
-                    ),
-                })
-                evidence.with_context(
-                    _finance_internal_token=_FINANCE_INTERNAL_TOKEN,
-                ).write({'activity_id': activity.id})
+        """Compatibility no-op: Accounting evidence is not quotation workflow."""
         return True
 
     def action_cancel(self):
-        result = super().action_cancel()
-        pending = self.sudo().mapped('withholding_evidence_ids').filtered(lambda item: item.status == 'pending')
-        if pending:
-            activities = pending.mapped('activity_id')
-            pending.with_context(_finance_internal_token=_FINANCE_INTERNAL_TOKEN).write({
-                'status': 'cancelled', 'closure_reason': _('Sales Order cancelled.'),
-                'closed_by': self.env.user.id, 'closed_at': fields.Datetime.now(),
-            })
-            for activity in activities:
-                activity.sudo().action_done(
-                    feedback=_('Sales Order cancelled; withholding follow-up closed.')
-                )
-        return result
+        # Legacy evidence records are retained for database compatibility only.
+        # Phase 1 creates no quotation-side Accounting follow-up on cancellation.
+        return super().action_cancel()
 
     def write(self, vals):
         if _is_finance_internal(self.env) or _is_offer_date_internal(self.env):
@@ -563,13 +628,6 @@ class SaleOrder(models.Model):
             ))
         if changing_selection and self.filtered(lambda order: order.state != 'draft') and not _is_retention_revision_internal(self.env):
             raise UserError(_('Taxes are locked after an offer is issued. Create a revision.'))
-        expiry_changes = self.filtered(lambda order: 'offer_expiry_days' in vals and vals['offer_expiry_days'] != order.offer_expiry_days)
-        if expiry_changes:
-            if not self._finance_manager():
-                raise AccessError(_('Only Quotation, Sales, or Accounting Managers may override Days of Expiry.'))
-            for order in expiry_changes.filtered(lambda item: vals['offer_expiry_days'] != item.company_id.quotation_expiry_days_default):
-                if not (vals.get('finance_approval_reason', order.finance_approval_reason) or '').strip():
-                    raise ValidationError(_('A stated reason is required for a Days of Expiry override.'))
         if any(not vals.get('apply_vat', order.apply_vat) for order in self):
             for order in self:
                 final_vat = vals.get('apply_vat', order.apply_vat)
@@ -593,7 +651,6 @@ class SaleOrder(models.Model):
             'ks_enable_discount', 'ks_global_discount_type',
             'ks_global_discount_rate',
         }
-        becomes_confirmed = vals.get('state') == 'sale'
         result = super().write(vals)
         if changing_selection:
             self._apply_quotation_tax_selection()
@@ -605,35 +662,11 @@ class SaleOrder(models.Model):
             self._invalidate_finance_approvals(_('VAT selection or VAT exemption changed.'))
         elif commercial_fields.intersection(vals):
             self._invalidate_finance_approvals(_('Commercial header changed.'))
-        for order in expiry_changes.filtered(lambda item: vals['offer_expiry_days'] != item.company_id.quotation_expiry_days_default):
-            order.message_post(body=_('Days of Expiry overridden to %(days)s by %(user)s: %(reason)s') % {
-                'days': vals['offer_expiry_days'], 'user': self.env.user.display_name,
-                'reason': vals.get('finance_approval_reason', order.finance_approval_reason),
-            })
-        if becomes_confirmed:
-            self.filtered(lambda order: order.state == 'sale')._create_pending_withholding_evidence()
         return result
 
     def _create_invoices(self, *args, **kwargs):
-        """Let standard Odoo create drafts, then link the first evidence task.
-
-        No invoice is created by confirmation and no accounting value is
-        calculated here; the link only helps Accounting collect the later
-        customer certificate against the document Odoo actually created.
-        """
-        invoices = super()._create_invoices(*args, **kwargs)
-        for order in self:
-            evidence = order.withholding_evidence_ids.filtered(
-                lambda item: item.status == 'pending' and not item.invoice_id
-            )[:1]
-            related = invoices.filtered(
-                lambda move: order in move.invoice_line_ids.sale_line_ids.order_id
-            )[:1]
-            if evidence and related:
-                evidence.with_context(
-                    _finance_internal_token=_FINANCE_INTERNAL_TOKEN,
-                ).write({'invoice_id': related.id})
-        return invoices
+        """Leave standard invoices completely untouched in Phase 1."""
+        return super()._create_invoices(*args, **kwargs)
 
 
 class SaleOrderLine(models.Model):

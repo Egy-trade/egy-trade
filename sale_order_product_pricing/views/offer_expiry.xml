@@ -8,10 +8,10 @@
         <field name="arch" type="xml">
             <field name="validity_date" position="before">
                 <field name="offer_date" readonly="1"
-                       help="Set to the Cairo business date only when Update Today is recorded; viewing or an unrelated save never changes it."/>
+                       help="Recorded when the quotation draft is created. Viewing or saving unrelated fields does not change it."/>
                 <field name="offer_expiry_days" string="Days of Expiry"
                        attrs="{'readonly': [('state', '!=', 'draft')]}"
-                       help="Sets the number of days used to calculate Expiration Date from Offer Date. Quotation, Sales, or Accounting Managers may override the company default; the override changes the offer validity and is audited, so state the manager reason before saving."/>
+                       help="Sets the number of days used to calculate Expiration Date from Offer Date. Sales and QS users may adjust it on a draft; review the resulting date before issuing the offer."/>
             </field>
             <field name="validity_date" position="attributes">
                 <attribute name="string">Expiration Date</attribute>

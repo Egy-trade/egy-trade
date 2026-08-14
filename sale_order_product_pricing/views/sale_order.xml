@@ -32,6 +32,8 @@
                 </xpath>
                 <xpath expr="//field[@name='pricelist_id']" position="attributes">
                     <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
+                    <attribute name="domain">[('active', '=', True)]</attribute>
+                    <attribute name="help">Choose an active Sales Pricelist. Only lines with a verified Odoo Pricelist origin are refreshed; Product Pricing and Manual Price lines stay protected.</attribute>
                 </xpath>
                 <xpath expr="//field[@name='payment_term_id']" position="attributes">
                     <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
@@ -127,31 +129,23 @@
                         </group>
                         <group>
                             <button name="action_preview_product_pricing" type="object" string="Preview Product Pricing"
-                                    class="btn-secondary" attrs="{'invisible': [('state', '!=', 'draft')]}"
+                                    class="btn-secondary" attrs="{'invisible': ['|', ('state', '!=', 'draft'), ('product_pricing', '=', False)]}"
                                     help="Product Pricing users calculate and explain proposed line prices without changing the quotation. Review the results, then use Confirm Apply only when every line is ready."/>
                         </group>
+                        <!-- This is an input workspace over the same order lines, not a
+                             second selling-price grid. It is hidden until Product Pricing
+                             is enabled and never displays quoted prices or totals. -->
                         <field name="pricing_line_ids" nolabel="1"
-                               attrs="{'readonly': [('state', '!=', 'draft')]}">
+                               attrs="{'invisible': [('product_pricing', '=', False)], 'readonly': [('state', '!=', 'draft')]}"
+                               help="Restricted Product Pricing inputs. Enter the supplier estimate and factors here, then use Preview to review proposed selling prices before Apply.">
                             <tree editable="bottom" create="0" delete="0">
                                 <field name="product_id" readonly="1"/>
-                                <field name="name" optional="hide"/>
                                 <field name="product_uom_qty" string="Quantity" readonly="1"/>
-                                <field name="product_uom" readonly="1" optional="hide"/>
                                 <field name="purchase_price_estimate" string="Purchase Price Estimate"/>
-                                <field name="pricing_eligible" readonly="1"/>
+                                <field name="factor" string="Global Factor"/>
+                                <field name="line_factor" string="Line Factor"/>
+                                <field name="pricing_eligible" readonly="1" optional="hide"/>
                                 <field name="pricing_warning" readonly="1" optional="show"/>
-                                <field name="factor"/>
-                                <field name="line_factor"/>
-                                <field name="estimate_unit_price" string="Estimate" readonly="1"/>
-                                <field name="price_reference" string="Reference" readonly="1"/>
-                                <field name="price_unit" string="Quoted Price" readonly="1"/>
-                                <field name="price_origin" invisible="1"/>
-                                <field name="price_origin_display" string="Price Origin" widget="html" readonly="1"/>
-                                <button name="action_reclassify_historical_origin" type="object"
-                                        string="Certify Origin" icon="fa-shield"
-                                        groups="sales_team.group_sale_manager"
-                                        attrs="{'invisible': [('price_origin', '!=', 'historical_unverified')]}"
-                                        help="Sales Managers certify the evidence for a Historical-Unverified price origin. Certification records the chosen origin without changing the price; review the source document and enter the evidence reason before confirming."/>
                             </tree>
                         </field>
                         <group string="Price Origin Summary">
