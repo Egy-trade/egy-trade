@@ -1,122 +1,127 @@
-# Quotation controls: Odoo 16 UAT guide
+# Quotation Phase 1 - Odoo 16 UAT Guide
 
-## 1. Test build and prerequisites
+## Release identity
 
-Run this only on a disposable Odoo 16 database restored from a recent production backup. Do not test on `live`.
+- Test only the isolated branch `codex/quotation-phase1-minimal`.
+- Record the exact deployed Git SHA and Odoo.sh build number.
+- Use a disposable database restored from a recent production backup; never test on `live`.
+- Upgrade these modules together:
+  - `egy-trade_custom`
+  - `sale_discount_total`
+  - `sale_order_product_pricing`
+  - `sale_revision_history`
+  - `sale_status_waiting_approve` if it is installed
+  - `custom_create_po_from_so` for procurement regression
 
-Deploy the final approved commit from `codex/quotation-uat-completion` to the
-isolated Odoo.sh branch `staging-pricing-test-20260810`. Test only the Odoo.sh
-build whose SHA exactly matches that final commit (it must contain `7202e97`
-and the follow-up R03 origin-integrity fix). Record the deployed SHA with the
-evidence; do not test an older branch or build. Then upgrade these modules
-together:
+Before starting, take a database backup and record the number of Sales Orders in
+the legacy states `approve`, `waiting`, and `waiting_approve`.
 
-```text
-sale_discount_total
-sale_order_product_pricing
-sale_revision_history
-custom_create_po_from_so
-```
+## Test users and configuration
 
-Example server-side test command (adapt the executable, database, and add-ons paths to the Odoo.sh build):
+Use separate non-administrator users for QS, Salesperson, Quotation Manager,
+Sales Manager, Product Pricing, Accounting Manager, and the configured
+High-Value Approver group.
 
-```bash
-odoo-bin -d <DISPOSABLE_DB> --stop-after-init --test-enable \
-  --test-tags /sale_discount_total,/sale_order_product_pricing,/sale_revision_history,/custom_create_po_from_so \
-  -u sale_discount_total,sale_order_product_pricing,sale_revision_history,custom_create_po_from_so
-```
+Accounting must select the company's existing 14% sales VAT and existing
+negative 1% sales withholding taxes in Sales Settings. Do not create or alter
+taxes, accounts, tags, fiscal positions, or tax repartition rules for this test.
 
-Create separate non-admin users for: Quotation Specialist (QS), Salesperson, Quotation Manager, Sales Manager, Product Pricing User, Lighting Designer, ordinary Employee, Procurement, and Finance/Accounting Manager. Do not reuse Administrator for role tests.
+Sales Management must set a high-value threshold and approver group. Also test
+with threshold `0`, which disables only the high-value approval requirement.
 
-Before testing, Accounting must verify the existing configuration (do not create
-or change taxes, accounts, tax tags, or tax repartition rules during this UAT):
-
-- a 14% sales VAT tax;
-- the existing 1% sales withholding tax, including its rate, account and report tag;
-- standard payment terms and delivery terms;
-- Standard Discount enabled, company maximum at or below 30%, default personal cap, and individual caps;
-- the normal quotation-validity default (14 days).
-
-## 2. Core quotation workflow
+## A. Drafting and usability
 
 | ID | Tester | Action | Expected result |
 |---|---|---|---|
-| Q01 | QS | Open an existing quotation and close it without editing. | No quotation, line, audit, or preview timestamp changes. |
-| Q02 | QS | Enter manual Item # values, plus section and note rows. | Exactly one Item # column exists; entered values persist; sections/notes have no generated number. |
-| Q03 | Pricing User | Before any commercial edit today, click Add Below to prove the decision wizard opens. Choose Update Today, then set Global Factor, save, and click Add Below again. | One blank row is inserted below. It inherits Global Factor only; product, quantity, estimate, price, discounts, Item # are blank/default and Line Factor is 1. |
-| Q04 | QS | On the first commercial edit of the Cairo day, try to save without recording a decision. | Save is rejected and directs the user to Record Commercial Change. The prominent action opens Update Today/Create Revision. No partial edit persists. |
-| Q05 | QS | Choose Update Today. | Same draft remains active; Offer Date becomes Cairo today; expiry recalculates from Days of Expiry; `date_order` is unchanged; chatter/audit records user and time. |
-| Q06 | QS | Choose Create Revision with a reason. | Old draft becomes inactive history; new `SXXXX-01` draft opens; copied commercial values are exact and the reason is audited. |
-| Q07 | Quotation Manager, Sales Manager, and Accounting Manager | With each manager role in turn, change Days of Expiry from 14 without a reason, then with a reason. Also try as ordinary QS/Sales. | No-reason save is blocked; each manager's reasoned override succeeds with warning/audit and requires approval before issue; ordinary QS/Sales cannot override. |
-| Q08 | Pricing User or Sales Manager | Click Product Pricing Preview and close it. Then open the same quotation as QS. | Preview causes no selling price, origin, offer date, audit log, or quotation-state change. QS cannot see/use Product Pricing or confidential cost controls. |
-| Q09 | Authorized issuer | Click Issue Offer PDF. | Confirmation warns that a customer document will be issued. PDF is rendered once, attached to the quotation, actor/time/version are logged, state becomes Sent, and the quotation is locked. |
-| Q10 | Sales/QS | Try UI edit, import, RPC write, line create/write/delete, direct state reopening, and standard Send on the issued record. | Every mutation is blocked. Normal confirmation is allowed only from the workflow-issued Sent record and cannot change commercial fields. |
+| A01 | QS | Create a quotation and add/edit several products, sections and notes. Save repeatedly. | Draft editing is immediate. No daily commercial-change decision or Record Commercial Change popup blocks the save. The form remains on the current quotation. |
+| A02 | QS/Sales | Change to another active Sales Pricelist. | The change is allowed on Draft. Verified Pricelist-origin lines refresh; Manual Price and Product Pricing lines remain unchanged and audited. Archived pricelists are rejected. |
+| A03 | QS/Sales | Try to edit a unit selling price without Product Pricing/manager authority. | The price edit is denied. Product, quantity, description, terms and allowed discounts remain editable. |
+| A04 | Any Sales user | Inspect the line actions. | Add Below is not available during stabilization. Standard Add a product works without a full-page refresh or forced navigation. |
+| A05 | QS | Enter Item # values. | One manual Item # column is shown; values persist and are not automatically renumbered. |
 
-Note: the daily control is a server-enforced transactional gate plus a **Record Commercial Change** wizard. Odoo's standard form Save does not itself open a custom JavaScript popup; saving without a recorded decision is rejected without persisting the edit.
-
-## 3. Pricing, approvals, and roles
+## B. Product Pricing and price origin
 
 | ID | Tester | Action | Expected result |
 |---|---|---|---|
-| R01 | Assigned QS | As the quotation's assigned QS, assign/reassign Salesperson on an active draft; repeat by import/RPC with inactive, portal, and non-Sales users; then try on Sent. | Selector contains only active internal Sales users; backend/import/RPC rejects all invalid users; assignment changes are audited; Sent cannot be reassigned. |
-| R02 | QS | Separately use the client, invoice-contact, and delivery-contact selectors, then try each selector's Create/Edit route and try deleting a contact from Contacts/direct URL. | Existing selection works; Create/Edit is absent or denied and deletion raises access denial. QS has no Purchase access. |
-| R03 | Sales/QS | Apply Standard Discount to a verified Pricelist line at personal cap, then 0.01 above. Repeat draft line creation through CSV import/RPC with policy disabled and with manual/unverified origin. Also try changing Selling Price and Standard Discount together in one UI save/import/RPC write. | At-cap save succeeds; over-cap and disabled-policy creation are blocked in UI/import/RPC. Product Pricing/manual/historical-unverified origins are ineligible. A combined manual-price/Standard-Discount write is rejected without changing either value, including for management. |
-| R04 | Quotation Manager and Sales Manager | Set the user's personal cap below the company cap. Exceed the personal cap with no reason, then supply a reason. | No-reason save is blocked; reasoned override succeeds only within company/30% hard caps, creates protected audit evidence, clears the one-use reason, and requires issue approval. |
-| R05 | Salesperson | Do not accept Sales responsibility; have issuer issue the offer. | Issue confirmation warns; issue still succeeds; exception is audited, assigned Sales/Managers are notified, and Issued Without Sales Acceptance KPI is true. |
-| R06 | Assigned Salesperson | Accept responsibility, then issue a fresh draft. | Acceptance actor/time are stored and exception KPI remains false. |
-| R07 | Manager, then assigned/unassigned Lighting Designers | Before release, inspect the drawing binary plus every projected free-text value (project name, internal reference, product description, drawing title, and filename) and confirm none contains prices, estimates, margins, vendors, client organization/contact, or other commercial data. Release it; test assigned access, then unassign/remove the designer and retry UI, direct URL, download, fields_get/search_read, and export. | Assigned designer sees only reviewed technical scope/drawings/products/descriptions/quantities/revision status. Unassigned/revoked designer sees no scope row or download and cannot access Sales quotation records. Structured commercial/contact fields are absent. Human content review is mandatory because the module does not sanitize free text or scan files. |
-| R08 | Ordinary Employee | Open Project Directory, then try Sales quotations, Technical Quotations/Drawings, documents, direct URLs, fields_get/search_read, and export. | Only project name, internal reference, client organization, stage, owner team, and latest activity are available through the directory; lines, contacts, documents, and commercial values stay inaccessible. |
-| R09 | Sales Manager | On an active draft/revision with a Historical-Unverified line, open Product Pricing and use Certify Origin with the required evidence/reason; repeat against an immutable Sent version. | Draft/revision certification records the verified origin and audit without changing the selling price; unauthorized users and Sent-version certification are rejected, and the Sent version remains unchanged. |
-| R10 | All roles | Hover each renamed/custom field and action. | Plain-language help explains purpose, authorized user, effect, and next action for Item #, estimates/origin, pricing eligibility/warning, Preview/Apply, factors, FOC, validity, VAT, withholding, issue, revisions, and approvals. |
+| B01 | Ordinary QS/Sales | Open a quotation. | Product Pricing inputs, supplier estimates, factors, proposed prices, audit and margins are not visible. Price Origin is visible without revealing cost. |
+| B02 | Product Pricing user | Enable Product Pricing. | A restricted input-only table appears for the same quotation lines. It shows product, quantity, Purchase Price Estimate, factors and warnings; it does not show selling prices or totals. |
+| B03 | Product Pricing user | Enter estimate and factors, then Preview and close. | Preview shows the proposal but closing it changes no selling price, origin, state or audit. |
+| B04 | Product Pricing user | Preview again and Confirm Apply. | Only the reviewed unchanged lines are applied atomically and the price origin/audit records Product Pricing. |
+| B05 | Product Pricing user | Set Purchase Price Estimate to zero. | Product Pricing skips its formula and proposes the selected Sales Pricelist price instead of producing an accidental zero selling price. |
+| B06 | Product Pricing user | Change an input after Preview, then attempt Apply. | Apply is rejected as stale; Preview must be run again. |
 
-## 4. Purchase Price Estimate and procurement
+## C. Global quotation taxes
 
 | ID | Tester | Action | Expected result |
 |---|---|---|---|
-| P01 | Pricing + Procurement | Put a non-zero Purchase Price Estimate on a service line and generate its RFQ/PO. Repeat with an MTO product. | Draft PO line starts from the stored quotation estimate converted with its saved estimate currency/rate; source quotation/line and estimate evidence are read-only. |
-| P02 | Procurement | With zero estimate and a valid positive vendor pricelist, generate RFQ. | Vendor price is retained and Supplier Cost Required is false. |
-| P03 | Procurement | With zero estimate and no valid vendor price, generate RFQ and confirm. | Draft line is zero with Supplier Cost Required; confirmation is blocked. Entering positive cost without reason is blocked. Cost plus reason clears the flag, records user/time, and posts an audit. |
-| P04 | API user | Try to create/write PO provenance or clear Supplier Cost Required directly through import/RPC. | Protected source, estimate, and audit fields reject forgery/tampering. |
+| C01 | QS | Create a new quotation. | VAT 14% is selected by default; 1% Withholding is off. Existing configured Odoo tax records are used. |
+| C02 | QS/Sales | Test VAT only, VAT plus withholding, withholding only, and neither. | Each selection is applied globally to commercial lines; sections/notes are unaffected. Line Taxes are read-only. |
+| C03 | QS/Sales | Add a new product after changing the header selection. | The new line receives the current global selection through the normal fiscal-position mapping. |
+| C04 | QS/Sales | Change Incoterm to CIF and back. | Incoterm never adds/removes taxes. There is no CIF tax treatment and no Finance Controls page. |
+| C05 | QS/Sales | Turn VAT off without a reason, then with a reason. | Missing reason is rejected. With a reason, the requester/time are recorded and Quotation Manager approval is required before Issue Offer PDF. |
+| C06 | QS/Sales | Select or clear withholding. | No Finance approval is requested. Withholding is a commercial proposal only; no invoice, journal entry or accounting evidence task is created. |
+| C07 | API/import tester | Try to edit an individual line tax or protected VAT audit fields. | A line-tax write is rejected; an explicit tax on a newly created line is normalized to the header selection; protected audit fields are rejected. No bypassed line tax persists. |
 
-## 5. Global VAT, withholding, confirmation, and invoices
-
-| ID | Tester | Action | Expected result |
-|---|---|---|---|
-| T01 | QS | Create a new quotation. | **VAT 14%** is selected; **1% Withholding** is clear. Odoo's existing VAT tax is proposed on every commercial line and totals update. |
-| T02 | QS | Add another product, section, and note line after selecting VAT. | The new commercial product line receives the same global tax selection. Sections and notes do not receive taxes. The line **Taxes** column is visible but cannot be edited. |
-| T03 | QS | Select 1% Withholding while VAT remains selected. | Both configured taxes are proposed globally; no Finance approval is requested. The total reflects Odoo's normal tax calculation. |
-| T04 | QS | Clear VAT, enter a genuine VAT-exemption reason, and leave withholding clear. | The draft is tax-free, the reason/audit requester/time are recorded, and Issue Offer PDF is blocked until a Quotation or Sales Manager approves the VAT exception. |
-| T05 | QS | Clear VAT, enter a reason, then select 1% Withholding. | Only the existing withholding tax is proposed. Manager approval is required because VAT is absent, not because withholding is selected. |
-| T06 | QS | Select neither VAT nor withholding. | No line taxes are proposed. The VAT-exemption reason and manager approval are still required before issue. |
-| T07 | Quotation/Sales Manager | Approve the current VAT exemption, then change VAT status, reason, customer, product, quantity, price, discount, payment term or delivery term. | The VAT approval is invalidated by a relevant change and Issue Offer PDF is blocked again until current exceptions are approved. Restoring VAT removes the VAT-exemption approval requirement. |
-| T08 | QS/Sales | Attempt to write `tax_id`, `apply_vat`, or `apply_withholding` through import/RPC or an alternate view; repeat after sending a quotation. | Individual line tax edits are rejected. Only authorized QS/Sales changes to draft header selectors succeed; sent quotation values cannot change. |
-| T09 | All roles | Choose CIF or change the incoterm. | CIF is absent as a tax treatment and the selected incoterm never adds or removes VAT/withholding. No **Finance Controls** tab is present. |
-| T10 | Sales/QS | From an issued quotation, confirm the Sales Order. | A mandatory confirmation popup asks whether 1% withholding applies. Cancelling makes no change. Choosing the answer already in the offer records the user/time and confirms normally. No draft invoice, `account.move`, journal entry or posting is created. |
-| T11 | Sales/QS | At confirmation, choose a withholding answer different from the issued offer while every other commercial term is unchanged. | Odoo creates the next revision, applies/removes only withholding, carries valid prior commercial/VAT approvals, generates and attaches an updated Offer PDF, then confirms the revised Sales Order. No new approval is requested. |
-| T12 | Sales/QS | Repeat T11 after changing price, quantity, discount, product, VAT status/reason, currency, payment term, delivery term, validity or customer. | Automatic carry-forward is rejected. Use the normal revision and approval workflow; no silent Sales Order rewrite occurs. |
-| T13 | Accounting | Open a confirmed order with 1% withholding. | The withholding-evidence item is visible only to Accounting. It links the Sales Order, expected amount/rate and later invoice; Sales/QS cannot see it. Cancelling the order closes the pending item without posting entries. |
-| T14 | Accounting | Use standard **Create Invoice** only after the confirmed order, then open the draft invoice. | The invoice inherits the final Sales Order taxes. Posting the invoice—not order confirmation—is when standard Odoo creates accounting entries. |
-| T15 | Accounting | Repeat T01-T14 in EGP and one foreign currency, including fractional quantities/prices and a Universal Discount. | Quotations/PDFs show the expected Odoo totals. The later invoice uses the same final taxes; accounting and tax-report reconciliation follows the existing configured taxes. |
-
-## 6. Revisions and concurrency
+## D. Approval rules
 
 | ID | Tester | Action | Expected result |
 |---|---|---|---|
-| V01 | QS/Sales | Create revision from issued `SXXXX`, then again. | New drafts are `SXXXX-01`, `SXXXX-02`; only the active newest revision opens; original issued versions remain byte-for-byte/commercially unchanged. |
-| V02 | Sales Manager | Open Revision History from newest revision. | Only its family appears, newest first; unrelated older quotations are excluded. |
-| V03 | Two browser sessions | Open same current revision in both sessions and submit Create Revision nearly simultaneously. | Exactly one successor is created; the losing session receives a concurrency message and no duplicate number exists. |
-| V04 | Authorized user | Restore an earlier sent family member with reason. | A new N+1 draft is created; source/current references, actor, time, reason, totals, and difference summary are audited; no existing version is overwritten. |
+| D01 | QS then Quotation Manager | Prepare a QS quotation and try Issue Offer PDF before/after approval. | Issue is blocked until the manager approves the exact current commercial snapshot. |
+| D02 | Salesperson | Prepare a normal VAT-on quotation below the high-value threshold with no QS assignment. | No blanket manager or Finance approval is required. |
+| D03 | Quotation Manager | Approve a QS quotation with VAT off. | One action records the manager's eligible requirements for the current snapshot. VAT reason is retained as evidence. |
+| D04 | High-Value Approver | Approve a quotation exactly at and above the configured threshold. | Only a member of the configured group can approve the high-value requirement. Currency conversion uses company currency and quotation date. |
+| D05 | Sales/Manager | Change customer, product, quantity, price, discount, currency, pricelist, payment/delivery terms or VAT after approval. | Applicable approval becomes invalid and Issue is blocked until the changed snapshot is approved. |
+| D06 | Sales/Manager | Change only 1% withholding. | Existing QS/VAT/high-value approvals remain valid; the change is monitored, not re-approved. |
+| D07 | Ordinary employee/API user | Search/read/create/write/delete approval audit rows directly. | Access or protected-operation error. Approval evidence is created only by the controlled action. |
+| D08 | Administrator | Set high-value threshold to `0`. | The high-value gate is disabled; QS and VAT-off rules still operate. |
 
-## 7. Release evidence and stop conditions
+## E. Issue, lock, confirmation and accounting boundary
 
-Capture screenshots or exports for every row above and keep the server test log. Release remains blocked if any of these is missing:
+| ID | Tester | Action | Expected result |
+|---|---|---|---|
+| E01 | Authorized assigned user | Click Issue Offer PDF after required approvals. | One exact PDF is attached; actor/time/version are logged; state becomes Sent; the record and lines become immutable. It is not emailed automatically. |
+| E02 | UI/import/RPC tester | Try header, line, optional-product, tax, state, copy and Send-by-Email mutations on Sent. | All normal mutation/reopen paths are blocked; create a revision instead. |
+| E03 | Sales/QS | Confirm the issued offer. Cancel the popup. | Mandatory popup asks whether the customer confirmed 1% withholding. Cancel leaves the offer unchanged. |
+| E04 | Sales/QS | Confirm with the same withholding choice as the issued offer. | Decision actor/time are recorded and standard Sales Order confirmation completes. No invoice or journal entry is created. |
+| E05 | Sales/QS | Confirm with the opposite withholding choice and no other commercial change. | The next revision is created, only withholding changes, valid approvals carry forward once, an updated PDF is attached without email, and that revision confirms. |
+| E06 | Sales/QS | Attempt automatic retention-only confirmation after any other commercial change. | Server comparison rejects carry-forward; use the normal revision and approval workflow. |
+| E07 | Accounting | Later use standard Create Invoice on an invoiceable confirmed order. | A Draft invoice is created only now and inherits the final Sales Order line taxes. Standard Odoo posting creates accounting entries later. |
 
-- clean module upgrade and all automated tests passing;
-- non-admin role matrix proof;
-- historical price-origin migration reconciliation;
-- standard later-invoice and tax-report reconciliation by Accounting;
-- Odoo.sh warning/error review;
-- portal/API/import/RPC/export evidence;
-- rollback rehearsal on a disposable database.
+For E04 and E05, record `account.move` and journal-item counts immediately
+before and after Sales Order confirmation; both counts must be unchanged.
 
-Record each case as `Pass`, `Fail`, or `Blocked`, with database/build SHA, user, timestamp, quotation number, and evidence link. Any failure requires a new build and full rerun of the affected section plus Q09-Q10, T01-T15, and V01-V04 regression gates.
+## F. Revision families and migration
+
+| ID | Tester | Action | Expected result |
+|---|---|---|---|
+| F01 | QS/Sales | Revise issued `S0123` three times. | Names are `S0123-01`, `S0123-02`, `S0123-03`; cumulative names are never created. |
+| F02 | Any authorized Sales user | Open the normal quotation list. | Only the current family member appears. Open Revisions on it to see the original and all older versions. |
+| F03 | Manager | Inspect an older cumulative chain such as `S0123-01-02`. | Existing names/PDFs remain unchanged, but the proven family is bundled and its next revision is `S0123-03`. |
+| F04 | Manager | Inspect migration rows marked Revision Family Needs Review. | Ambiguous/circular/missing/conflicting families were not guessed; they remain clearly flagged for manual reconciliation. |
+| F05 | Two sessions | Create the next revision from the same current issued version at nearly the same time. | Exactly one successor number is allocated; the stale request is rejected. |
+| F06 | Authorized user | Restore an earlier sent family member with a reason. | A new N+1 draft is created and audited; no issued historical record or PDF is changed. |
+
+## G. Legacy state and procurement regression
+
+| ID | Tester | Action | Expected result |
+|---|---|---|---|
+| G01 | Administrator | Upgrade a copy containing `approve`, `waiting`, and `waiting_approve` orders. | They map to Draft with a chatter note. The standard state bar contains no custom approval states. |
+| G02 | API tester | Call legacy `action_to_approve` and `action_approve`. | They cannot confirm, reopen or create a custom state. |
+| G03 | Product Pricing/Procurement | Generate service and MTO RFQs with a non-zero saved estimate. | Existing procurement behavior and saved-rate provenance remain correct. |
+| G04 | Procurement | Generate an RFQ with zero estimate and a positive vendor price, then with neither. | Vendor price is retained in the first case; Supplier Cost Required blocks PO confirmation in the second until cost/reason are supplied. |
+
+## Release stop conditions
+
+Do not promote if any of the following is missing:
+
+- clean upgrade of every listed module;
+- complete automated module suite with zero failures/errors;
+- all cases above tested with non-admin role users;
+- migration counts and ambiguous-family list captured;
+- no invoice/journal entry created by Sales Order confirmation;
+- later standard invoice tax inheritance reconciled by Accounting;
+- exact build SHA, database backup identifier, screenshots and failure notes;
+- rollback rehearsal using commit revert plus the matching pre-upgrade backup.
+
+Any failure requires a new build and rerun of the affected section plus C, D, E
+and F regression cases.
