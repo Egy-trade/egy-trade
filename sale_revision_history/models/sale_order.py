@@ -7,7 +7,7 @@ record in the same revision family.
 """
 
 import base64
-from datetime import timedelta
+import re
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
@@ -45,7 +45,11 @@ _REVISION_SYSTEM_FIELDS = {
     "withholding_confirmation_by",
     "retention_only_revision",
     "retention_only_source_id",
+    "revision_family_ambiguous",
+    "revision_family_ambiguity_reason",
 }
+
+_REVISION_SUFFIX_RE = re.compile(r"(?:-\d{2})+$")
 
 
 def _is_revision_internal(env):
@@ -78,26 +82,6 @@ def _is_withholding_confirmation(env):
     return env.context.get(
         "_withholding_confirmation_token"
     ) is _WITHHOLDING_CONFIRMATION_TOKEN
-
-
-_COMMERCIAL_ORDER_FIELDS = {
-    "partner_id", "partner_invoice_id", "partner_shipping_id", "pricelist_id",
-    "currency_id", "payment_term_id", "fiscal_position_id", "incoterm",
-    "incoterm_id", "client_order_ref", "note", "user_id",
-    "quotation_specialist_id", "sale_order_template_id", "sale_order_option_ids",
-    "warehouse_id", "commitment_date", "offer_expiry_days",
-    "validity_date", "offer_date", "order_line", "apply_vat", "vat_exemption_reason",
-    "apply_withholding", "ks_enable_discount", "ks_global_discount_type",
-    "ks_global_discount_rate", "discount_type", "discount_rate",
-    "product_pricing", "global_factor", "currency_estimate_id",
-    "currency_rate_estimate", "currency_rate_inverse",
-    "change_currency_rate_type", "change_currency_rate",
-}
-_COMMERCIAL_LINE_FIELDS = {
-    "sn", "sequence", "display_type", "product_id", "name", "product_uom_qty",
-    "product_uom", "price_unit", "discount", "discount_2", "discount_3",
-    "tax_id", "purchase_price_estimate", "factor", "line_factor",
-}
 
 
 class SaleOrder(models.Model):
@@ -147,7 +131,7 @@ class SaleOrder(models.Model):
 
     commercial_change_date = fields.Date(
         string="Commercial Change Date", readonly=True, copy=False,
-        help="Cairo business date on which the commercial-change decision was last recorded.",
+        help="Legacy audit data retained for historical quotations; it no longer controls draft editing.",
     )
     commercial_change_decision = fields.Selection(
         [("update_today", "Update Today"), ("create_revision", "Create Revision")],
@@ -210,6 +194,15 @@ class SaleOrder(models.Model):
     )
     retention_only_source_id = fields.Many2one(
         "sale.order", string="Retention-only Source", readonly=True, copy=False,
+    )
+    revision_family_ambiguous = fields.Boolean(
+        string="Revision Family Needs Review", readonly=True, copy=False,
+        index=True,
+        help="Set only by the migration when existing revision metadata conflicts. "
+             "The records are deliberately not guessed into a family.",
+    )
+    revision_family_ambiguity_reason = fields.Text(
+        string="Revision Family Review Reason", readonly=True, copy=False,
     )
 
     def _commercial_fingerprint(self):
@@ -368,77 +361,25 @@ class SaleOrder(models.Model):
             "sales_responsibility_accepted_at": self.sales_responsibility_accepted_at,
             "sales_responsibility_accepted_by": self.sales_responsibility_accepted_by.id,
         })
+        # Approval implementations live outside this lifecycle module.  They
+        # may carry their own evidence forward only after the server-side
+        # commercial fingerprint above has proved that withholding is the sole
+        # change.  A normal revision never invokes this hook.
+        carry_approvals = getattr(
+            revision.with_context(
+                _retention_revision_token=_RETENTION_REVISION_TOKEN,
+            ),
+            "_carry_retention_only_approvals_from",
+            None,
+        )
+        if carry_approvals:
+            carry_approvals(self)
         revision.action_issue_offer_pdf()
         revision.with_context(
             _withholding_confirmation_token=_WITHHOLDING_CONFIRMATION_TOKEN,
         ).action_confirm()
         return {"type": "ir.actions.act_window", "res_model": "sale.order",
                 "res_id": revision.id, "view_mode": "form", "target": "current"}
-
-    def _cairo_today(self):
-        self.ensure_one()
-        return fields.Date.context_today(self.with_context(tz="Africa/Cairo"))
-
-    def _ensure_daily_commercial_change_decided(self):
-        pending = self.filtered(
-            lambda order: order.state == "draft" and order.active
-            and order.commercial_change_date != order._cairo_today()
-        )
-        if pending:
-            raise UserError(_(
-                "Record Update Today or Create Revision before saving the first "
-                "commercial change for this quotation in the Cairo business day."
-            ))
-
-    def action_record_commercial_change(self):
-        self.ensure_one()
-        if self.state != "draft" or not self.active:
-            raise UserError(_(
-                "A non-current quotation is immutable. Create a revision instead."
-            ))
-        return {
-            "type": "ir.actions.act_window",
-            "name": _("Record Commercial Change"),
-            "res_model": "quotation.commercial.change",
-            "view_mode": "form",
-            "target": "new",
-            "context": {"default_sale_id": self.id},
-        }
-
-    def _record_commercial_change(self, decision, reason=False):
-        """Audit the daily decision without touching Odoo's ``date_order``."""
-        self.ensure_one()
-        self.check_access_rights("write")
-        self.check_access_rule("write")
-        self._ensure_revision_authorized()
-        if self.state != "draft" or not self.active:
-            raise UserError(_(
-                "Only the active unsent draft can record Update Today. Create a revision instead."
-            ))
-        today = self._cairo_today()
-        if decision != "update_today":
-            raise UserError(_("Only Update Today can be recorded on this quotation."))
-        audit = _(
-            "%(decision)s recorded by %(user)s on %(date)s Cairo business day."
-        ) % {
-            "decision": "Update Today",
-            "user": self.env.user.display_name,
-            "date": today,
-        }
-        if reason:
-            audit = "%s %s" % (audit, reason.strip())
-        self.with_context(
-            _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
-        ).write({
-            "offer_date": today,
-            "validity_date": today + timedelta(days=self.offer_expiry_days),
-            "commercial_change_date": today,
-            "commercial_change_decision": decision,
-            "commercial_change_decision_at": fields.Datetime.now(),
-            "commercial_change_decision_by": self.env.user.id,
-            "commercial_change_audit": audit,
-        })
-        self.message_post(body=audit)
 
     def _ensure_issue_authorized(self):
         self.ensure_one()
@@ -492,9 +433,18 @@ class SaleOrder(models.Model):
             "state", "active", "issued_offer_attachment_id",
         ])
         self._ensure_issue_authorized()
-        finance_gate = getattr(self, "_check_finance_issue_requirements", None)
-        if finance_gate:
-            finance_gate()
+        approval_gate = getattr(
+            self, "_check_quotation_issue_approval_requirements", None,
+        )
+        if approval_gate:
+            approval_gate()
+        else:
+            # Compatibility only while the stabilization branch replaces the
+            # former finance-control layer.  New approval code uses the hook
+            # above and must not add another Sale Order state.
+            finance_gate = getattr(self, "_check_finance_issue_requirements", None)
+            if finance_gate:
+                finance_gate()
         report_ref = "sale.action_report_saleorder"
         if not self.env.ref(report_ref, raise_if_not_found=False):
             raise UserError(_("The standard Sales Order PDF report is not available."))
@@ -607,13 +557,6 @@ class SaleOrder(models.Model):
             raise UserError(_(
                 "Use Issue Offer PDF to send and lock a quotation with its exact customer PDF."
             ))
-        needs_daily_decision = bool(
-            _COMMERCIAL_ORDER_FIELDS.intersection(vals)
-            and not lifecycle_internal
-            and not revision_internal
-            and not _is_pricing_internal(self.env)
-            and not _is_finance_internal(self.env)
-        )
         if (_REVISION_SYSTEM_FIELDS.intersection(vals)
                 and not (revision_internal or lifecycle_internal)):
             raise AccessError(_("Revision history fields are managed by the system."))
@@ -627,14 +570,7 @@ class SaleOrder(models.Model):
                 raise AccessError(_(
                     "Quotation revision history cannot be archived or restored manually."
                 ))
-        result = super().write(vals)
-        # Run after lower-layer ACL/role validation so unauthorized users see
-        # the real access error rather than a generic daily-decision message.
-        # Raising here rolls the complete transaction back, including nested
-        # one2many commands, so an undecided commercial save never persists.
-        if needs_daily_decision:
-            self._ensure_daily_commercial_change_decided()
-        return result
+        return super().write(vals)
 
     def copy(self, default=None):
         if not _is_revision_internal(self.env) and self.filtered(
@@ -734,13 +670,14 @@ class SaleOrder(models.Model):
             ))
 
     def _lock_revision_source(self):
-        """Serialize revision numbering and successor creation for one quote."""
+        """Serialize allocation at the one current member of a family."""
         self.ensure_one()
+        current = self._current_revision()
         self.env.cr.execute(
             "SELECT id FROM sale_order WHERE id = %s FOR UPDATE",
-            [self.id],
+            [current.id],
         )
-        self.invalidate_cache(fnames=[
+        current.invalidate_cache(fnames=[
             "state",
             "active",
             "current_revision_id",
@@ -749,15 +686,112 @@ class SaleOrder(models.Model):
         ])
 
     def _current_revision(self):
-        """Return the current member of this revision family, including drafts."""
+        """Return the current member of this revision family, including drafts.
+
+        Old deployments may contain a chain instead of every historical record
+        pointing at the newest member.  Follow that explicit chain; never infer
+        a family from similarly-looking quotation names.
+        """
         self.ensure_one()
-        return self.current_revision_id or self
+        current = self.with_context(active_test=False)
+        seen = set()
+        while current.current_revision_id:
+            if current.id in seen:
+                raise UserError(_(
+                    "This quotation has a circular revision link and needs administrator review."
+                ))
+            seen.add(current.id)
+            current = current.current_revision_id.with_context(active_test=False)
+        return current
 
     def _revision_family(self, current=None):
-        """Return all records in the family, including archived history."""
+        """Return all explicitly linked records, including legacy chains."""
         self.ensure_one()
-        current = current or self._current_revision()
-        return current.with_context(active_test=False).old_revision_ids | current
+        current = (current or self._current_revision()).with_context(active_test=False)
+        family = current
+        frontier = current
+        # New writes flatten every historical member to the current tip.  This
+        # small traversal also makes a pre-migration legacy chain visible
+        # without using display-name heuristics.
+        while frontier:
+            children = self.env["sale.order"].with_context(active_test=False).search([
+                ("current_revision_id", "in", frontier.ids),
+            ])
+            children -= family
+            if not children:
+                break
+            family |= children
+            frontier = children
+        return family
+
+    @staticmethod
+    def _canonical_revision_root(value, is_revision=False):
+        """Return the root used for future names without changing old names.
+
+        ``S0123-01-02`` is a malformed *revision* name and therefore has root
+        ``S0123``.  A new root quotation with no revision metadata is left
+        untouched even if its business sequence happens to end in ``-01``.
+        """
+        value = (value or "").strip()
+        if not value:
+            return value
+        return _REVISION_SUFFIX_RE.sub("", value) if is_revision else value
+
+    def _revision_family_root(self, family=None):
+        """Return one proven canonical root or require manual family review.
+
+        Structured family links and ``unrevisioned_name`` are evidence.  We do
+        not bundle independent old quotations merely because their display
+        names look similar.
+        """
+        self.ensure_one()
+        family = family or self._revision_family()
+        ambiguous = family.filtered("revision_family_ambiguous")
+        if ambiguous:
+            raise UserError(_(
+                "This quotation revision family is marked for review. Resolve its "
+                "existing family metadata before creating another revision."
+            ))
+        # A revision-number zero member is the strongest proof of the root.
+        # Next prefer an explicitly stored root exactly as it was entered: a
+        # legitimate quotation number can itself end in '-01'.
+        roots = {
+            (member.name or "").strip()
+            for member in family if not member.revision_number
+        }
+        roots.discard("")
+        if len(roots) > 1:
+            raise UserError(_(
+                "The existing revision-family metadata conflicts. It was not guessed; "
+                "an administrator must resolve the family before another revision is created."
+            ))
+        if not roots:
+            roots = {
+                (member.unrevisioned_name or "").strip()
+                for member in family if (member.unrevisioned_name or "").strip()
+            }
+        if not roots:
+            # Last resort for a linked, metadata-free legacy family: only a
+            # record already marked as a revision is parsed.  New root quotes
+            # are never parsed from display name alone.
+            roots = {
+                self._canonical_revision_root(member.name, True)
+                for member in family if member.revision_number
+            }
+        if not roots:
+            roots.add((self.unrevisioned_name or self.name or "").strip())
+        roots.discard("")
+        if len(roots) != 1:
+            raise UserError(_(
+                "The existing revision-family metadata conflicts. It was not guessed; "
+                "an administrator must resolve the family before another revision is created."
+            ))
+        return roots.pop()
+
+    def _next_revision_number(self, family=None):
+        self.ensure_one()
+        family = family or self._revision_family()
+        return max(family.mapped("revision_number") or [0]) + 1
 
     def _restore_candidates(self, current=None):
         """Previously sent family members that may be used as a draft baseline."""
@@ -852,84 +886,6 @@ class SaleOrder(models.Model):
             values.pop(field_name, None)
         return self.env["sale.order"].sudo().with_context(**internal_context).create(values)
 
-    def action_create_draft_revision(self, reason):
-        """Create a successor from the active draft after a daily decision.
-
-        The old draft becomes inactive history; it is never overwritten.  This
-        is distinct from the established sent-offer revision flow below.
-        """
-        self.ensure_one()
-        comment = (reason or "").strip()
-        if not comment:
-            raise UserError(_("A Revision Comment is required."))
-        self.check_access_rights("write")
-        self.check_access_rule("write")
-        self._ensure_revision_authorized()
-        if self.state != "draft" or not self.active or self.current_revision_id:
-            raise UserError(_(
-                "Only the active current draft can be revised from a commercial-change decision."
-            ))
-        self._lock_revision_source()
-        self.invalidate_cache(fnames=["state", "active", "current_revision_id"])
-        if self.state != "draft" or not self.active or self.current_revision_id:
-            raise UserError(_(
-                "This quotation changed while the decision dialog was open. Reopen it and try again."
-            ))
-        family = self._revision_family(self)
-        next_number = max(family.mapped("revision_number")) + 1
-        family_name = self.unrevisioned_name or self.name
-        now = fields.Datetime.now()
-        internal_context = {
-            "_revision_internal_token": _REVISION_INTERNAL_TOKEN,
-            "_pricing_internal_token": _PRICING_INTERNAL_TOKEN,
-            "_lifecycle_internal_token": _LIFECYCLE_INTERNAL_TOKEN,
-        }
-        revision = self.sudo().with_context(**internal_context).copy(default={
-            "name": "%s-%02d" % (family_name, next_number),
-            "state": "draft",
-            "active": True,
-            "current_revision_id": False,
-            "revision_number": next_number,
-            "unrevisioned_name": family_name,
-            "revision_reason": False,
-            "revision_date": False,
-            "revision_author_id": False,
-            "commercial_change_date": self._cairo_today(),
-            "commercial_change_decision": "create_revision",
-            "commercial_change_decision_at": now,
-            "commercial_change_decision_by": self.env.user.id,
-            "commercial_change_audit": _(
-                "Create Revision recorded by %(user)s on %(date)s Cairo business day. %(reason)s"
-            ) % {
-                "user": self.env.user.display_name,
-                "date": self._cairo_today(),
-                "reason": comment,
-            },
-        })
-        self.sudo().with_context(**internal_context).write({
-            "active": False,
-            "current_revision_id": revision.id,
-            "revision_reason": comment,
-            "revision_date": now,
-            "revision_author_id": self.env.user.id,
-        })
-        historical = family - self
-        if historical:
-            historical.sudo().with_context(**internal_context).write({
-                "current_revision_id": revision.id,
-            })
-        revision.message_post(body=revision.commercial_change_audit)
-        return {
-            "type": "ir.actions.act_window",
-            "name": _("Quotation Revision"),
-            "res_model": "sale.order",
-            "res_id": revision.id,
-            "view_mode": "form",
-            "view_id": self.env.ref("sale.view_order_form").id,
-            "target": "current",
-        }
-
-
     def action_revision(self):
         self.ensure_one()
         self._ensure_revision_source()
@@ -1020,8 +976,8 @@ class SaleOrder(models.Model):
             ))
 
         family = self._revision_family(current)
-        next_number = max(family.mapped("revision_number")) + 1
-        family_name = current.unrevisioned_name or current.name
+        family_name = current._revision_family_root(family)
+        next_number = current._next_revision_number(family)
         now = fields.Datetime.now()
         internal_context = {
             "_revision_internal_token": _REVISION_INTERNAL_TOKEN,
@@ -1090,9 +1046,10 @@ class SaleOrder(models.Model):
         self._ensure_revision_source()
 
         source = self
-        family_name = source.unrevisioned_name or source.name
-        next_number = source.revision_number + 1
-        historical = source.with_context(active_test=False).old_revision_ids
+        family = source._revision_family(source)
+        family_name = source._revision_family_root(family)
+        next_number = source._next_revision_number(family)
+        historical = family - source
         internal_context = {
             "_revision_internal_token": _REVISION_INTERNAL_TOKEN,
             "_pricing_internal_token": _PRICING_INTERNAL_TOKEN,
@@ -1197,49 +1154,12 @@ class SaleOrderLine(models.Model):
                 "Lines on an issued quotation are immutable through the interface, "
                 "RPC, imports, and normal reopening. Create a revision instead."
             ))
-        orders._ensure_daily_commercial_change_decided()
 
     def action_add_below(self):
-        """Add one blank product row directly after this commercial line."""
-        self.ensure_one()
-        order = self.order_id
-        order.check_access_rights("write")
-        order.check_access_rule("write")
-        if order.state != "draft" or not order.active:
-            raise UserError(_("Add Below is available only on the active draft quotation."))
-        if self.display_type or not self.product_id:
-            raise UserError(_("Add Below is available only on a product line."))
-        if order.commercial_change_date != order._cairo_today():
-            # A row button can return a wizard action, unlike an x2many write.
-            # After recording the decision, the user clicks Add Below again.
-            return order.action_record_commercial_change()
-        following = order.order_line.filtered(
-            lambda line: line.id != self.id and line.sequence > self.sequence
-        )
-        for line in following.sorted("sequence", reverse=True):
-            line.with_context(
-                _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
-            ).write({"sequence": line.sequence + 1})
-        # Intentionally pass no source commercial values.  The pricing module
-        # supplies only the header Global Factor; product, quantity, prices,
-        # estimates, discounts, Item #, and Line Factor start blank/default.
-        new_line = self.env["sale.order.line"].with_context(
-            _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
-        ).create({
-            "order_id": order.id,
-            "sequence": self.sequence + 1,
-            "name": _("New product line"),
-            "product_uom_qty": 0.0,
-            "is_add_below_placeholder": True,
-        })
-        return {
-            "type": "ir.actions.act_window",
-            "res_model": "sale.order",
-            "res_id": order.id,
-            "view_mode": "form",
-            "target": "current",
-            "context": {"focus_line_id": new_line.id},
-        }
+        """Retired until row insertion can preserve the active-line position."""
+        raise UserError(_(
+            "Add Below is temporarily disabled. Use Add a product, which keeps the quotation in place."
+        ))
 
     def write(self, vals):
         if "is_add_below_placeholder" in vals and not _is_lifecycle_internal(self.env):
@@ -1249,13 +1169,6 @@ class SaleOrderLine(models.Model):
                 "Lines on an issued quotation are immutable through the interface, "
                 "RPC, imports, and normal reopening. Create a revision instead."
             ))
-        if (
-                _COMMERCIAL_LINE_FIELDS.intersection(vals)
-                and not (
-                    _is_lifecycle_internal(self.env)
-                    or _is_pricing_internal(self.env)
-                    or _is_finance_internal(self.env))):
-            self.mapped("order_id")._ensure_daily_commercial_change_decided()
         result = super().write(vals)
         completed = self.filtered(
             lambda line: line.is_add_below_placeholder
@@ -1282,7 +1195,6 @@ class SaleOrderLine(models.Model):
                 raise UserError(_(
                     "Quotation lines cannot be added after Issue Offer PDF. Create a revision instead."
                 ))
-            orders._ensure_daily_commercial_change_decided()
         return super().create(vals_list)
 
     def unlink(self):
@@ -1291,11 +1203,6 @@ class SaleOrderLine(models.Model):
                 "Lines on an issued quotation are immutable through the interface, "
                 "RPC, imports, and normal reopening. Create a revision instead."
             ))
-        if not (
-                _is_lifecycle_internal(self.env)
-                or _is_pricing_internal(self.env)
-                or _is_finance_internal(self.env)):
-            self.mapped("order_id")._ensure_daily_commercial_change_decided()
         return super().unlink()
 
 
@@ -1310,20 +1217,14 @@ class SaleOrderOption(models.Model):
             raise UserError(_(
                 "Issued quotation optional products are immutable. Create a revision instead."
             ))
-        if not (_is_lifecycle_internal(self.env) or _is_revision_internal(self.env)):
-            orders._ensure_daily_commercial_change_decided()
         return super().create(vals_list)
 
     def write(self, vals):
         if self.mapped("order_id").filtered(lambda order: order.state == "sent"):
             raise UserError(_("Issued quotation optional products are immutable. Create a revision instead."))
-        if not (_is_lifecycle_internal(self.env) or _is_revision_internal(self.env)):
-            self.mapped("order_id")._ensure_daily_commercial_change_decided()
         return super().write(vals)
 
     def unlink(self):
         if self.mapped("order_id").filtered(lambda order: order.state == "sent"):
             raise UserError(_("Issued quotation optional products are immutable. Create a revision instead."))
-        if not (_is_lifecycle_internal(self.env) or _is_revision_internal(self.env)):
-            self.mapped("order_id")._ensure_daily_commercial_change_decided()
         return super().unlink()

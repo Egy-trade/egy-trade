@@ -2,7 +2,7 @@
 
 {
     "name" : "Sale Status Waiting Approve",
-    "version" : "16.0.0.2",
+    "version" : "16.0.0.3",
     "category" : "Sales",
     'license': 'OPL-1',
     "author": "Azam Mustafa Mohamed",

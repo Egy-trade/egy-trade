@@ -78,6 +78,27 @@ class QuotationLifecycleCase(SavepointCase):
                 cls.env.ref("sales_team.group_sale_salesman").id,
             ])],
         })
+        cls.quotation_specialist = cls.env["res.users"].create({
+            "name": "Lifecycle Quotation Specialist",
+            "login": "lifecycle.qs@example.test",
+            "groups_id": [(6, 0, [
+                cls.env.ref("base.group_user").id,
+                cls.env.ref("sales_team.group_sale_salesman").id,
+                cls.env.ref(
+                    "sale_order_product_pricing.quotation_specialist_group"
+                ).id,
+            ])],
+        })
+        cls.quotation_manager = cls.env["res.users"].create({
+            "name": "Lifecycle Quotation Manager",
+            "login": "lifecycle.quotation.manager@example.test",
+            "groups_id": [(6, 0, [
+                cls.env.ref("base.group_user").id,
+                cls.env.ref(
+                    "sale_order_product_pricing.quotation_manager_group"
+                ).id,
+            ])],
+        })
 
     def _draft(self, **extra):
         values = {
@@ -95,105 +116,37 @@ class QuotationLifecycleCase(SavepointCase):
         values.update(extra)
         return self.env["sale.order"].create(values)
 
-    def _update_today(self, order):
-        wizard = self.env["quotation.commercial.change"].create({
-            "sale_id": order.id, "decision": "update_today",
-        })
-        wizard.action_confirm()
-
-    def test_assigned_salesperson_can_open_and_submit_commercial_change_wizard(self):
+    def test_assigned_salesperson_can_edit_draft_without_daily_wizard(self):
         order = self._draft()
         line = order.order_line.with_user(self.salesperson)
-        action = line.action_add_below()
-        self.assertEqual(action["res_model"], "quotation.commercial.change")
+        order.with_user(self.salesperson).write({"note": "Draft edited directly"})
+        line.write({"name": "Draft line edited directly"})
+        self.assertEqual(order.note, "Draft edited directly")
+        self.assertEqual(line.name, "Draft line edited directly")
 
-        wizard_model = self.env[action["res_model"]].with_user(self.salesperson)
-        for operation in ("read", "write", "create", "unlink"):
-            self.assertTrue(wizard_model.check_access_rights(operation))
-        wizard = wizard_model.with_context(**action["context"]).create({
-            "sale_id": order.id,
-            "decision": "update_today",
-        })
-        wizard.action_confirm()
-        self.assertEqual(order.commercial_change_decision, "update_today")
-        self.assertEqual(order.commercial_change_decision_by, self.salesperson)
-
-    def test_manual_item_number_is_not_computed_or_copied_by_add_below(self):
+    def test_add_below_is_disabled_to_preserve_active_line_position(self):
         order = self._draft()
         source = order.order_line
-        initial_line_ids = order.order_line.ids
-        decision_action = source.action_add_below()
-        self.assertEqual(decision_action["res_model"], "quotation.commercial.change")
-        self.assertEqual(decision_action["target"], "new")
-        self.assertEqual(order.order_line.ids, initial_line_ids)
-
-        self._update_today(order)
-        action = source.action_add_below()
-        added = self.env["sale.order.line"].browse(action["context"]["focus_line_id"])
-        self.assertEqual(source.sn, "A-01")
-        self.assertFalse(added.product_id)
-        self.assertTrue(added.is_add_below_placeholder)
-        self.assertEqual(added.name, "New product line")
-        self.assertEqual(added.product_uom_qty, 0.0)
-        self.assertFalse(added.sn)
-        self.assertEqual(added.price_unit, 0.0)
-        self.assertEqual(added.purchase_price_estimate, 0.0)
-        self.assertEqual(added.discount, 0.0)
-        self.assertEqual(added.factor, order.global_factor)
-        self.assertEqual(added.line_factor, 1.0)
-        self.assertEqual(added.sequence, source.sequence + 1)
         with self.assertRaises(UserError):
-            order.action_issue_offer_pdf()
-        added.write({
-            "product_id": self.product.id,
-            "product_uom": self.product.uom_id.id,
-        })
-        self.assertFalse(added.is_add_below_placeholder)
+            source.action_add_below()
 
-    def test_daily_gate_update_today_keeps_date_order_and_audits(self):
+    def test_draft_header_edit_needs_no_daily_decision(self):
         order = self._draft()
         original_date_order = order.date_order
-        original_note = order.note
-        # The HTTP/RPC request transaction rolls a rejected write back. Mirror
-        # that boundary explicitly because this direct ORM test catches the
-        # exception inside the surrounding SavepointCase transaction.
-        with self.assertRaises(UserError), self.env.cr.savepoint():
-            order.write({"note": "Commercial change without a decision"})
-        order.invalidate_cache(fnames=["note"])
-        self.assertEqual(order.note, original_note)
-        self._update_today(order)
-        order.write({"note": "Commercial change after Update Today"})
+        order.write({"note": "Commercial change without a daily decision"})
         self.assertEqual(order.date_order, original_date_order)
-        self.assertEqual(order.commercial_change_decision, "update_today")
-        self.assertEqual(order.commercial_change_decision_by, self.env.user)
-        self.assertIn("Update Today", order.commercial_change_audit)
-        self.assertEqual(
-            order.validity_date - order.offer_date,
-            __import__("datetime").timedelta(days=order.offer_expiry_days),
-        )
+        self.assertEqual(order.note, "Commercial change without a daily decision")
 
-    def test_direct_line_orm_create_write_unlink_require_daily_decision_and_lock_sent(self):
+    def test_direct_line_orm_create_write_unlink_are_free_in_draft_and_lock_sent(self):
         order = self._draft()
         source = order.order_line
         line_model = self.env["sale.order.line"].with_context(import_file=True)
-        with self.assertRaises(UserError):
-            line_model.create({
-                "order_id": order.id,
-                "product_id": self.product.id,
-                "name": "Imported product line",
-            })
-        with self.assertRaises(UserError):
-            source.with_context(import_file=True).write({"name": "RPC change"})
-        with self.assertRaises(UserError):
-            source.with_context(import_file=True).unlink()
-
-        self._update_today(order)
         added = line_model.create({
             "order_id": order.id,
             "product_id": self.product.id,
             "name": "Imported product line",
         })
-        source.with_context(import_file=True).write({"name": "Approved RPC change"})
+        source.with_context(import_file=True).write({"name": "Draft RPC change"})
         added.with_context(import_file=True).unlink()
 
         order.with_context(
@@ -210,7 +163,7 @@ class QuotationLifecycleCase(SavepointCase):
             with self.assertRaises(UserError):
                 operation()
 
-    def test_initial_nested_create_and_finance_tax_write_need_no_daily_decision(self):
+    def test_initial_nested_create_needs_no_daily_decision(self):
         order = self.env["sale.order"].create({
             "partner_id": self.partner.id,
             "order_line": [(0, 0, {
@@ -219,24 +172,32 @@ class QuotationLifecycleCase(SavepointCase):
                 "product_uom_qty": 1.0,
             })],
         })
-        self.assertFalse(order.commercial_change_date)
         self.assertEqual(order.order_line.tax_id, self.vat_tax)
 
-    def test_create_revision_archives_draft_and_opens_successor(self):
+    def test_sent_quote_revision_archives_source_and_opens_successor(self):
         order = self._draft()
-        wizard = self.env["quotation.commercial.change"].create({
-            "sale_id": order.id,
-            "decision": "create_revision",
-            "reason": "Customer requested a revised commercial option.",
-        })
-        action = wizard.action_confirm()
+        order.with_context(_lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN).write({"state": "sent"})
+        action = order.action_view_revision_wizard("Customer requested a revised commercial option.")
         revision = self.env["sale.order"].browse(action["res_id"])
         self.assertFalse(order.active)
         self.assertEqual(order.current_revision_id, revision)
         self.assertEqual(revision.state, "draft")
         self.assertEqual(revision.revision_number, 1)
-        self.assertEqual(revision.commercial_change_decision, "create_revision")
         self.assertIn(order.name, revision.name)
+
+    def test_optional_products_are_free_to_edit_in_draft(self):
+        order = self._draft()
+        option = self.env["sale.order.option"].create({
+            "order_id": order.id,
+            "product_id": self.product.id,
+            "name": "Draft optional product",
+            "quantity": 1.0,
+            "uom_id": self.product.uom_id.id,
+            "price_unit": 10.0,
+        })
+        option.write({"name": "Edited draft optional product"})
+        self.assertEqual(option.name, "Edited draft optional product")
+        option.unlink()
 
     def test_preview_and_read_do_not_mutate_quotation(self):
         order = self._draft(product_pricing=True)
@@ -346,15 +307,21 @@ class QuotationLifecycleCase(SavepointCase):
             order.action_issue_offer_pdf()
         with self.assertRaises(UserError):
             order.action_approve()
-        order.with_context(
-            _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
-        ).write({"state": "waiting"})
-        with self.assertRaises(UserError):
-            order.action_approve()
 
     def test_retention_only_confirmation_creates_issued_successor_and_preserves_approval(self):
-        order = self._draft(apply_withholding=False)
+        order = self._draft(
+            apply_withholding=False,
+            quotation_specialist_id=self.quotation_specialist.id,
+        )
         order.action_accept_sales_responsibility()
+        order.with_user(
+            self.quotation_manager
+        ).action_approve_quotation_requirements()
+        source_approval = order.finance_approval_ids.filtered(
+            lambda approval: approval.code == "quotation_manager"
+            and not approval.invalidated
+        )
+        self.assertEqual(len(source_approval), 1)
         report_service = self.env["ir.actions.report"]
         with patch.object(type(report_service), "_render_qweb_pdf", return_value=(b"%PDF-test", "pdf")):
             order.action_issue_offer_pdf()
@@ -369,11 +336,16 @@ class QuotationLifecycleCase(SavepointCase):
         self.assertEqual(revision.state, "sale")
         self.assertTrue(revision.issued_offer_attachment_id)
         self.assertEqual(revision.withholding_confirmation, "yes")
-        self.assertTrue(revision.withholding_evidence_ids)
+        self.assertEqual(revision._commercial_fingerprint(), order._commercial_fingerprint())
+        carried = revision.finance_approval_ids.filtered(
+            lambda approval: approval.code == "quotation_manager"
+            and not approval.invalidated
+        )
+        self.assertEqual(len(carried), 1)
+        self.assertEqual(carried.carried_from_approval_id, source_approval)
 
     def test_retention_only_revision_preserves_free_of_charge_authorization(self):
         order = self._draft(apply_withholding=False)
-        self._update_today(order)
         order.order_line.write({
             "price_unit": 0.0,
             "is_free_of_charge": True,
@@ -550,7 +522,7 @@ class QuotationLifecycleCase(SavepointCase):
             (
                 "Line Factor", "sale_order_product_pricing.sale_order_role_guidance",
                 "//xpath[contains(@expr, 'line_factor')]/attribute[@name='help']",
-                ("adjusts only", "product pricing users", "does not change", "before applying"),
+                ("adjusts only", "product pricing users", "does not change", "preview is applied"),
             ),
             (
                 "Free of Charge", "sale_order_product_pricing.sale_order_finance_controls_form",
@@ -560,17 +532,17 @@ class QuotationLifecycleCase(SavepointCase):
             (
                 "Days of Expiry", "sale_order_product_pricing.sale_order_offer_expiry_form",
                 "//field[@name='offer_expiry_days']",
-                ("number of days", "quotation, sales, or accounting managers", "changes the offer validity", "before saving"),
+                ("number of days", "sales and qs users", "expiration date", "before issuing"),
             ),
             (
                 "VAT 14%", "sale_order_product_pricing.sale_order_finance_controls_form",
                 "//field[@name='apply_vat'][@string='VAT 14%']",
-                ("selected by default", "genuine vat exemption", "reason below", "quotation total"),
+                ("selected by default", "qs and sales users", "applied globally", "before issue offer pdf"),
             ),
             (
                 "Retention", "sale_order_product_pricing.res_config_settings_finance_controls",
                 "//field[@name='quotation_retention_tax_id']",
-                ("withholding tax", "finance or accounting managers", "deducts", "before using"),
+                ("withholding sales tax", "accounting managers", "reduces", "before sales uses"),
             ),
             (
                 "Issue Offer PDF", "sale_revision_history.sale_order_view_form",
@@ -583,9 +555,9 @@ class QuotationLifecycleCase(SavepointCase):
                 ("creates the next draft", "assigned sales or qs", "source remains locked", "mandatory reason"),
             ),
             (
-                "Commercial exception approval", "sale_order_product_pricing.sale_order_finance_controls_form",
-                "//button[@name='action_approve_finance_requirements']",
-                ("quotation or sales management", "current commercial exceptions", "before issue offer pdf"),
+                "Quotation requirements approval", "sale_order_product_pricing.sale_order_finance_controls_form",
+                "//button[@name='action_approve_quotation_requirements']",
+                ("eligible approver", "current exception", "server verifies", "requirement"),
             ),
         )
         for label, view_xmlid, xpath, required_fragments in cases:
@@ -600,12 +572,9 @@ class QuotationLifecycleCase(SavepointCase):
 
     def test_history_action_is_limited_to_one_family_and_includes_current_draft(self):
         order = self._draft()
+        order.with_context(_lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN).write({"state": "sent"})
         revision = self.env["sale.order"].browse(
-            self.env["quotation.commercial.change"].create({
-                "sale_id": order.id,
-                "decision": "create_revision",
-                "reason": "First revision",
-            }).action_confirm()["res_id"]
+            order.action_view_revision_wizard("First revision")["res_id"]
         )
         unrelated = self._draft()
         action = revision.action_open_revision_history()

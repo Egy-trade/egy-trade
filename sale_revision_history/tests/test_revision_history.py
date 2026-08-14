@@ -64,7 +64,6 @@ class RevisionHistoryCase(SavepointCase):
             "product_pricing": True,
             "global_factor": 1.35,
         })
-        order._record_commercial_change("update_today")
         line = self.env["sale.order.line"].create({
             "order_id": order.id,
             "product_id": self.product.id,
@@ -312,7 +311,6 @@ class RevisionHistoryCase(SavepointCase):
 
         # Preview/Apply only reprices after an authorized pricing input changes
         # on the draft successor; it never silently rewrites the exact copy.
-        revision._record_commercial_change("update_today")
         revision_line.write({"product_uom_qty": 3.0})
         self.assertTrue(revision_line.pricing_reprice_pending)
         action = revision.action_preview_product_pricing()
@@ -340,6 +338,8 @@ class RevisionHistoryCase(SavepointCase):
         self.assertIn("'group_by': 'revision_number'", search_arch)
         self.assertIn("button[@name='action_cancel'])[1]", form_arch)
         self.assertNotIn("action_quotations_with_onboarding", form_arch)
+        self.assertNotIn("action_record_commercial_change", form_arch)
+        self.assertNotIn("action_add_below", form_arch)
     def test_11_restore_sent_history_creates_next_revision_and_preserves_snapshot(self):
         original = self._sent_order()
         original_line = original.order_line
@@ -384,7 +384,6 @@ class RevisionHistoryCase(SavepointCase):
             self.env,
             original.with_user(self.owner).action_view_revision_wizard('Draft alternative'),
         )
-        current_draft.with_user(self.owner)._record_commercial_change('update_today')
         current_draft.order_line.with_user(self.owner).write({
             'name': 'Same total, different commercial description',
         })
@@ -465,3 +464,57 @@ class RevisionHistoryCase(SavepointCase):
         self.assertIn('restore_source_id', wizard_arch)
         self.assertIn('expected_current_revision_id', wizard_arch)
         self.assertIn('Restore as Next Revision', wizard_arch)
+
+    def test_15_explicit_legacy_family_uses_root_sequence_not_cumulative_name(self):
+        """Old linked records stay together; only the new successor is named."""
+        original = self._sent_order()
+        internal_context = {
+            "_revision_internal_token": _REVISION_INTERNAL_TOKEN,
+            "_pricing_internal_token": _PRICING_INTERNAL_TOKEN,
+            "_lifecycle_internal_token": _LIFECYCLE_INTERNAL_TOKEN,
+        }
+        original.sudo().with_context(**internal_context).write({
+            "name": "S0123",
+            "unrevisioned_name": "S0123",
+            "revision_number": 0,
+        })
+        current = original.sudo().with_context(**internal_context).copy({
+            # This is a historical malformed display name.  Its existing PDF
+            # reference must remain untouched; only its successor is canonical.
+            "name": "S0123-01-02",
+            "state": "draft",
+            "active": True,
+            "current_revision_id": False,
+            "unrevisioned_name": "S0123-01",
+            "revision_number": 2,
+        })
+        current.with_context(**internal_context).write({"state": "sent"})
+        first = original.sudo().with_context(**internal_context).copy({
+            "name": "S0123-01",
+            "state": "draft",
+            "active": False,
+            "current_revision_id": current.id,
+            "unrevisioned_name": "S0123",
+            "revision_number": 1,
+        })
+        first.with_context(**internal_context).write({"state": "sent"})
+        original.sudo().with_context(**internal_context).write({
+            "active": False,
+            # Legacy rows could form a chain rather than all pointing to the
+            # newest revision.  The new family traversal must still bundle it.
+            "current_revision_id": first.id,
+        })
+
+        action = current.with_user(self.owner).action_view_revision_wizard(
+            "Canonical successor after legacy repair",
+        )
+        successor = self._revision_from_action(self.env, action)
+
+        self.assertEqual(successor.name, "S0123-03")
+        self.assertEqual(successor.unrevisioned_name, "S0123")
+        self.assertEqual(successor.revision_number, 3)
+        self.assertEqual(
+            set(successor.with_context(active_test=False).old_revision_ids.ids),
+            {original.id, first.id, current.id},
+        )
+        self.assertEqual(current.name, "S0123-01-02")

@@ -65,11 +65,13 @@
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
+            <xpath expr="(//form/header/button[@name='action_confirm'])[1]" position="attributes">
+                <attribute name="attrs">{'invisible': ['|', '|', ('state', '!=', 'sent'), ('active', '=', False), ('current_revision_id', '!=', False)]}</attribute>
+            </xpath>
+            <xpath expr="//form/header/button[@name='action_quotation_send'][@string='Send by Email']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
             <xpath expr="(//form/header/button[@name='action_cancel'])[1]" position="after">
-                <button name="action_record_commercial_change" type="object"
-                        string="Record Commercial Change" class="btn-secondary"
-                        attrs="{'invisible': ['|', ('state', '!=', 'draft'), ('active', '=', False)]}"
-                        help="Before the first commercial save in a Cairo business day, choose Update Today or Create Revision. This is required for draft prices, quantities, terms, and lines."/>
                 <button name="action_issue_offer_pdf" type="object"
                         string="Issue Offer PDF" class="btn-primary"
                         confirm="Issue and lock this exact customer Offer PDF? Changes afterwards require a revision. If Sales responsibility is unaccepted, issuing still proceeds but records the exception and notifies Sales and Sales Managers."
@@ -84,11 +86,6 @@
                         attrs="{'invisible': ['|', '|', ('state', '!=', 'sent'), ('active', '=', False), ('current_revision_id', '!=', False)]}"
                         help="Assigned Sales or QS, or a Sales Manager, creates the next draft from this issued version with a mandatory reason; the issued source remains locked."/>
             </xpath>
-            <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree" position="inside">
-                <button name="action_add_below" type="object" string="Add Below" icon="fa-plus"
-                        attrs="{'invisible': ['|', '|', ('display_type', '!=', False), ('product_id', '=', False), ('parent.state', '!=', 'draft')]}"
-                        help="Creates one blank product row immediately below this product line. Only the quotation Global Factor is inherited; no product, quantities, Item #, prices, costs, discounts, or Line Factor are copied."/>
-            </xpath>
             <xpath expr="//sheet/notebook" position="inside">
                 <page string="Revisions" name="revision_history">
                     <group>
@@ -100,11 +97,9 @@
                         <field name="restoration_date" readonly="1"/>
                         <field name="restoration_author_id" readonly="1"/>
                         <field name="restoration_difference_summary" readonly="1"/>
-                        <field name="commercial_change_date" readonly="1"/>
-                        <field name="commercial_change_decision" readonly="1"/>
-                        <field name="commercial_change_decision_at" readonly="1"/>
-                        <field name="commercial_change_decision_by" readonly="1"/>
-                        <field name="commercial_change_audit" readonly="1"/>
+                        <field name="revision_family_ambiguous" readonly="1"/>
+                        <field name="revision_family_ambiguity_reason" readonly="1"
+                               attrs="{'invisible': [('revision_family_ambiguous', '=', False)]}"/>
                         <field name="issued_offer_attachment_id" readonly="1"/>
                         <field name="issued_offer_at" readonly="1"/>
                         <field name="issued_offer_by" readonly="1"/>

@@ -1,42 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 
+
 <odoo><record model="ir.ui.view" id="sale_order_waiting_approve">
-            <field name="name">Sale Order</field>
+            <field name="name">Legacy waiting approval view disabled</field>
             <field name="model">sale.order</field>
-            <field name="inherit_id" ref = "sale.view_order_form"/>
-            <field name="arch" type="xml">
-                
-                <xpath expr="//form/header" position="inside">
-                    <button name="action_approve" id="action_approve" string="Approve" class="btn-primary" type="object"
-                            groups="sales_team.group_sale_manager"
-                            attrs="{'invisible': [('state', '!=', 'waiting')]}"/>
-
-
-                </xpath>
-
-                
-            </field>
+            <field name="inherit_id" eval="False"/>
+            <field name="type">form</field>
+            <field name="arch" type="xml"><form/></field>
+            <field name="active" eval="False"/>
         </record>
 	
 
     <record id="action_sale_order_waiting_approve" model="ir.actions.act_window">
-        <field name="name">Waiting Approve</field>
+        <field name="name">Legacy Waiting Approve (Disabled)</field>
         <field name="type">ir.actions.act_window</field>
         <field name="res_model">sale.order</field>
         <field name="view_id" ref="sale.view_quotation_tree_with_onboarding"/>
         <field name="view_mode">tree,kanban,form,calendar,pivot,graph,activity</field>
-        <field name="domain">[('state', '=', 'waiting')]</field>
+        <field name="domain">[('id', '=', 0)]</field>
         <field name="context">{}</field>
         
     </record>
 	
 
 
-    <menuitem id="menu_sale_order_waiting_approve"
-        action="action_sale_order_waiting_approve"
-        parent="sale.sale_order_menu"
-        groups="group_sale_order_waiting_approve"
-        sequence="1"/>
+    <record id="menu_sale_order_waiting_approve" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
 
   
 </odoo>

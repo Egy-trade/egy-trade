@@ -1,21 +1,13 @@
 # -*- coding: utf-8 -*-
 
 from odoo import models, fields, api, _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 from odoo.tools.float_utils import float_compare
 
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
-    state = fields.Selection([
-        ('draft', 'Quotation'),
-        ('approve', 'Approved'),
-        ('sent', 'Quotation Sent'),
-        ('sale', 'Sales Order'),
-        ('done', 'Locked'),
-        ('cancel', 'Cancelled'),
-    ], string='Status', readonly=True, copy=False, index=True, tracking=3, default='draft')
     follower_user_ids = fields.Many2many('res.users', compute="_get_follower_user_ids", store=True)
     mep_contractors = fields.Many2one('res.users', string='MEP Contractor')
     arch_consultants = fields.Many2one('res.users', string='Architecture Consultant')
@@ -28,9 +20,12 @@ class SaleOrder(models.Model):
             follower_users = self.env['res.users'].search([('partner_id', 'in', rec.message_follower_ids.mapped('partner_id').ids)])
             rec.follower_user_ids = [(6, 0, follower_users.ids)]
 
-    # Incomplete validation of the approved state
     def action_to_approve(self):
-        self.state = 'approve'
+        """Prevent RPC or legacy buttons from creating a non-standard state."""
+        raise UserError(_(
+            'The legacy Approved quotation state is retired. Record quotation '
+            'approval separately, then use the standard sales workflow.'
+        ))
 
     @api.depends('partner_id')
     def _get_partner_allows(self):
