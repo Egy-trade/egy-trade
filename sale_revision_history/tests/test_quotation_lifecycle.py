@@ -307,6 +307,7 @@ class QuotationLifecycleCase(SavepointCase):
             order.action_issue_offer_pdf()
         with self.assertRaises(UserError):
             order.action_approve()
+        self.assertEqual(order.state, "sent")
 
     def test_retention_only_confirmation_creates_issued_successor_and_preserves_approval(self):
         order = self._draft(

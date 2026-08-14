@@ -542,10 +542,10 @@ class SaleOrder(models.Model):
         sent_orders = self.filtered(lambda order: order.state == "sent")
         if sent_orders and lifecycle_confirming:
             if (set(vals) - {"state", "date_order"}
-                    or vals.get("state") not in {"sale", "waiting"}):
+                    or vals.get("state") != "sale"):
                 raise UserError(_(
-                    "Confirmation may only set the Sales Order state, approval-waiting "
-                    "state, and standard confirmation date; commercial values cannot be "
+                    "Confirmation may only set the Sales Order to confirmed and set its "
+                    "standard confirmation date; commercial values cannot be "
                     "changed at the same time."
                 ))
         elif sent_orders and not (lifecycle_internal or revision_internal):
@@ -624,26 +624,11 @@ class SaleOrder(models.Model):
         return result
 
     def action_approve(self):
-        """Approve only a genuine second-step order after withholding was recorded."""
-        if not (
-                self.env.is_superuser()
-                or self.env.user.has_group("sales_team.group_sale_manager")):
-            raise AccessError(_("Only Sales Managers may approve a waiting Sales Order."))
-        self.check_access_rights("write")
-        self.check_access_rule("write")
-        if self.filtered(
-                lambda order: order.state != "waiting" or not order.active
-                or order.current_revision_id or not order.issued_offer_attachment_id
-                or order.withholding_confirmation not in {"yes", "no"}):
-            raise UserError(_(
-                "Approve is available only for the active current issued Sales Order "
-                "after the mandatory withholding decision was recorded."
-            ))
-        result = super().action_approve()
-        evidence_hook = getattr(self, "_create_pending_withholding_evidence", None)
-        if evidence_hook and all(order.state == "sale" for order in self):
-            evidence_hook()
-        return result
+        """Block obsolete two-step confirmation routes from legacy modules."""
+        raise UserError(_(
+            "Legacy Sales Order approval is no longer used. Confirm the current issued "
+            "offer through the withholding confirmation dialog."
+        ))
 
     def _ensure_revision_authorized(self):
         self.ensure_one()

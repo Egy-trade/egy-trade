@@ -91,8 +91,6 @@ class TestQuotationTaxSelection(SavepointCase):
         return order
 
     def _line(self, order):
-        if 'commercial_change_date' in order._fields:
-            order.with_user(order.user_id)._record_commercial_change('update_today')
         return self.env['sale.order.line'].create({
             'order_id': order.id, 'product_id': self.product.id,
             'name': self.product.name, 'product_uom_qty': 1.0, 'price_unit': 100.0,
