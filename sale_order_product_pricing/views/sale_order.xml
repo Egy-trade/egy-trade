@@ -132,22 +132,6 @@
                                     class="btn-secondary" attrs="{'invisible': ['|', ('state', '!=', 'draft'), ('product_pricing', '=', False)]}"
                                     help="Product Pricing users calculate and explain proposed line prices without changing the quotation. Review the results, then use Confirm Apply only when every line is ready."/>
                         </group>
-                        <!-- This is an input workspace over the same order lines, not a
-                             second selling-price grid. It is hidden until Product Pricing
-                             is enabled and never displays quoted prices or totals. -->
-                        <field name="pricing_line_ids" nolabel="1"
-                               attrs="{'invisible': [('product_pricing', '=', False)], 'readonly': [('state', '!=', 'draft')]}"
-                               help="Restricted Product Pricing inputs. Enter the supplier estimate and factors here, then use Preview to review proposed selling prices before Apply.">
-                            <tree editable="bottom" create="0" delete="0">
-                                <field name="product_id" readonly="1"/>
-                                <field name="product_uom_qty" string="Quantity" readonly="1"/>
-                                <field name="purchase_price_estimate" string="Purchase Price Estimate"/>
-                                <field name="factor" string="Global Factor"/>
-                                <field name="line_factor" string="Line Factor"/>
-                                <field name="pricing_eligible" readonly="1" optional="hide"/>
-                                <field name="pricing_warning" readonly="1" optional="show"/>
-                            </tree>
-                        </field>
                         <group string="Price Origin Summary">
                             <field name="product_pricing_line_count" readonly="1"/>
                             <field name="odoo_pricelist_line_count" readonly="1"/>

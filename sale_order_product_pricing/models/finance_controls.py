@@ -36,9 +36,6 @@ class ResCompany(models.Model):
     quotation_retention_tax_id = fields.Many2one(
         'account.tax', string='Quotation Withholding Tax',
         help='Finance-configured existing negative 1% sales withholding tax.')
-    quotation_withholding_responsible_id = fields.Many2one(
-        'res.users', string='Withholding Evidence Responsible',
-        help='Accounting user responsible for collecting customer withholding evidence.')
     quotation_high_value_threshold = fields.Monetary(
         string='High-value quotation threshold', currency_field='currency_id', default=0.0,
         help=(
@@ -58,8 +55,6 @@ class ResConfigSettings(models.TransientModel):
 
     quotation_vat_tax_id = fields.Many2one(related='company_id.quotation_vat_tax_id', readonly=False)
     quotation_retention_tax_id = fields.Many2one(related='company_id.quotation_retention_tax_id', readonly=False)
-    quotation_withholding_responsible_id = fields.Many2one(
-        related='company_id.quotation_withholding_responsible_id', readonly=False)
     quotation_high_value_threshold = fields.Monetary(
         related='company_id.quotation_high_value_threshold', readonly=False)
     quotation_high_value_approver_group_id = fields.Many2one(
@@ -98,84 +93,6 @@ class SaleOrderFinanceApproval(models.Model):
         raise AccessError(_('Quotation approval audit records cannot be deleted.'))
 
 
-class SaleOrderWithholdingEvidence(models.Model):
-    _name = 'sale.order.withholding.evidence'
-    _description = 'Customer Withholding Evidence'
-    _order = 'id desc'
-
-    order_id = fields.Many2one('sale.order', required=True, ondelete='cascade', readonly=True, index=True)
-    partner_id = fields.Many2one(related='order_id.partner_id', store=True, readonly=True)
-    invoice_id = fields.Many2one('account.move', readonly=True, copy=False)
-    activity_id = fields.Many2one('mail.activity', readonly=True, copy=False)
-    responsible_id = fields.Many2one('res.users', readonly=True, copy=False)
-    tax_id = fields.Many2one('account.tax', readonly=True, required=True)
-    currency_id = fields.Many2one(related='order_id.currency_id', readonly=True)
-    expected_basis = fields.Monetary(readonly=True)
-    expected_amount = fields.Monetary(readonly=True)
-    evidence_attachment_ids = fields.Many2many('ir.attachment', string='Customer Evidence', copy=False)
-    remittance_reference = fields.Char(copy=False)
-    payment_remittance_date = fields.Date(copy=False)
-    status = fields.Selection([
-        ('pending', 'Pending Customer Evidence'), ('received', 'Evidence Received'),
-        ('waived', 'Waived'), ('cancelled', 'Order Cancelled'),
-    ], default='pending', required=True, readonly=True, copy=False)
-    closure_reason = fields.Text(readonly=True, copy=False)
-    closed_by = fields.Many2one('res.users', readonly=True, copy=False)
-    closed_at = fields.Datetime(readonly=True, copy=False)
-
-    @api.model_create_multi
-    def create(self, vals_list):
-        if not _is_finance_internal(self.env):
-            raise AccessError(_('Withholding evidence tasks are created only when an eligible Sales Order is confirmed.'))
-        return super().create(vals_list)
-
-    def action_mark_received(self):
-        if not (self.env.is_superuser() or self.env.user.has_group('account.group_account_manager')):
-            raise AccessError(_('Only an Accounting Manager may close withholding evidence.'))
-        if any(not evidence.evidence_attachment_ids for evidence in self):
-            raise ValidationError(_('Attach the customer withholding evidence before closing this task.'))
-        result = self.with_context(_finance_internal_token=_FINANCE_INTERNAL_TOKEN).write({
-            'status': 'received', 'closed_by': self.env.user.id, 'closed_at': fields.Datetime.now(),
-        })
-        for evidence in self.filtered('activity_id'):
-            evidence.activity_id.sudo().action_done(
-                feedback=_('Customer withholding evidence received.')
-            )
-        return result
-
-    def action_waive(self, reason):
-        if not (self.env.is_superuser() or self.env.user.has_group('account.group_account_manager')):
-            raise AccessError(_('Only an Accounting Manager may waive withholding evidence.'))
-        if not (reason or '').strip():
-            raise ValidationError(_('A reason is required to waive withholding evidence.'))
-        result = self.with_context(_finance_internal_token=_FINANCE_INTERNAL_TOKEN).write({
-            'status': 'waived', 'closure_reason': reason, 'closed_by': self.env.user.id,
-            'closed_at': fields.Datetime.now(),
-        })
-        for evidence in self.filtered('activity_id'):
-            evidence.activity_id.sudo().action_done(
-                feedback=_('Withholding evidence follow-up waived: %s') % reason
-            )
-        return result
-
-    def write(self, vals):
-        protected = {'order_id', 'partner_id', 'invoice_id', 'activity_id', 'responsible_id', 'tax_id', 'expected_basis',
-                     'expected_amount', 'status', 'closure_reason', 'closed_by', 'closed_at'}
-        if protected.intersection(vals) and not _is_finance_internal(self.env):
-            raise AccessError(_('Withholding evidence lifecycle fields are system-managed.'))
-        evidence_fields = {
-            'evidence_attachment_ids', 'remittance_reference',
-            'payment_remittance_date',
-        }
-        if (evidence_fields.intersection(vals) and not _is_finance_internal(self.env)
-                and self.filtered(lambda evidence: evidence.status != 'pending')):
-            raise AccessError(_(
-                'Received, waived, or cancelled withholding evidence is immutable. '
-                'Record a new audited follow-up instead of rewriting closed evidence.'
-            ))
-        return super().write(vals)
-
-
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
@@ -192,7 +109,6 @@ class SaleOrder(models.Model):
         compute='_compute_can_approve_quotation_requirements',
         help='True only when the current user may approve at least one pending requirement.',
     )
-    withholding_evidence_ids = fields.One2many('sale.order.withholding.evidence', 'order_id', readonly=True, copy=False)
 
     def _quotation_manager(self):
         user = self.env.user
@@ -602,12 +518,12 @@ class SaleOrder(models.Model):
         return True
 
     def _create_pending_withholding_evidence(self):
-        """Compatibility no-op: Accounting evidence is not quotation workflow."""
+        """Compatibility no-op: quotations do not create Accounting evidence."""
         return True
 
     def action_cancel(self):
-        # Legacy evidence records are retained for database compatibility only.
-        # Phase 1 creates no quotation-side Accounting follow-up on cancellation.
+        # Cancellation remains standard Sales behavior; no quotation-side
+        # accounting task or document is created.
         return super().action_cancel()
 
     def write(self, vals):
@@ -663,11 +579,6 @@ class SaleOrder(models.Model):
         elif commercial_fields.intersection(vals):
             self._invalidate_finance_approvals(_('Commercial header changed.'))
         return result
-
-    def _create_invoices(self, *args, **kwargs):
-        """Leave standard invoices completely untouched in Phase 1."""
-        return super()._create_invoices(*args, **kwargs)
-
 
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'

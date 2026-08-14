@@ -634,20 +634,12 @@ class TestProductPricingAccess(SavepointCase):
         self.assertEqual(line.price_origin, 'historical_unverified')
         self.assertFalse(line.price_origin_verified)
 
-    def test_standard_and_pricing_views_use_separate_line_fields(self):
+    def test_product_pricing_is_preview_and_apply_only(self):
         view = self.env.ref('sale_order_product_pricing.sale_order_product_pricing_form')
         root = etree.fromstring(view.arch_db.encode())
         pricing_page = root.xpath("//page[@name='product_pricing']")
         self.assertEqual(len(pricing_page), 1)
-        input_grid = pricing_page[0].xpath(".//field[@name='pricing_line_ids']")
-        self.assertEqual(len(input_grid), 1)
-        self.assertIn("product_pricing", input_grid[0].get('attrs'))
-        self.assertTrue(input_grid[0].xpath(".//field[@name='purchase_price_estimate']"))
-        self.assertTrue(input_grid[0].xpath(".//field[@name='factor']"))
-        self.assertTrue(input_grid[0].xpath(".//field[@name='line_factor']"))
-        self.assertFalse(input_grid[0].xpath(".//field[@name='price_unit']"))
-        self.assertFalse(input_grid[0].xpath(".//field[@name='price_reference']"))
-        self.assertFalse(input_grid[0].xpath(".//field[@name='estimate_unit_price']"))
+        self.assertFalse(pricing_page[0].xpath(".//field[@name='pricing_line_ids']"))
         self.assertFalse(pricing_page[0].xpath(".//field[@name='order_line']"))
         self.assertTrue(
             root.xpath("//field[@name='price_origin_label'][@optional='show']")

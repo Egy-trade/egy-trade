@@ -7,7 +7,10 @@ from lxml import etree
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests.common import SavepointCase
 
-from ..models.sale_order import _LIFECYCLE_INTERNAL_TOKEN
+from ..models.sale_order import (
+    _LIFECYCLE_INTERNAL_TOKEN,
+    _WITHHOLDING_CONFIRMATION_TOKEN,
+)
 from odoo.addons.sale_order_product_pricing.models.sale_order import (
     _PRICING_INTERNAL_TOKEN,
 )
@@ -33,7 +36,6 @@ class QuotationLifecycleCase(SavepointCase):
         cls.env.company.sudo().write({
             "quotation_vat_tax_id": cls.vat_tax.id,
             "quotation_retention_tax_id": cls.withholding_tax.id,
-            "quotation_withholding_responsible_id": cls.env.user.id,
         })
         cls.receivable_account = cls.env["account.account"].create({
             "name": "Lifecycle Test Receivable",
@@ -422,14 +424,24 @@ class QuotationLifecycleCase(SavepointCase):
             {"quotation_manager", "vat_exemption"},
         )
         report_service = self.env["ir.actions.report"]
+        before_moves = self.env["account.move"].search_count([])
+        before_move_lines = self.env["account.move.line"].search_count([])
         with patch.object(
                 type(report_service), "_render_qweb_pdf",
-                return_value=(b"%PDF-test", "pdf")):
+                return_value=(b"%PDF-test", "pdf")), patch.object(
+                    type(order), "action_confirm", return_value=True,
+                ) as final_confirmation:
             order.action_issue_offer_pdf()
             self.env["sale.order.withholding.confirmation"].create({
                 "sale_id": order.id, "decision": "yes",
             }).action_confirm()
         revision = order.current_revision_id
+        # The automatic revision is now issued but deliberately paused before
+        # standard SO confirmation.  This is the only point where its clone
+        # snapshot can be compared to the issued source: action_confirm
+        # correctly stamps a new confirmation date afterwards.
+        self.assertEqual(revision.state, "sent")
+        final_confirmation.assert_called_once()
         self.assertTrue(revision.apply_withholding)
         self.assertFalse(revision.apply_vat)
         self.assertEqual(revision.vat_exemption_reason, order.vat_exemption_reason)
@@ -446,6 +458,20 @@ class QuotationLifecycleCase(SavepointCase):
         self.assertEqual(revision._commercial_fingerprint(), issued_fingerprint)
         self.assertEqual(
             revision.order_line.price_origin, "historical_unverified",
+        )
+        self.assertEqual(self.env["account.move"].search_count([]), before_moves)
+        self.assertEqual(
+            self.env["account.move.line"].search_count([]), before_move_lines,
+        )
+
+        revision.with_context(
+            _withholding_confirmation_token=_WITHHOLDING_CONFIRMATION_TOKEN,
+        ).action_confirm()
+        self.assertEqual(revision.state, "sale")
+        self.assertNotEqual(revision.date_order, order.date_order)
+        self.assertEqual(self.env["account.move"].search_count([]), before_moves)
+        self.assertEqual(
+            self.env["account.move.line"].search_count([]), before_move_lines,
         )
 
     def test_retention_only_revision_preserves_free_of_charge_authorization(self):

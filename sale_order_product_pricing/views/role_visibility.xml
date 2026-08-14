@@ -55,23 +55,8 @@
             <xpath expr="//page[@name='product_pricing']//field[@name='global_factor']" position="attributes">
                 <attribute name="help">Global Factor is the default multiplier for eligible Product Pricing lines. Product Pricing users set it, preview the non-mutating result, then Apply the reviewed proposal.</attribute>
             </xpath>
-            <xpath expr="//page[@name='product_pricing']//field[@name='pricing_line_ids']/tree/field[@name='purchase_price_estimate']" position="attributes">
-                <attribute name="help">Expected supplier cost used by Product Pricing users to calculate a proposed selling price. Enter it before Preview; zero deliberately falls back to the selected Sales Pricelist.</attribute>
-            </xpath>
-            <xpath expr="//page[@name='product_pricing']//field[@name='pricing_line_ids']/tree/field[@name='pricing_eligible']" position="attributes">
-                <attribute name="help">Shows Product Pricing users whether this line can be calculated and included in Apply. Correct the warning, then Preview again.</attribute>
-            </xpath>
-            <xpath expr="//page[@name='product_pricing']//field[@name='pricing_line_ids']/tree/field[@name='pricing_warning']" position="attributes">
-                <attribute name="help">Explains to Product Pricing users why a line will be skipped or blocked, preventing an unsafe Apply. Correct the input, then Preview again.</attribute>
-            </xpath>
-            <xpath expr="//page[@name='product_pricing']//field[@name='pricing_line_ids']/tree/field[@name='factor']" position="attributes">
-                <attribute name="help">Default factor copied from the quotation for Product Pricing users. Review it before Preview and Apply.</attribute>
-            </xpath>
-            <xpath expr="//page[@name='product_pricing']//field[@name='pricing_line_ids']/tree/field[@name='line_factor']" position="attributes">
-                <attribute name="help">Adjusts only this line for Product Pricing users and does not change the quoted price until the reviewed Preview is applied.</attribute>
-            </xpath>
             <xpath expr="//page[@name='product_pricing']//button[@name='action_preview_product_pricing']" position="attributes">
-                <attribute name="help">Preview shows Product Pricing inputs, eligibility, estimated prices and the proposed change without changing this quotation. Purchase estimates and factors remain restricted to Product Pricing users and managers; review the result, then Confirm Apply in the modal only when every line is ready.</attribute>
+                <attribute name="help">Preview shows eligibility, supplier-cost/factor inputs already recorded on the quotation, estimated prices and the proposed change without changing this quotation. Purchase estimates and factors remain restricted to Product Pricing users and managers; review the result, then Confirm Apply in the modal only when every line is ready.</attribute>
             </xpath>
             <xpath expr="//page[@name='order_lines']/field[@name='order_line']/tree/field[@name='price_origin_label']" position="attributes">
                 <attribute name="help">Price Origin shows how the current selling price was established. Product Pricing and Manual Price values remain protected when a Sales Pricelist changes. Historical-Unverified values require manager certification.</attribute>

@@ -173,7 +173,10 @@ class TestQuotationRoleVisibility(SavepointCase):
         line.with_user(self.manager).write({"discount": 15.0})
         self.assertFalse(order.standard_discount_override_reason)
         self.assertTrue(line.standard_discount_override_used)
-        self.assertIn("discount_override", order._finance_requirement_codes())
+        # A manager's documented override is monitoring/audit evidence, not a
+        # second quotation Finance approval gate.  Only QS-manager, VAT-off,
+        # and configured high-value requirements may block Issue Offer PDF.
+        self.assertNotIn("discount_override", order._finance_requirement_codes())
         self.assertTrue(self.env["sale.order.pricing.audit"].search([
             ("order_id", "=", order.id), ("reason", "ilike", "commercial concession"),
         ]))

@@ -28,14 +28,12 @@ class TestQuotationTaxSelection(SavepointCase):
         cls.old_taxes = (
             cls.company.quotation_vat_tax_id,
             cls.company.quotation_retention_tax_id,
-            cls.company.quotation_withholding_responsible_id,
             cls.company.quotation_high_value_threshold,
             cls.company.quotation_high_value_approver_group_id,
         )
         cls.company.write({
             'quotation_vat_tax_id': cls.vat.id,
             'quotation_retention_tax_id': cls.withholding.id,
-            'quotation_withholding_responsible_id': cls.env.user.id,
         })
         cls.employee = cls.env['res.users'].create({
             'name': 'Quotation tax unauthorized employee',
@@ -78,9 +76,8 @@ class TestQuotationTaxSelection(SavepointCase):
         cls.company.write({
             'quotation_vat_tax_id': cls.old_taxes[0].id,
             'quotation_retention_tax_id': cls.old_taxes[1].id,
-            'quotation_withholding_responsible_id': cls.old_taxes[2].id,
-            'quotation_high_value_threshold': cls.old_taxes[3],
-            'quotation_high_value_approver_group_id': cls.old_taxes[4].id,
+            'quotation_high_value_threshold': cls.old_taxes[2],
+            'quotation_high_value_approver_group_id': cls.old_taxes[3].id,
         })
         super().tearDownClass()
 
@@ -139,11 +136,11 @@ class TestQuotationTaxSelection(SavepointCase):
         with self.assertRaises(AccessError):
             order.with_user(self.employee).write({'apply_withholding': True})
 
-    def test_withholding_evidence_is_created_only_when_selected(self):
+    def test_withholding_confirmation_hook_is_a_quotation_no_op(self):
         order = self._order(apply_withholding=True)
         self._line(order)
-        order._create_pending_withholding_evidence()
-        self.assertFalse(order.withholding_evidence_ids)
+        self.assertTrue(order._create_pending_withholding_evidence())
+        self.assertNotIn('withholding_evidence_ids', order._fields)
 
     def test_ambiguous_migrated_tax_selection_blocks_issue(self):
         order = self._order()
@@ -320,9 +317,3 @@ class TestQuotationTaxSelection(SavepointCase):
             order.write({'state': 'sent'})
         with self.assertRaises(UserError):
             order.action_approve_finance_requirements()
-
-    def test_withholding_does_not_create_quote_side_evidence_on_confirmation_path(self):
-        order = self._order(apply_withholding=True)
-        self._line(order)
-        order._create_pending_withholding_evidence()
-        self.assertFalse(order.withholding_evidence_ids)
