@@ -673,6 +673,10 @@ class TestProductPricingAccess(SavepointCase):
         root = etree.fromstring(view.arch_db.encode())
 
         self.assertTrue(root.xpath("//field[@name='apply_vat']"))
+        unrestricted_vat = root.xpath(
+            "//field[@name='apply_vat'][@invisible='1' and not(@groups)]"
+        )
+        self.assertEqual(len(unrestricted_vat), 1)
         self.assertTrue(root.xpath("//field[@name='apply_withholding']"))
         self.assertTrue(root.xpath("//field[@name='vat_exemption_reason']"))
         self.assertTrue(root.xpath(
