@@ -537,6 +537,30 @@ class QuotationLifecycleCase(SavepointCase):
                 order, order._commercial_fingerprint(), True,
             )
 
+    def test_fingerprint_diagnostics_expose_paths_not_commercial_values(self):
+        expected = {
+            "partner": 7,
+            "lines": [{
+                "price_unit": 123.45,
+                "name": "Confidential item",
+            }],
+        }
+        actual = {
+            "partner": 7,
+            "lines": [{
+                "price_unit": 120.00,
+                "name": "Confidential item",
+            }],
+        }
+
+        paths = self.env["sale.order"]._fingerprint_difference_paths(
+            expected, actual,
+        )
+
+        self.assertEqual(paths, ["lines[0].price_unit"])
+        self.assertNotIn("123.45", repr(paths))
+        self.assertNotIn("Confidential item", repr(paths))
+
     def test_superseded_issued_offer_cannot_be_confirmed(self):
         order = self._draft()
         report_service = self.env['ir.actions.report']

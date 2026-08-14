@@ -305,6 +305,31 @@ class SaleOrder(models.Model):
             "lines": lines, "options": options,
         }
 
+    @staticmethod
+    def _fingerprint_difference_paths(expected, actual, prefix=""):
+        """Return field paths only, never confidential commercial values."""
+        if isinstance(expected, dict) and isinstance(actual, dict):
+            paths = []
+            for key in sorted(set(expected) | set(actual)):
+                path = "%s.%s" % (prefix, key) if prefix else key
+                if key not in expected or key not in actual:
+                    paths.append(path)
+                else:
+                    paths.extend(SaleOrder._fingerprint_difference_paths(
+                        expected[key], actual[key], path,
+                    ))
+            return paths
+        if isinstance(expected, list) and isinstance(actual, list):
+            paths = []
+            if len(expected) != len(actual):
+                paths.append("%s.length" % prefix)
+            for index, (expected_item, actual_item) in enumerate(zip(expected, actual)):
+                paths.extend(SaleOrder._fingerprint_difference_paths(
+                    expected_item, actual_item, "%s[%d]" % (prefix, index),
+                ))
+            return paths
+        return [] if expected == actual else [prefix]
+
     def _open_withholding_confirmation(self):
         self.ensure_one()
         return {
@@ -359,11 +384,16 @@ class SaleOrder(models.Model):
             _("System-created retention-only revision after customer confirmation."),
         )
         revision = self.env["sale.order"].browse(action["res_id"]).exists()
-        if not revision or revision._commercial_fingerprint() != expected_fingerprint:
+        revision_fingerprint = revision._commercial_fingerprint() if revision else {}
+        if not revision or revision_fingerprint != expected_fingerprint:
+            difference_paths = self._fingerprint_difference_paths(
+                expected_fingerprint, revision_fingerprint,
+            )
             raise UserError(_(
                 "The proposed revision differs from the issued commercial terms. "
-                "Use the normal revision workflow and approval process."
-            ))
+                "Use the normal revision workflow and approval process. "
+                "Different fields: %(fields)s."
+            ) % {"fields": ", ".join(difference_paths[:8]) or _("unknown")})
         revision.with_context(
             _retention_revision_token=_RETENTION_REVISION_TOKEN,
             _lifecycle_internal_token=_LIFECYCLE_INTERNAL_TOKEN,
