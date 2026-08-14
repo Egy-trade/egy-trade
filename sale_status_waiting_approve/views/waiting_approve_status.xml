@@ -25,6 +25,9 @@
 
 
     <record id="menu_sale_order_waiting_approve" model="ir.ui.menu">
+        <!-- The XML id also exists on upgraded databases.  A name is required
+             when this record is first created on a clean installation. -->
+        <field name="name">Legacy Waiting Approval (Disabled)</field>
         <field name="active" eval="False"/>
     </record>
 
