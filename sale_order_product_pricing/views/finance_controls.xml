@@ -33,7 +33,7 @@
           <field name="finance_approval_required" invisible="1"/>
           <field name="can_approve_quotation_requirements" invisible="1"/>
           <div class="alert alert-warning" role="alert"
-               attrs="{'invisible': [('finance_approval_required', '=', False)]}">
+               attrs="{'invisible': ['|', ('state', '!=', 'draft'), ('finance_approval_required', '=', False)]}">
             A quotation exception needs approval before Issue Offer PDF.
             <button name="action_approve_quotation_requirements" type="object"
                     string="Approve Quotation Requirements" class="btn-primary"

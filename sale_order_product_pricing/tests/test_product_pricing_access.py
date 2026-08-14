@@ -702,6 +702,12 @@ class TestProductPricingAccess(SavepointCase):
         self.assertIn(
             'can_approve_quotation_requirements', approval_button.get('attrs')
         )
+        approval_alert = root.xpath("//div[@role='alert']")[0]
+        self.assertIn("('state', '!=', 'draft')", approval_alert.get('attrs'))
+        self.assertIn(
+            "('finance_approval_required', '=', False)",
+            approval_alert.get('attrs'),
+        )
         self.assertFalse(root.xpath("//page[@name='withholding_evidence']"))
         self.assertFalse(root.xpath("//field[@name='withholding_evidence_ids']"))
 
