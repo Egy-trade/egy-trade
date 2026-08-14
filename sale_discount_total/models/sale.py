@@ -40,12 +40,16 @@ class SaleOrder(models.Model):
                 amount_untaxed += line.price_subtotal
                 amount_tax += line.price_tax
                 amount_discount += (line.product_uom_qty * line.price_unit * line.discount) / 100
-            order.update({
-                'amount_untaxed': amount_untaxed,
-                'amount_tax': amount_tax,
-                'amount_discount': amount_discount,
-                'amount_total': amount_untaxed + amount_tax,
-            })
+            # A compute must populate the record cache without calling the
+            # business ``write`` path.  ``update`` on a persisted quotation can
+            # re-enter Sale Order write overrides while the web client is only
+            # reading a locked Sent offer.  Direct assignments are Odoo's
+            # normal computed-field pattern and keep form reads side-effect
+            # free.
+            order.amount_untaxed = amount_untaxed
+            order.amount_tax = amount_tax
+            order.amount_discount = amount_discount
+            order.amount_total = amount_untaxed + amount_tax
 
     discount_type = fields.Selection([('percent', 'Percentage'), ('amount', 'Amount')], string='Discount type',
                                      readonly=True,

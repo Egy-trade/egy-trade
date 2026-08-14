@@ -261,6 +261,27 @@ class QuotationLifecycleCase(SavepointCase):
         self.assertEqual(order.issued_offer_by, self.env.user)
         self.assertEqual(order.issued_offer_version, order.name)
         self.assertIn("Issued customer Offer PDF", order.issued_offer_audit)
+        # Reading/recomputing totals is not a commercial mutation.  Legacy
+        # quotation total computes must use cache assignments rather than
+        # re-entering ``sale.order.write`` on a locked Sent offer.
+        expected_totals = (
+            order.amount_untaxed, order.amount_tax,
+            order.amount_discount, order.amount_total,
+        )
+        order.invalidate_cache([
+            "amount_untaxed", "amount_tax", "amount_discount", "amount_total",
+        ])
+        order._amount_all()
+        totals = order.read([
+            "amount_untaxed", "amount_tax", "amount_discount", "amount_total",
+        ])[0]
+        self.assertEqual(order.state, "sent")
+        self.assertEqual(
+            tuple(totals[field_name] for field_name in (
+                "amount_untaxed", "amount_tax", "amount_discount", "amount_total",
+            )),
+            expected_totals,
+        )
         with self.assertRaises(UserError):
             order.write({"note": "RPC mutation"})
         with self.assertRaises(UserError):
