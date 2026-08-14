@@ -340,6 +340,8 @@ class RevisionHistoryCase(SavepointCase):
         self.assertNotIn("action_quotations_with_onboarding", form_arch)
         self.assertNotIn("action_record_commercial_change", form_arch)
         self.assertNotIn("action_add_below", form_arch)
+        self.assertNotIn("@string=", form_arch)
+
     def test_11_restore_sent_history_creates_next_revision_and_preserves_snapshot(self):
         original = self._sent_order()
         original_line = original.order_line
