@@ -240,6 +240,27 @@ class SaleOrder(models.Model):
 class SaleOrderLine(models.Model):
     _inherit = "sale.order.line"
 
+    def _is_amount_recompute_discount_write(self, vals):
+        """Identify Odoo's protected amount recompute writing ``discount``.
+
+        The live discount module computes sale line amounts and assigns the
+        resulting compound percentage to the standard discount field. During
+        that ORM recompute, the amount fields are protected. A browser/RPC
+        write does not run in this protected state, so the public lock remains
+        enforceable without changing the live discount calculation.
+        """
+        if set(vals) != {"discount"}:
+            return False
+        amount_fields = [
+            self._fields[name]
+            for name in ("price_subtotal", "price_tax", "price_total")
+        ]
+        return any(
+            self.env.is_protected(field, line)
+            for line in self
+            for field in amount_fields
+        )
+
     can_edit_quoted_price = fields.Boolean(compute="_compute_can_edit_quoted_price")
     can_edit_pricelist_discount = fields.Boolean(
         compute="_compute_can_edit_pricelist_discount"
@@ -330,6 +351,7 @@ class SaleOrderLine(models.Model):
                 ) % {"limit": ceiling})
 
     def write(self, vals):
+        amount_recompute = self._is_amount_recompute_discount_write(vals)
         metadata_reclassification = (
             _is_pricing_reclassification(self.env)
             and set(vals).issubset({
@@ -339,7 +361,10 @@ class SaleOrderLine(models.Model):
                 "pricing_warning",
             })
         )
-        if _LINE_PRICING_FIELDS.intersection(vals) and not metadata_reclassification:
+        if (
+                _LINE_PRICING_FIELDS.intersection(vals)
+                and not metadata_reclassification
+                and not amount_recompute):
             locked_lines = self.filtered(
                 lambda line: line.order_id.state != "draft"
             )
@@ -347,7 +372,7 @@ class SaleOrderLine(models.Model):
                 raise UserError(
                     _("Pricing is locked after the related quotation has been sent or confirmed.")
                 )
-        if not _is_pricing_internal(self.env):
+        if not _is_pricing_internal(self.env) and not amount_recompute:
             if "discount" in vals:
                 self._ensure_standard_discount_access(vals["discount"])
             if {"discount_2", "discount_3"}.intersection(vals):

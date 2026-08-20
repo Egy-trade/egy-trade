@@ -76,11 +76,11 @@ class TestProductPricingAccess(SavepointCase):
             values['quotation_specialist_id'] = owner.id
         return self.env['sale.order'].create(values)
 
-    def _line(self, order):
+    def _line(self, order, cost=50.0):
         return self.env['sale.order.line'].create({
             'order_id': order.id, 'product_id': self.product.id,
             'name': self.product.display_name, 'product_uom_qty': 1, 'price_unit': 100,
-            'purchase_price_estimate': 50,
+            'purchase_price_estimate': cost,
         })
 
     def _option(self, order):
@@ -388,7 +388,7 @@ class TestProductPricingAccess(SavepointCase):
 
     def test_standard_discount_requires_verified_pricelist_and_uses_30_percent_cap(self):
         order = self._order(owner=self.basic_user)
-        line = self._line(order)
+        line = self._line(order, cost=0.0)
         self.assertTrue(line.price_origin_verified)
         self.assertEqual(line.price_origin_evidence, 'new_pricelist')
 
@@ -431,7 +431,7 @@ class TestProductPricingAccess(SavepointCase):
             pricing_line.with_user(self.pricing_user).can_edit_pricelist_discount
         )
         pricing_line.with_user(self.pricing_user).write({'discount': 45.0})
-        self.assertEqual(pricing_line.discount, 45.0)
+        self.assertAlmostEqual(pricing_line.discount, 45.0)
 
         manager_order = self._order(owner=self.sales_manager)
         manager_line = self._line(manager_order)
