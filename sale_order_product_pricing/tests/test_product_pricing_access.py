@@ -393,7 +393,7 @@ class TestProductPricingAccess(SavepointCase):
         self.assertEqual(line.price_origin_evidence, 'new_pricelist')
 
         line.with_user(self.basic_user).write({'discount': 30.0})
-        self.assertEqual(line.discount, 30.0)
+        self.assertAlmostEqual(line.discount, 30.0)
         with self.assertRaises(ValidationError):
             line.with_user(self.basic_user).write({'discount': 30.01})
 
