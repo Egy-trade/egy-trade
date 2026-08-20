@@ -19,7 +19,19 @@ class SaleOrder(models.Model):
     mep_contractors = fields.Many2one('res.users', string='MEP Contractor')
     arch_consultants = fields.Many2one('res.users', string='Architecture Consultant')
     electrical_consultants = fields.Many2one('res.users', string='Electrical Consultant')
-    project = fields.Char()
+    project = fields.Char(help='Project name shown on the quotation when selected for PDF output.')
+    print_manufacturer = fields.Boolean(
+        string='Print Manufacturer', default=True, copy=True,
+        help='Include the Manufacturer column in this quotation PDF.',
+    )
+    print_origin = fields.Boolean(
+        string='Print Origin', default=True, copy=True,
+        help='Include the country-of-origin column in this quotation PDF.',
+    )
+    print_project = fields.Boolean(
+        string='Print Project', default=True, copy=True,
+        help='Include the Project value in this quotation PDF.',
+    )
     
     @api.depends('message_follower_ids')
     def _get_follower_user_ids(self):
@@ -93,8 +105,18 @@ class SaleOrderLine(models.Model):
         )
         if has_full_pricing:
             return
-        limit = min(max(user.max_discount or 0.0, 0.0), 30.0)
         for rec in self:
+            enabled = getattr(rec.company_id, 'standard_discount_enabled', True)
+            company_limit = getattr(rec.company_id, 'standard_discount_maximum', 30.0)
+            if not enabled and rec.discount:
+                raise ValidationError(_(
+                    'Standard line discounts are disabled in Sales Settings.'
+                ))
+            limit = min(
+                max(user.max_discount or 0.0, 0.0),
+                max(company_limit or 0.0, 0.0),
+                30.0,
+            )
             if rec.discount < 0 or rec.discount > limit:
                 raise ValidationError(_(
                     'Your maximum allowed standard discount per order line is %(limit).2f%%.'

@@ -1,16 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from odoo import api, fields, models, _
-from odoo.exceptions import ValidationError
-
-
-def _compound_discount(first_discount, second_discount):
-    """Return the effective percentage for two sequential discounts."""
-    return 100.0 * (
-        1.0
-        - (1.0 - (first_discount or 0.0) / 100.0)
-        * (1.0 - (second_discount or 0.0) / 100.0)
-    )
+from odoo import models, fields, api
+from odoo.exceptions import UserError, ValidationError
 
 
 class KsGlobalDiscountSales(models.Model):
@@ -19,11 +10,11 @@ class KsGlobalDiscountSales(models.Model):
     ks_global_discount_type = fields.Selection([('percent', 'Percentage'), ('amount', 'Amount')],
                                                string='Universal Discount Type',
                                                readonly=True,
-                                               states={'draft': [('readonly', False)]},
+                                               states={'draft': [('readonly', False)], 'sent': [('readonly', False)]},
                                                default='percent')
     ks_global_discount_rate = fields.Float('Universal Discount',
                                            readonly=True,
-                                           states={'draft': [('readonly', False)]})
+                                           states={'draft': [('readonly', False)], 'sent': [('readonly', False)]})
     ks_amount_discount = fields.Monetary(string='Universal Discount', readonly=True,
                                          # compute='_amount_all',
                                          store=True,
@@ -48,35 +39,25 @@ class KsGlobalDiscountSales(models.Model):
 
     @api.onchange('ks_global_discount_rate', 'ks_global_discount_type')
     def _onchange_ks_global_discount_rate(self):
-        """Apply the global discount to virtual lines without database writes."""
-        warning = False
+        """ ks_global_discount_rate """
         for rec in self:
-            discount_rate = 0.0
             if rec.ks_global_discount_type == 'percent':
-                discount_rate = rec.ks_global_discount_rate
-            elif rec.ks_global_discount_rate:
-                eligible_amount = sum(
-                    line.price_unit
-                    * line.product_uom_qty
-                    * (1.0 - (line.discount_2 or 0.0) / 100.0)
-                    for line in rec.order_line
-                    if not line.display_type
-                )
-                if eligible_amount > 0.0:
-                    discount_rate = rec.ks_global_discount_rate / eligible_amount * 100.0
-                else:
-                    warning = {
-                        'title': _('Universal Discount Not Applied'),
-                        'message': _(
-                            'A fixed discount requires at least one line with a positive amount after the first discount.'
-                        ),
-                    }
+                rec.order_line.write({
+                    'discount_3': rec.ks_global_discount_rate
+                })
+            else:
+                if rec.order_line:
+                    amount_total = 0
+                    discount_amount = 0
+                    for line in rec.order_line:
+                        amount_total += line.price_unit * line.product_uom_qty
+                        discount_amount += line.price_unit * line.product_uom_qty * line.discount_2 / 100
 
-            for line in rec.order_line.filtered(lambda item: not item.display_type):
-                line.discount_3 = discount_rate
-
-        if warning:
-            return {'warning': warning}
+                    if amount_total:
+                        discount_rate = (rec.ks_global_discount_rate / (amount_total-discount_amount)) * 100
+                        rec.order_line.write({
+                            'discount_3': discount_rate
+                        })
 
 
     # @api.depends('order_line.price_total', 'ks_global_discount_rate', 'ks_global_discount_type')
@@ -87,10 +68,10 @@ class KsGlobalDiscountSales(models.Model):
 
     # @api.multi
     def _prepare_invoice(self):
-        self.ensure_one()
-        res = super()._prepare_invoice()
-        res['ks_global_discount_rate'] = self.ks_global_discount_rate
-        res['ks_global_discount_type'] = self.ks_global_discount_type
+        res = super(KsGlobalDiscountSales, self)._prepare_invoice()
+        for rec in self:
+            res['ks_global_discount_rate'] = rec.ks_global_discount_rate
+            res['ks_global_discount_type'] = rec.ks_global_discount_type
         return res
 
     # @api.multi
@@ -111,23 +92,13 @@ class KsGlobalDiscountSales(models.Model):
 
     @api.constrains('ks_global_discount_rate', 'ks_global_discount_type')
     def ks_check_discount_value(self):
-        for order in self:
-            if order.ks_global_discount_rate < 0:
-                raise ValidationError(_('Universal Discount cannot be negative.'))
-            if order.ks_global_discount_type == 'percent' and order.ks_global_discount_rate > 100:
-                raise ValidationError(_('Universal Discount percentage cannot exceed 100.'))
-            if order.ks_global_discount_type == 'amount':
-                eligible_amount = sum(
-                    line.price_unit
-                    * line.product_uom_qty
-                    * (1.0 - (line.discount_2 or 0.0) / 100.0)
-                    for line in order.order_line
-                    if not line.display_type
-                )
-                if order.ks_global_discount_rate > eligible_amount:
-                    raise ValidationError(
-                        _('Universal Discount amount cannot exceed the eligible line amount.')
-                    )
+        if self.ks_global_discount_type == "percent":
+            if self.ks_global_discount_rate > 100 or self.ks_global_discount_rate < 0:
+                raise ValidationError('You cannot enter percentage value greater than 100.')
+        else:
+            if self.ks_global_discount_rate < 0 or self.ks_global_discount_rate > self.amount_untaxed:
+                raise ValidationError(
+                    'You cannot enter discount amount greater than actual cost or value lower than 0.')
 
 
 class SaleOrderLine(models.Model):
@@ -137,38 +108,54 @@ class SaleOrderLine(models.Model):
     """
     _inherit = 'sale.order.line'
 
-    discount_2 = fields.Float(string='Discount 1')
-    discount_3 = fields.Float(string='Discount 2')
-    discount = fields.Float(
-        string='Discount (%)',
-        compute='_compute_compound_discount',
-        store=True,
-        readonly=True,
+    discount_2 = fields.Float(
+        'Discount 1'
     )
-    tx_amount = fields.Monetary(
-        string='Tax Amount',
-        compute='_compute_tax_amount',
-        currency_field='currency_id',
-        store=True,
+    discount_3 = fields.Float(
+        'Discount 2'
     )
+    tx_amount = fields.Float()
 
-    @api.depends('discount_2', 'discount_3')
-    def _compute_compound_discount(self):
+    @api.depends('product_uom_qty', 'discount', 'price_unit',
+                 'tax_id', 'discount_2', 'discount_3')
+    def _compute_amount(self):
+        """
+        Compute the amounts of the SO line.
+        """
         for line in self:
-            line.discount = _compound_discount(line.discount_2, line.discount_3)
-
-    @api.depends('price_tax')
-    def _compute_tax_amount(self):
-        for line in self:
-            line.tx_amount = line.price_tax
-
-    @api.constrains('discount_2', 'discount_3')
-    def _check_discount_percentages(self):
-        for line in self:
-            if not 0.0 <= line.discount_2 <= 100.0:
-                raise ValidationError(_('Discount 1 must be between 0 and 100.'))
-            if not 0.0 <= line.discount_3 <= 100.0:
-                raise ValidationError(_('Discount 2 must be between 0 and 100.'))
+            price_subtotal = (line.price_unit * line.product_uom_qty)
+            second_price_subtotal = 0
+            if line.discount_2:
+                price_subtotal = (line.price_unit * line.product_uom_qty) - ((line.price_unit * line.product_uom_qty) * line.discount_2 / 100)
+                discount_2_amount = (line.price_unit * line.product_uom_qty) * line.discount_2 / 100
+                second_price_subtotal = price_subtotal
+            if line.discount_3 and second_price_subtotal:
+                discount_3_amount = second_price_subtotal * line.discount_3 / 100
+                price_subtotal -= discount_3_amount
+            elif line.discount_3:
+                discount_3_amount = price_subtotal * line.discount_3 / 100
+                price_subtotal -= discount_3_amount
+            amount_untaxed = price_subtotal
+            all_amount = line.price_unit * line.product_uom_qty
+            discount_amount = all_amount - price_subtotal
+            if all_amount > 0:
+                line.discount = (discount_amount / all_amount) * 100
+            tax_amt = 0
+            taxes = line.tax_id.compute_all(
+                line.price_unit,
+                line.currency_id,
+                line.product_uom_qty,
+                line.product_id,
+                line.order_id.partner_id)["taxes"]
+            if taxes:
+                for rec in taxes:
+                    tax_amt += rec.get("amount")
+            line.tx_amount = tax_amt
+            line.write({
+                'price_subtotal': amount_untaxed,
+                'price_tax': tax_amt,
+                'price_total': amount_untaxed + tax_amt,
+            })
 
 
     def _prepare_invoice_line(self, **optional_values):
@@ -176,3 +163,14 @@ class SaleOrderLine(models.Model):
         result['discount_1'] = self.discount_2
         result['discount_2'] = self.discount_3
         return result
+
+
+class KsSaleAdvancePaymentInv(models.TransientModel):
+    _inherit = "sale.advance.payment.inv"
+
+    def _create_invoice(self, order, so_line, amount):
+        invoice = super(KsSaleAdvancePaymentInv, self)._create_invoice(order, so_line, amount)
+        if invoice:
+            invoice['ks_global_discount_rate'] = order.ks_global_discount_rate
+            invoice['ks_global_discount_type'] = order.ks_global_discount_type
+        return invoice

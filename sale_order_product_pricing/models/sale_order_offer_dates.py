@@ -55,8 +55,8 @@ class SaleOrder(models.Model):
         readonly=True,
         copy=False,
         help=(
-            "Business date automatically refreshed whenever this active draft "
-            "quotation is saved."
+            "Business date recorded when this quotation is first created. "
+            "Later draft saves do not change it."
         ),
     )
     offer_expiry_days = fields.Integer(
@@ -90,16 +90,6 @@ class SaleOrder(models.Model):
                 self.env.company.quotation_expiry_days_default
             )
         return values
-    def _offer_date_values(self):
-        """Return the current business date and derived expiration."""
-        self.ensure_one()
-        offer_date = fields.Date.context_today(self)
-        return {
-            "offer_date": offer_date,
-            "date_order": fields.Datetime.now(),
-            "validity_date": offer_date + timedelta(days=self.offer_expiry_days),
-        }
-
     @api.model_create_multi
     def create(self, vals_list):
         prepared_vals = []
@@ -153,14 +143,28 @@ class SaleOrder(models.Model):
                 "quotation history."
             ))
 
-        result = super().write(vals)
+        if "offer_date" in vals:
+            vals.pop("offer_date")
 
-        # Only an active draft is refreshed. Sent/confirmed quotations and
-        # superseded revision history retain their exact historical dates.
-        for order in self.filtered(
-            lambda item: item.state == "draft" and getattr(item, "active", True)
-        ):
-            order.with_context(
-                _offer_date_internal_token=_OFFER_DATE_INTERNAL_TOKEN
-            ).write(order._offer_date_values())
-        return result
+        # Days and the visible expiration date are two views of the same rule.
+        # On drafts, changing either one updates the other while Offer Date is
+        # preserved. An explicitly entered Expiration Date takes precedence.
+        for order in self:
+            order_vals = dict(vals)
+            if order.state == "draft" and getattr(order, "active", True):
+                if "validity_date" in order_vals:
+                    validity = fields.Date.to_date(order_vals["validity_date"])
+                    if validity and order.offer_date:
+                        days = (validity - order.offer_date).days
+                        if days < 0:
+                            raise ValidationError(_(
+                                "Expiration Date cannot be before Offer Date."
+                            ))
+                        order_vals["offer_expiry_days"] = days
+                elif "offer_expiry_days" in order_vals and order.offer_date:
+                    order_vals["validity_date"] = (
+                        order.offer_date
+                        + timedelta(days=order_vals["offer_expiry_days"])
+                    )
+            super(SaleOrder, order).write(order_vals)
+        return True

@@ -95,6 +95,11 @@
                     <field name="arch_consultants" attrs="{'readonly':[('state','!=','draft')]}"/>
                     <field name="electrical_consultants" attrs="{'readonly':[('state','!=','draft')]}"/>
                 </group>
+                <group string="Quotation PDF Fields">
+                    <field name="print_manufacturer" attrs="{'readonly':[('state','!=','draft')]}"/>
+                    <field name="print_origin" attrs="{'readonly':[('state','!=','draft')]}"/>
+                    <field name="print_project" attrs="{'readonly':[('state','!=','draft')]}"/>
+                </group>
             </xpath>
 
         </field>

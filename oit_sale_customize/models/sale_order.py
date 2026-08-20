@@ -14,16 +14,20 @@ class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
     lighting_designer_id = fields.Many2one(
-        'res.users'
+        'res.users',
+        help='Lighting designer responsible for the quotation; printed when assigned.'
     )
     technical_sales_id = fields.Many2one(
-        'res.users'
+        'res.users',
+        help='Technical sales member responsible for the quotation; printed when assigned.'
     )
     technical_office_id = fields.Many2one(
-        'res.users'
+        'res.users',
+        help='Technical office member responsible for the quotation; printed when assigned.'
     )
     terms_conditions_id = fields.Many2one(
-        'terms.conditions'
+        'terms.conditions',
+        help='Saved terms and conditions copied into the quotation notes.'
     )
     amount_total = fields.Monetary(
         tracking=False

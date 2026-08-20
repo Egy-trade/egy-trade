@@ -95,14 +95,15 @@ class ProductPricingCase(SavepointCase):
         self.assertNotIn(deleted.id, order.order_line.ids)
         self.assertTrue(all(line.price_origin == 'product_pricing' for line in order.order_line))
 
-    def test_03_new_line_inherits_global_factor_but_starts_from_pricelist(self):
+    def test_03_new_line_inherits_global_factor_and_is_priced_immediately(self):
         order = self._order(global_factor=1.35)
         line = self._line(order)
         self.assertAlmostEqual(line.factor, 1.35)
-        self.assertEqual(line.price_origin, 'pricelist')
+        self.assertAlmostEqual(line.price_unit, 50.0 * 1.35)
+        self.assertEqual(line.price_origin, 'product_pricing')
         self.assertTrue(line.price_origin_verified)
-        self.assertEqual(line.price_origin_evidence, 'new_pricelist')
-        self.assertEqual(line.price_origin_label, 'Odoo Pricelist')
+        self.assertEqual(line.price_origin_evidence, 'product_pricing_apply')
+        self.assertEqual(line.price_origin_label, 'Product Pricing')
         self.assertIn('price_reference', line._fields)
 
     def test_04_zero_cost_is_ineligible_and_apply_skips_with_explanation(self):
@@ -175,7 +176,7 @@ class ProductPricingCase(SavepointCase):
         with self.assertRaises(UserError):
             self._apply(order)
         self.assertEqual(priced.price_unit, before)
-        self.assertEqual(priced.price_origin, 'pricelist')
+        self.assertEqual(priced.price_origin, 'product_pricing')
         self.assertEqual(self._preview_item(incomplete)['status'], 'blocked')
 
     def test_10_product_or_uom_replacement_requires_preview_before_apply(self):
@@ -439,23 +440,49 @@ class ProductPricingCase(SavepointCase):
         self.assertAlmostEqual(manual_line.price_unit, 137.0)
         self.assertEqual(manual_line.price_origin, 'edited')
 
-    def test_24_item_numbers_are_sequential_and_exclude_sections_and_notes(self):
+    def test_24_existing_sn_is_retained_without_duplicate_item_number(self):
         order = self._order()
-        section = self.env['sale.order.line'].create({
-            'order_id': order.id,
-            'display_type': 'line_section',
-            'name': 'Section',
-        })
         first = self._line(order)
-        note = self.env['sale.order.line'].create({
-            'order_id': order.id,
-            'display_type': 'line_note',
-            'name': 'Note',
-        })
         second = self._line(order, self.other_product)
-
-        self.assertEqual(section.quotation_item_number, 0)
-        self.assertEqual(first.quotation_item_number, 1)
-        self.assertEqual(note.quotation_item_number, 0)
-        self.assertEqual(second.quotation_item_number, 2)
+        first.sn = 'A-01'
+        self.assertNotIn('quotation_item_number', first._fields)
+        self.assertEqual(first.sn, 'A-01')
         self.assertEqual(order.pricing_line_ids, first | second)
+
+    def test_25_manual_price_on_new_line_survives_first_create(self):
+        line = self._line(self._order(), price=137.0)
+        self.assertAlmostEqual(line.price_unit, 137.0)
+        self.assertEqual(line.price_origin, 'edited')
+        self.assertEqual(line.price_origin_evidence, 'manual_edit')
+
+    def test_26_manual_price_survives_combined_quantity_write(self):
+        line = self._line(self._order())
+        line.with_user(self.pricing_user).write({
+            'product_uom_qty': 3.0,
+            'price_unit': 137.0,
+        })
+        self.assertEqual(line.product_uom_qty, 3.0)
+        self.assertAlmostEqual(line.price_unit, 137.0)
+        self.assertEqual(line.price_origin, 'edited')
+
+    def test_27_mixed_one2many_delete_edit_create_is_atomic(self):
+        order = self._order()
+        deleted = self._line(order)
+        surviving = self._line(order, self.other_product)
+        order.write({'order_line': [
+            (2, deleted.id, 0),
+            (1, surviving.id, {
+                'product_uom_qty': 2.0,
+                'price_unit': 131.0,
+            }),
+            (0, 0, {
+                'product_id': self.product.id,
+                'name': self.product.display_name,
+                'product_uom_qty': 1.0,
+                'purchase_price_estimate': 60.0,
+            }),
+        ]})
+        self.assertFalse(deleted.exists())
+        self.assertAlmostEqual(surviving.price_unit, 131.0)
+        self.assertEqual(surviving.price_origin, 'edited')
+        self.assertEqual(len(order.order_line), 2)

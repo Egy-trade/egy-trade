@@ -20,7 +20,8 @@
 #
 #############################################################################
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import ValidationError
 
 
 class sale_discount(models.Model):
@@ -67,6 +68,25 @@ class Company(models.Model):
     so_double_validation_limit = fields.Float(string="Percentage of Discount that requires double validation'",
                                   help="Minimum discount percentage for which a double validation is required")
 
+    standard_discount_enabled = fields.Boolean(
+        string="Allow Standard Line Discount",
+        default=True,
+        help="Allow the standard Discount percentage on quotation lines.",
+    )
+    standard_discount_maximum = fields.Float(
+        string="Maximum Standard Line Discount",
+        default=30.0,
+        help="Company ceiling for the standard quotation-line Discount percentage.",
+    )
+
+    @api.constrains('standard_discount_maximum')
+    def _check_standard_discount_maximum(self):
+        for company in self:
+            if not 0.0 <= company.standard_discount_maximum <= 30.0:
+                raise ValidationError(_(
+                    "Maximum Standard Line Discount must be between 0 and 30 percent."
+                ))
+
 
 class ResDiscountSettings(models.TransientModel):
     _inherit = 'res.config.settings'
@@ -76,6 +96,12 @@ class ResDiscountSettings(models.TransientModel):
     so_double_validation = fields.Selection(related='company_id.so_double_validation',string="Levels of Approvals *", readonly=False)
     so_double_validation_limit = fields.Float(string="Discount limit requires approval in %",
                                               related='company_id.so_double_validation_limit', readonly=False)
+    standard_discount_enabled = fields.Boolean(
+        related='company_id.standard_discount_enabled', readonly=False,
+    )
+    standard_discount_maximum = fields.Float(
+        related='company_id.standard_discount_maximum', readonly=False,
+    )
 
     def set_values(self):
         super(ResDiscountSettings, self).set_values()

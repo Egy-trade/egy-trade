@@ -491,9 +491,7 @@ class TestProductPricingAccess(SavepointCase):
         self.assertTrue(
             root.xpath("//field[@name='price_origin_label'][@optional='show']")
         )
-        self.assertTrue(
-            root.xpath("//field[@name='quotation_item_number'][@optional='show']")
-        )
+        self.assertFalse(root.xpath("//field[@name='quotation_item_number']"))
         for action_name in (
             'action_preview_product_pricing',
             'action_apply_product_pricing',

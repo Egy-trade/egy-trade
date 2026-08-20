@@ -10,6 +10,7 @@ import json
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
+from odoo.tools.float_utils import float_compare
 
 
 _PRICING_INTERNAL_TOKEN = object()
@@ -69,15 +70,20 @@ class SaleOrder(models.Model):
         groups='sale_order_product_pricing.product_pricing_group')
     currency_rate_estimate = fields.Float(
         compute='_compute_currency_rate', digits=(12, 6), copy=True, store=True,
+        help='Exchange rate used to convert Purchase Price Estimates into the quotation currency.',
         groups='sale_order_product_pricing.product_pricing_group')
     currency_rate_inverse = fields.Float(
         compute='_compute_currency_rate_inverse', digits=(12, 6), store=True,
+        help='Inverse exchange rate displayed for review.',
         groups='sale_order_product_pricing.product_pricing_group')
     change_currency_rate_type = fields.Selection(
         [('amount', 'Amount'), ('percentage', 'Percentage')], copy=True,
+        help='Choose whether the exchange-rate adjustment is a fixed amount or percentage.',
         groups='sale_order_product_pricing.product_pricing_group')
     change_currency_rate = fields.Float(
-        copy=True, groups='sale_order_product_pricing.product_pricing_group')
+        copy=True,
+        help='Adjustment applied to the exchange rate used by Product Pricing.',
+        groups='sale_order_product_pricing.product_pricing_group')
     global_factor = fields.Float(
         default=1.0, copy=True,
         help='Default multiplier applied to eligible lines in the Product Pricing preview.',
@@ -491,9 +497,6 @@ class SaleOrder(models.Model):
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
-    quotation_item_number = fields.Integer(
-        string='Item #', compute='_compute_quotation_item_number',
-        help='Sequential commercial item number. Sections and notes are excluded.')
     purchase_price_estimate = fields.Float(
         string='Purchase Price Estimate', copy=True,
         help='Estimated supplier purchase price used only for quotation pricing. It is not the Accounting Cost.',
@@ -505,7 +508,9 @@ class SaleOrderLine(models.Model):
         default=1.0, copy=True,
         groups='sale_order_product_pricing.product_pricing_group',
         help='Additional line-specific multiplier used by the pricing formula.')
-    qty_estimate = fields.Float(string='Quantity', default=1.0)
+    qty_estimate = fields.Float(
+        string='Quantity', default=1.0,
+        help='Quotation quantity mirrored for the internal pricing worksheet.')
     estimate_unit_price = fields.Float(
         string='Estimated Unit Price', compute='_compute_estimate_unit_price', store=True,
         help='Preview formula result before it is applied to Unit Price.',
@@ -517,7 +522,7 @@ class SaleOrderLine(models.Model):
         compute='_compute_currency_rate_estimate', store=True,
         help='Conversion rate used by the Product Pricing formula.',
         groups='sale_order_product_pricing.product_pricing_group')
-    note = fields.Char()
+    note = fields.Char(help='Internal note for this Product Pricing line.')
     price_origin = fields.Selection(
         [('product_pricing', 'Product Pricing'),
          ('pricelist', 'Odoo Pricelist'),
@@ -562,18 +567,6 @@ class SaleOrderLine(models.Model):
         help='Set when a product, UoM, or quantity change must be repriced by confirmed Apply.',
         groups='sale_order_product_pricing.product_pricing_group')
 
-    @api.depends('order_id.order_line.sequence', 'order_id.order_line.display_type')
-    def _compute_quotation_item_number(self):
-        for line in self:
-            line.quotation_item_number = 0
-        for order in self.mapped('order_id'):
-            number = 0
-            for line in order.order_line:
-                if line.display_type:
-                    continue
-                number += 1
-                line.quotation_item_number = number
-
     @api.depends('price_origin', 'price_origin_verified')
     def _compute_price_origin_label(self):
         labels = {
@@ -613,8 +606,7 @@ class SaleOrderLine(models.Model):
             factor = protected_order.global_factor
             if can_manage_pricing and requested_factor is not None:
                 factor = requested_factor
-            # New lines retain the normal sale module's pricelist result.  The
-            # baseline is set after standard create/onchange defaults are present.
+            incoming_price = values.get('price_unit')
             values.pop('price_origin', None)
             values.pop('price_origin_verified', None)
             values.pop('price_origin_evidence', None)
@@ -624,32 +616,74 @@ class SaleOrderLine(models.Model):
             values.pop('pricing_eligible', None)
             values.pop('pricing_reprice_pending', None)
             prepared_vals.append(values)
-            pricing_defaults.append((factor, protected_order.currency_id.id))
+            pricing_defaults.append((
+                factor,
+                protected_order.currency_id.id,
+                incoming_price,
+                bool(protected_order.product_pricing),
+            ))
         lines = super(
             SaleOrderLine,
             self.with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN),
         ).create(prepared_vals)
-        for line, (factor, currency_id) in zip(lines, pricing_defaults):
+        for line, (factor, currency_id, incoming_price, product_pricing) in zip(
+                lines, pricing_defaults):
             if line.display_type or (line.is_downpayment and _is_pricing_downpayment(self.env)):
                 continue
             protected_line = line.sudo()
             pricelist_price = line._pricing_pricelist_price() if line.product_id else 0.0
-            warning = False
-            if not protected_line.purchase_price_estimate:
-                warning = _('No purchasing cost: Product Pricing is ineligible; Odoo Price List is used.')
+            currency = line.order_id.currency_id
+            manual_price = (
+                incoming_price is not None
+                and float_compare(
+                    incoming_price,
+                    pricelist_price,
+                    precision_rounding=currency.rounding,
+                ) != 0
+            )
+            if manual_price and not line._pricing_manual_price_authorized():
+                raise UserError(_(
+                    'Only Product Pricing users or Sales Managers may manually edit a selling price.'))
+
+            if manual_price:
+                selling_price = incoming_price
+                origin = 'edited'
+                evidence = 'manual_edit'
+                warning = False
+                reason = _('New quotation line keeps the authorized manual selling price.')
+            elif product_pricing and protected_line.purchase_price_estimate > 0:
+                selling_price = (
+                    protected_line.purchase_price_estimate
+                    * (factor or 1.0)
+                    * (protected_line.currency_rate_estimate or 1.0)
+                    * (protected_line.line_factor or 1.0)
+                )
+                origin = 'product_pricing'
+                evidence = 'product_pricing_apply'
+                warning = False
+                reason = _('New quotation line automatically uses the active Product Pricing formula.')
+            else:
+                selling_price = pricelist_price
+                origin = 'pricelist'
+                evidence = 'new_pricelist'
+                warning = (
+                    _('No purchasing cost: Product Pricing is ineligible; Odoo Price List is used.')
+                    if not protected_line.purchase_price_estimate else False
+                )
+                reason = _('New quotation line uses Odoo Price List.')
             protected_line.with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN).write({
                 'factor': factor,
-                'price_unit': pricelist_price,
-                'price_reference': pricelist_price,
-                'price_origin': 'pricelist',
+                'price_unit': selling_price,
+                'price_reference': selling_price if origin != 'edited' else pricelist_price,
+                'price_origin': origin,
                 'price_origin_verified': True,
-                'price_origin_evidence': 'new_pricelist',
+                'price_origin_evidence': evidence,
                 'price_currency_id': currency_id,
                 'pricing_warning': warning,
                 'pricing_reprice_pending': False,
             })
             line.order_id._pricing_log_line(
-                line, _('New quotation line uses Odoo Price List.'),
+                line, reason,
                 old_price=0.0, old_origin=False)
         # Do not return a recordset carrying the internal bypass token. Validate
         # the fully initialized values using the same rules as public writes.
@@ -687,6 +721,16 @@ class SaleOrderLine(models.Model):
         for line in self:
             if line.id in protected_prices:
                 line.price_unit = protected_prices[line.id]
+            elif (
+                (not line._origin or not line._origin.id)
+                and line.order_id.product_pricing
+                and line.purchase_price_estimate > 0
+            ):
+                # The web client has not created this row yet.  Keep every new
+                # row, including the final row, aligned with the already active
+                # Product Pricing formula without requiring another Apply.
+                line.factor = line.order_id.global_factor or 1.0
+                line.price_unit = line._pricing_target_price()
 
     def write(self, vals):
         if _is_pricing_internal(self.env):
@@ -774,6 +818,34 @@ class SaleOrderLine(models.Model):
                 line_vals.pop('price_reference', None)
                 line_vals.pop('price_currency_id', None)
                 protected_line = line.sudo()
+                explicit_manual_price = (
+                    price_change
+                    and line._pricing_manual_price_authorized()
+                    and float_compare(
+                        vals['price_unit'],
+                        previous_prices[line.id],
+                        precision_rounding=line.order_id.currency_id.rounding,
+                    ) != 0
+                )
+                if explicit_manual_price:
+                    super(SaleOrderLine, line).write(line_vals)
+                    protected_line.with_context(
+                        _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+                    ).write({
+                        'price_origin': 'edited',
+                        'price_origin_verified': True,
+                        'price_origin_evidence': 'manual_edit',
+                        'price_currency_id': line.order_id.currency_id.id,
+                        'pricing_reprice_pending': False,
+                        'pricing_warning': False,
+                    })
+                    line.order_id._pricing_log_line(
+                        line,
+                        _('Authorized manual selling-price edit saved with product, UoM, or quantity changes.'),
+                        old_price=previous_prices[line.id],
+                        old_origin=previous_origins[line.id],
+                    )
+                    continue
                 can_reprice_pricelist = (
                     'product_id' not in vals
                     and protected_line.price_origin == 'pricelist'
@@ -920,6 +992,18 @@ class SaleOrderLine(models.Model):
         for line in self:
             if line.order_id and not line.factor:
                 line.factor = line.order_id.sudo().global_factor
+
+    @api.onchange('purchase_price_estimate', 'factor', 'line_factor')
+    def _onchange_new_line_product_pricing(self):
+        """Price an unsaved eligible row immediately from the active formula."""
+        for line in self:
+            if (
+                (not line._origin or not line._origin.id)
+                and line.order_id.product_pricing
+                and line.purchase_price_estimate > 0
+            ):
+                line.factor = line.order_id.global_factor or 1.0
+                line.price_unit = line._pricing_target_price()
 
     @api.onchange('product_uom_qty')
     def _onchange_product_uom_qty_estimate(self):

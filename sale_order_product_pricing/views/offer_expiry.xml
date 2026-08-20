@@ -8,15 +8,15 @@
         <field name="arch" type="xml">
             <field name="validity_date" position="before">
                 <field name="offer_date" readonly="1"
-                       help="Automatically updated to today's business date whenever this draft is saved."/>
+                       help="Set to today's business date when the quotation is first created and preserved afterward."/>
                 <field name="offer_expiry_days" string="Days of Expiry"
                        attrs="{'readonly': [('state', '!=', 'draft')]}"
                        help="Expiration Date equals Offer Date plus this number of days."/>
             </field>
             <field name="validity_date" position="attributes">
                 <attribute name="string">Expiration Date</attribute>
-                <attribute name="readonly">1</attribute>
-                <attribute name="help">Automatically calculated from Offer Date and Days of Expiry.</attribute>
+                <attribute name="attrs">{'readonly': [('state', '!=', 'draft')]}</attribute>
+                <attribute name="help">Editable on a draft. Days of Expiry is synchronized from this date.</attribute>
             </field>
         </field>
     </record>

@@ -1,4 +1,4 @@
-from odoo import models, fields, api
+from odoo import _, models, fields, api
 from odoo.exceptions import UserError
 from odoo.tools import float_compare
 from odoo.tools.misc import get_lang
@@ -49,6 +49,26 @@ class SaleOrderLine(models.Model):
             product_ctx.update({'seller_id': supplierinfo.id})
         else:
             product_ctx.update({'partner_id': purchase_order.partner_id.id})
+
+        # A positive quotation Purchase Price Estimate is the commercial input
+        # approved by the salesperson and therefore seeds the draft PO.  Zero
+        # deliberately falls back to the selected vendor price above.
+        purchase_estimate = (
+            self.purchase_price_estimate
+            if 'purchase_price_estimate' in self._fields else 0.0
+        )
+        if purchase_estimate > 0:
+            source_currency = (
+                self.order_id.currency_estimate_id
+                if 'currency_estimate_id' in self.order_id._fields
+                else self.order_id.currency_id
+            )
+            price_unit = source_currency._convert(
+                purchase_estimate,
+                purchase_order.currency_id,
+                purchase_order.company_id,
+                fields.Date.context_today(self),
+            )
 
         product = self.product_id.with_context(**product_ctx)
         name = product.display_name
@@ -103,7 +123,6 @@ class SaleOrderLine(models.Model):
             # determine (or create) PO
             # purchase_order = supplier_po_map.get(partner_supplier.id)
             purchase_order=False
-            print('purchase_order1',purchase_order)
             # if not purchase_order:
             #     purchase_order = PurchaseOrder.search([
             #         ('partner_id', '=', partner_supplier.id),
@@ -114,9 +133,7 @@ class SaleOrderLine(models.Model):
             purchase_order=False
             if not purchase_order:
                 values = line._purchase_service_prepare_order_values(supplierinfo)
-                print('values',values)
                 purchase_order = PurchaseOrder.with_context(mail_create_nosubscribe=True).create(values)
-                print('purchase_order3', purchase_order)
 
 
             else:  # update origin of existing PO

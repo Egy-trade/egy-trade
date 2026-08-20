@@ -2,7 +2,7 @@
 {
     'name': 'Egy-Trade',
     'description': 'Egy-Trade Technical Modifications',
-    'version': '1.0.1',
+    'version': '16.0.1.0.2',
     'author': 'EffVision',
     'category': 'Inventory',
     'depends': ['product', 'stock', 'purchase', 'purchase_stock', 'crm', 'sale_management', 'sale_margin','sale_crm'],

@@ -18,8 +18,8 @@
                     </div>
                 </xpath>
                 <xpath expr="//field[@name='order_line']//tree//field[@name='discount']" position="before">
-                    <field name="discount_2" string="Discount 1"/>
-                    <field name="discount_3" string="Discount 2"/>
+                    <field name="discount_2"/>
+                    <field name="discount_3"/>
                 </xpath>
                 <xpath expr="//field[@name='tax_totals']" position="before">
                     <field name="amount_undiscounted" attrs="{'invisible':[('ks_global_discount_rate','=',0)]}"/>

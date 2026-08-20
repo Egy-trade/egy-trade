@@ -1,8 +1,8 @@
 <odoo>
     <template id="report_saleorder_document_inherited" inherit_id="sale.report_saleorder_document">
         <xpath expr="//th[@name='th_description']" position="before">
-            <th name="th_vendor" class="text-left">Manufacturer</th>
-            <th name="th_vendor" class="text-left">Origin</th>
+            <th t-if="doc.print_manufacturer" name="th_manufacturer" class="text-left">Manufacturer</th>
+            <th t-if="doc.print_origin" name="th_origin" class="text-left">Origin</th>
         </xpath>
 <!--        <xpath expr="//th[@name='th_description']" position="after">-->
 <!--            <th name="th_family_name" class="text-left">Family Name</th>-->
@@ -11,15 +11,27 @@
 <!--            <th name="th_ip" class="text-left">IP Rating</th>-->
 <!--        </xpath>-->
         <xpath expr="//div[@id='informations']" position="inside">
-            <div t-if="doc.project" class="col-auto col-3 mw-100 mb-2">
+            <div t-if="doc.print_project and doc.project" class="col-auto col-3 mw-100 mb-2">
                 <strong>Project:</strong>
                 <p class="m-0" t-field="doc.project"/>
+            </div>
+            <div t-if="doc._fields.get('lighting_designer_id') and doc.lighting_designer_id" class="col-auto col-3 mw-100 mb-2">
+                <strong>Lighting Designer:</strong>
+                <p class="m-0" t-field="doc.lighting_designer_id"/>
+            </div>
+            <div t-if="doc._fields.get('technical_sales_id') and doc.technical_sales_id" class="col-auto col-3 mw-100 mb-2">
+                <strong>Technical Sales:</strong>
+                <p class="m-0" t-field="doc.technical_sales_id"/>
+            </div>
+            <div t-if="doc._fields.get('technical_office_id') and doc.technical_office_id" class="col-auto col-3 mw-100 mb-2">
+                <strong>Technical Office:</strong>
+                <p class="m-0" t-field="doc.technical_office_id"/>
             </div>
         </xpath>
 
         <xpath expr="//td[@name='td_name']" position="before">
-            <td name="td_product_vendor" class="text-left"><span t-field="line.manufacturer"/></td>
-            <td name="td_product_vendor" class="text-left"><span t-field="line.origin"/></td>
+            <td t-if="doc.print_manufacturer" name="td_product_manufacturer" class="text-left"><span t-field="line.manufacturer"/></td>
+            <td t-if="doc.print_origin" name="td_product_origin" class="text-left"><span t-field="line.origin"/></td>
         </xpath>
 <!--        <xpath expr="//td[@name='td_name']" position="after">-->
 <!--            <td name="td_product_family_name" class="text-left"><span t-field="line.product_family_name"/></td>-->

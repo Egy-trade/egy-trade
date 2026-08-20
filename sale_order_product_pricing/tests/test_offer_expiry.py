@@ -62,23 +62,21 @@ class TestOfferExpiry(SavepointCase):
             expected_offer_date + timedelta(days=14),
         )
 
-    def test_draft_save_refreshes_offer_date_and_expiration(self):
+    def test_draft_save_preserves_offer_date_and_expiration(self):
         order = self._order(offer_expiry_days=10)
         old_offer_date = fields.Date.context_today(order) - timedelta(days=5)
         order.with_context(
             _offer_date_internal_token=_OFFER_DATE_INTERNAL_TOKEN
         ).write({
             "offer_date": old_offer_date,
-            "validity_date": old_offer_date + timedelta(days=1),
+            "validity_date": old_offer_date + timedelta(days=10),
         })
 
         order.write({"note": "Explicit draft save"})
-        expected_offer_date = fields.Date.context_today(order)
-        self.assertEqual(order.offer_date, expected_offer_date)
-        self.assertEqual(fields.Date.to_date(order.date_order), expected_offer_date)
+        self.assertEqual(order.offer_date, old_offer_date)
         self.assertEqual(
             order.validity_date,
-            expected_offer_date + timedelta(days=10),
+            old_offer_date + timedelta(days=10),
         )
 
     def test_per_quotation_days_recomputes_expiration_on_save(self):
@@ -90,6 +88,13 @@ class TestOfferExpiry(SavepointCase):
             order.validity_date,
             order.offer_date + timedelta(days=21),
         )
+
+    def test_editing_expiration_date_recomputes_days(self):
+        order = self._order(offer_expiry_days=5)
+        expiration = order.offer_date + timedelta(days=17)
+        order.write({"validity_date": expiration})
+        self.assertEqual(order.validity_date, expiration)
+        self.assertEqual(order.offer_expiry_days, 17)
 
     def test_zero_days_expires_on_offer_date(self):
         order = self._order(offer_expiry_days=0)
@@ -158,7 +163,7 @@ class TestOfferExpiry(SavepointCase):
             expected_offer_date + timedelta(days=8),
         )
 
-    def test_offer_fields_are_visible_and_system_managed(self):
+    def test_offer_date_is_fixed_and_expiration_is_editable_on_draft(self):
         view = self.env.ref(
             "sale_order_product_pricing.sale_order_offer_expiry_form"
         )
@@ -178,10 +183,9 @@ class TestOfferExpiry(SavepointCase):
             ),
             ["Expiration Date"],
         )
-        self.assertEqual(
-            root.xpath(
-                "//field[@name='validity_date']/"
-                "attribute[@name='readonly']/text()"
-            ),
-            ["1"],
-        )
+        self.assertTrue(root.xpath(
+            "//field[@name='validity_date']/attribute[@name='attrs']"
+        ))
+        self.assertFalse(root.xpath(
+            "//field[@name='validity_date']/attribute[@name='readonly']"
+        ))

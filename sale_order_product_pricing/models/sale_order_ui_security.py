@@ -77,6 +77,10 @@ class SaleOrder(models.Model):
         string="Quotation Specialist",
         copy=True,
         tracking=True,
+        help=(
+            "Internal quotation-preparation owner. Sales Managers may assign another "
+            "specialist while the quotation is a draft."
+        ),
         default=lambda self: (
             self.env.user if self.env.user.has_group(
                 "sale_order_product_pricing.quotation_specialist_group"
@@ -120,11 +124,17 @@ class SaleOrder(models.Model):
         for order in self:
             order.can_edit_quotation_price = can_edit
 
+    @api.depends("state", "user_id")
     @api.depends_context("uid")
     def _compute_can_assign_salesperson(self):
-        can_assign = self._is_quotation_specialist()
         for order in self:
-            order.can_assign_salesperson = can_assign
+            order.can_assign_salesperson = (
+                order.state == "draft"
+                and (
+                    self._is_quotation_specialist()
+                    or order.user_id == self.env.user
+                )
+            )
 
     @api.depends_context("uid")
     def _compute_can_assign_quotation_specialist(self):
@@ -184,12 +194,16 @@ class SaleOrder(models.Model):
         if editor_fields:
             self._ensure_price_editor_access()
         if "user_id" in vals:
-            if not self._is_quotation_specialist():
-                raise AccessError(_("Only Quotation Specialists can change the Salesperson."))
             if self.filtered(lambda order: order.state != "draft"):
                 raise UserError(
                     _("The Salesperson can only be changed on a draft quotation or revision.")
                 )
+            if not self._is_quotation_specialist() and self.filtered(
+                    lambda order: order.user_id != self.env.user):
+                raise AccessError(_(
+                    "Only the assigned Salesperson, a Quotation Specialist, or a Sales Manager "
+                    "can change the Salesperson on a draft quotation."
+                ))
         if "quotation_specialist_id" in vals and not self.env.is_superuser() and not (
                 self.env.user.has_group("sales_team.group_sale_manager")
                 or vals["quotation_specialist_id"] == self.env.user.id):
@@ -292,7 +306,18 @@ class SaleOrderLine(models.Model):
         ) or user.has_group("sales_team.group_sale_manager")
         if full_access:
             return
-        ceiling = min(max(user.max_discount or 0.0, 0.0), 30.0)
+        company = self.order_id[:1].company_id or self.env.company
+        enabled = getattr(company, "standard_discount_enabled", True)
+        company_limit = getattr(company, "standard_discount_maximum", 30.0)
+        if not enabled and discount:
+            raise ValidationError(_(
+                "Standard line discounts are disabled in Sales Settings."
+            ))
+        ceiling = min(
+            max(user.max_discount or 0.0, 0.0),
+            max(company_limit or 0.0, 0.0),
+            30.0,
+        )
         for line in self:
             order = line.order_id
             protected_line = line.sudo()
