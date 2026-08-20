@@ -81,11 +81,10 @@ class SaleOrder(models.Model):
             "Internal quotation-preparation owner. Sales Managers may assign another "
             "specialist while the quotation is a draft."
         ),
-        default=lambda self: (
-            self.env.user if self.env.user.has_group(
-                "sale_order_product_pricing.quotation_specialist_group"
-            ) else False
-        ),
+        # Keep ordinary batched sale-order creation on Odoo's standard query
+        # budget. Specialists are assigned explicitly in the quotation UI or
+        # by the controlled salesperson reassignment path below.
+        default=False,
         groups=(
             "sale_order_product_pricing.quotation_specialist_group,"
             "sales_team.group_sale_manager"

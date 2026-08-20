@@ -641,9 +641,14 @@ class SaleOrderLine(models.Model):
                     precision_rounding=currency.rounding,
                 ) != 0
             )
-            if manual_price and not line._pricing_manual_price_authorized():
-                raise UserError(_(
-                    'Only Product Pricing users or Sales Managers may manually edit a selling price.'))
+            # The web client includes a canonical price_unit in create
+            # commands even when the user did not deliberately edit it. A
+            # non-price-editor cannot turn that payload into a manual price;
+            # safely normalize it back to the pricelist instead of rejecting
+            # the whole one2many save.
+            manual_price = (
+                manual_price and line._pricing_manual_price_authorized()
+            )
 
             if manual_price:
                 selling_price = incoming_price

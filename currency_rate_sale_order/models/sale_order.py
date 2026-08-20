@@ -9,21 +9,22 @@ class SaleOrder(models.Model):
     currency_state = fields.Selection([('match', 'Matching'), ('not_match', 'Not Matching')])
     currency_is_default = fields.Boolean(compute='_check_default_currency_func')
 
-    # def action_confirm(self):
-    #     res = super(SaleOrder, self).action_confirm()
-    #     self.currency_rate_confirm = self.currency_id.rate_ids.filtered(
-    #         lambda l: l.name == max([x.name for x in self.currency_id.rate_ids])).inverse_company_rate
-    #     return res
+    @api.onchange('pricelist_id', 'currency_id')
+    def _onchange_currency_rate_confirm(self):
+        """Snapshot the rate used by the interactive quotation flow.
 
-    @api.model
-    def create(self, vals_list):
-        currency_rate_ids = self.env['res.currency'].browse(
-            int(vals_list.get('currency_id')) if vals_list.get('currency_id') else self.currency_id.id).rate_ids
+        This intentionally stays out of ``create`` so unrelated API and batch
+        sale-order creation retains Odoo's standard performance profile.
+        """
+        for order in self:
+            order.currency_rate_confirm = order.currency_rate_now
 
-        vals_list['currency_rate_confirm'] = currency_rate_ids.filtered(
-            lambda l: l.name == max([x.name for x in currency_rate_ids])).inverse_company_rate
-
-        return super(SaleOrder, self).create(vals_list)
+    def action_confirm(self):
+        # API-created orders may not have run browser onchange. Ensure the
+        # snapshot exists before the quotation becomes a confirmed order.
+        for order in self.filtered(lambda item: not item.currency_rate_confirm):
+            order.currency_rate_confirm = order.currency_rate_now
+        return super().action_confirm()
 
     def _compute_currency_rate_now(self):
         for rec in self:
@@ -45,7 +46,6 @@ class SaleOrder(models.Model):
     def _check_default_currency_func(self):
         for rec in self:
             if rec.env.company.currency_id.id == rec.currency_id.id:
-                print('true')
                 rec.currency_is_default = True
             else:
                 rec.currency_is_default = False
