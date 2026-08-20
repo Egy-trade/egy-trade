@@ -21,7 +21,7 @@
     'author': "Osama Ibrahim Team",
     'website': "https://www.linkedin.com/in/osama-ibrahim-mcts-58b1374b/",
     'category': 'Accounting',
-    'version': '0.1',
+    'version': '16.0.0.2.0',
 
     # any module necessary for this one to work correctly
     'depends': ['base', 'portal','account', 'mail','sale'],

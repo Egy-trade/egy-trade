@@ -345,18 +345,18 @@ class ProductPricingCase(SavepointCase):
         with self.assertRaises(ValidationError):
             line.with_context(pricing_initializing=True).write({'factor': 0.0})
 
-    def test_19_product_replacement_ignores_simultaneous_manual_price(self):
+    def test_19_product_replacement_preserves_simultaneous_manual_price(self):
         order = self._order()
         line = self._line(order)
-        old_price = line.price_unit
-
         line.with_user(self.pricing_user).write({
             'product_id': self.other_product.id,
             'price_unit': 999.0,
         })
 
-        self.assertEqual(line.price_unit, old_price)
-        self.assertTrue(line.pricing_reprice_pending)
+        self.assertEqual(line.price_unit, 999.0)
+        self.assertEqual(line.price_origin, 'edited')
+        self.assertEqual(line.price_origin_evidence, 'manual_edit')
+        self.assertFalse(line.pricing_reprice_pending)
 
     def test_20_quantity_onchange_preserves_product_pricing_after_reopen(self):
         order = self._order()

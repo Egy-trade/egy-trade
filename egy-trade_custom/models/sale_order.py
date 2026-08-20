@@ -2,6 +2,7 @@
 
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
+from odoo.tools import float_compare
 
 
 class SaleOrder(models.Model):
@@ -117,7 +118,9 @@ class SaleOrderLine(models.Model):
                 max(company_limit or 0.0, 0.0),
                 30.0,
             )
-            if rec.discount < 0 or rec.discount > limit:
+            if (
+                    float_compare(rec.discount, 0.0, precision_digits=6) < 0
+                    or float_compare(rec.discount, limit, precision_digits=6) > 0):
                 raise ValidationError(_(
                     'Your maximum allowed standard discount per order line is %(limit).2f%%.'
                 ) % {'limit': limit})

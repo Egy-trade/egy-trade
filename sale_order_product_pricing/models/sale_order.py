@@ -823,6 +823,67 @@ class SaleOrderLine(models.Model):
                 line_vals.pop('price_reference', None)
                 line_vals.pop('price_currency_id', None)
                 protected_line = line.sudo()
+                can_reprice_pricelist = (
+                    'product_id' not in vals
+                    and protected_line.price_origin == 'pricelist'
+                    and protected_line.price_origin_verified
+                    and not cost_change
+                )
+                if can_reprice_pricelist:
+                    # First persist quantity/UoM without trusting the browser
+                    # price, then compare that payload to the authoritative
+                    # pricelist result. Matching input is an automatic onchange;
+                    # a different authorized value is a deliberate manual edit.
+                    line_vals.pop('price_unit', None)
+                    super(SaleOrderLine, line).write(line_vals)
+                    pricelist_price = line._pricing_pricelist_price()
+                    explicit_manual_price = (
+                        price_change
+                        and line._pricing_manual_price_authorized()
+                        and float_compare(
+                            vals['price_unit'],
+                            pricelist_price,
+                            precision_rounding=line.order_id.currency_id.rounding,
+                        ) != 0
+                    )
+                    if explicit_manual_price:
+                        protected_line.with_context(
+                            _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+                        ).write({
+                            'price_unit': vals['price_unit'],
+                            'price_reference': pricelist_price,
+                            'price_origin': 'edited',
+                            'price_origin_verified': True,
+                            'price_origin_evidence': 'manual_edit',
+                            'price_currency_id': line.order_id.currency_id.id,
+                            'pricing_reprice_pending': False,
+                            'pricing_warning': False,
+                        })
+                        line.order_id._pricing_log_line(
+                            line,
+                            _('Authorized manual selling-price edit saved with quantity or UoM changes.'),
+                            old_price=previous_prices[line.id],
+                            old_origin=previous_origins[line.id],
+                        )
+                    else:
+                        protected_line.with_context(
+                            _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
+                        ).write({
+                            'price_unit': pricelist_price,
+                            'price_reference': pricelist_price,
+                            'price_origin': 'pricelist',
+                            'price_origin_verified': True,
+                            'price_origin_evidence': 'new_pricelist',
+                            'price_currency_id': line.order_id.currency_id.id,
+                            'pricing_reprice_pending': False,
+                        })
+                        line.order_id._pricing_log_line(
+                            line,
+                            _('Verified Odoo Pricelist refreshed after quantity or UoM change.'),
+                            old_price=previous_prices[line.id],
+                            old_origin=previous_origins[line.id],
+                        )
+                    continue
                 explicit_manual_price = (
                     price_change
                     and line._pricing_manual_price_authorized()
@@ -837,6 +898,7 @@ class SaleOrderLine(models.Model):
                     protected_line.with_context(
                         _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
                     ).write({
+                        'price_reference': line._pricing_pricelist_price(),
                         'price_origin': 'edited',
                         'price_origin_verified': True,
                         'price_origin_evidence': 'manual_edit',
@@ -847,36 +909,6 @@ class SaleOrderLine(models.Model):
                     line.order_id._pricing_log_line(
                         line,
                         _('Authorized manual selling-price edit saved with product, UoM, or quantity changes.'),
-                        old_price=previous_prices[line.id],
-                        old_origin=previous_origins[line.id],
-                    )
-                    continue
-                can_reprice_pricelist = (
-                    'product_id' not in vals
-                    and protected_line.price_origin == 'pricelist'
-                    and protected_line.price_origin_verified
-                    and not cost_change
-                )
-                if can_reprice_pricelist:
-                    # Persist the quantity/UoM before calculating. Never trust
-                    # the browser onchange amount.
-                    line_vals.pop('price_unit', None)
-                    super(SaleOrderLine, line).write(line_vals)
-                    pricelist_price = line._pricing_pricelist_price()
-                    protected_line.with_context(
-                        _pricing_internal_token=_PRICING_INTERNAL_TOKEN,
-                    ).write({
-                        'price_unit': pricelist_price,
-                        'price_reference': pricelist_price,
-                        'price_origin': 'pricelist',
-                        'price_origin_verified': True,
-                        'price_origin_evidence': 'new_pricelist',
-                        'price_currency_id': line.order_id.currency_id.id,
-                        'pricing_reprice_pending': False,
-                    })
-                    line.order_id._pricing_log_line(
-                        line,
-                        _('Verified Odoo Pricelist refreshed after quantity or UoM change.'),
                         old_price=previous_prices[line.id],
                         old_origin=previous_origins[line.id],
                     )

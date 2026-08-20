@@ -147,9 +147,11 @@ class ResCompany(models.Model):
 
     @api.constrains('use_lg')
     def onchange_lG_menu(self):
-        if self.use_lg:
-            lg_menu = self.env['res.groups'].search([('id', '=', self.env.ref('Letter_Guarantee.use_lg').id)])
-            lg_menu.users = [(4, self.env.user.id)]
-        else:
-            lg_menu = self.env['res.groups'].search([('id', '=', self.env.ref('Letter_Guarantee.use_lg').id)])
-            lg_menu.users = [(2, self.env.user.id)]
+        # A company-level False value must never remove the current user from
+        # a global security group (and especially must not delete the admin
+        # user through a malformed many2many command). Enabling the feature
+        # may grant the current settings user access; disabling is managed by
+        # the standard implied-group setting or an administrator.
+        if any(company.use_lg for company in self):
+            lg_group = self.env.ref('Letter_Guarantee.use_lg')
+            lg_group.users = [(4, self.env.user.id)]
