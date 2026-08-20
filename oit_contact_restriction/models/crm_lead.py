@@ -5,6 +5,8 @@ from dateutil.relativedelta import relativedelta
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError, Warning
 
+from .res_partner import _CRM_CONTACT_CREATE_TOKEN
+
 
 class CrmLead(models.Model):
     """
@@ -12,6 +14,20 @@ class CrmLead(models.Model):
          -
     """
     _inherit = 'crm.lead'
+
+    def _create_customer(self):
+        """Allow Odoo's controlled lead-conversion flow to create its customer.
+
+        The in-process token is intentionally scoped to this call.  Direct
+        contact creation remains protected by the Create Contact group.
+        """
+        self.ensure_one()
+        return super(
+            CrmLead,
+            self.with_context(
+                _crm_contact_create_token=_CRM_CONTACT_CREATE_TOKEN,
+            ),
+        )._create_customer()
 
     @api.model
     def create(self, vals_list):

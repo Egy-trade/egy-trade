@@ -5,7 +5,7 @@
     'author': "OIT Solutions",
     'company': 'OIT Solutions',
     'website': "http://www.oit-solution.com",
-    'version': '15.0.0.1.0',
+    'version': '16.0.0.2.0',
     'category': "OIT Solutions/apps",
     'license': 'AGPL-3',
     'sequence': 1,

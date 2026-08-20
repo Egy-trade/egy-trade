@@ -6,6 +6,12 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError, Warning
 
 
+# A module-local object cannot be supplied by an RPC caller.  CRM uses it to
+# authorize only the standard lead-to-customer creation path without granting
+# the user unrestricted contact creation rights.
+_CRM_CONTACT_CREATE_TOKEN = object()
+
+
 class ResPartner(models.Model):
     """
         Inherit Res Partner:
@@ -27,13 +33,17 @@ class ResPartner(models.Model):
     )
     is_user = fields.Boolean()
 
-    @api.model
+    @api.model_create_multi
     def create(self, vals_list):
         """ Override create """
-        # vals_list ={'field': value}  -> dectionary contains only new filled fields
-        res = super(ResPartner, self).create(vals_list)
-        if not self.env.user.has_group('oit_contact_restriction.group_create_contact'):
+        crm_authorized = (
+            self.env.context.get('_crm_contact_create_token')
+            is _CRM_CONTACT_CREATE_TOKEN
+        )
+        if not crm_authorized and not self.env.user.has_group(
+                'oit_contact_restriction.group_create_contact'):
             raise ValidationError('You must have create contact group !')
+        res = super(ResPartner, self).create(vals_list)
         res._onchange_allowed_users_ids()
         res._onchange_owner_users_ids()
         self.env['ir.rule'].clear_caches()

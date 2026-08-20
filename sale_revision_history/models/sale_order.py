@@ -91,14 +91,10 @@ class SaleOrder(models.Model):
                     vals.pop(field_name, None)
             prepared_vals.append(vals)
 
-        orders = super().create(prepared_vals)
-        if not internal:
-            for order in orders.filtered(lambda item: not item.unrevisioned_name):
-                super(
-                    SaleOrder,
-                    order.with_context(_revision_internal_token=_REVISION_INTERNAL_TOKEN),
-                ).write({"unrevisioned_name": order.name})
-        return orders
+        # Ordinary quotations do not need revision-family metadata until the
+        # first revision is created.  Avoiding a second write here keeps the
+        # standard batched sale-order create path intact and inexpensive.
+        return super().create(prepared_vals)
 
     def write(self, vals):
         if _REVISION_SYSTEM_FIELDS.intersection(vals) and not _is_revision_internal(self.env):
@@ -393,6 +389,7 @@ class SaleOrder(models.Model):
         current.sudo().with_context(**internal_context).write({
             "active": False,
             "current_revision_id": revision.id,
+            "unrevisioned_name": family_name,
             "revision_reason": superseded_comment,
             "revision_date": now,
             "revision_author_id": self.env.user.id,
@@ -457,6 +454,7 @@ class SaleOrder(models.Model):
         source.sudo().with_context(**internal_context).write({
             "active": False,
             "current_revision_id": revision.id,
+            "unrevisioned_name": family_name,
             "revision_reason": comment,
             "revision_date": fields.Datetime.now(),
             "revision_author_id": self.env.user.id,
