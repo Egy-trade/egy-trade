@@ -22,7 +22,6 @@ class PurchaseEstimateCase(SavepointCase):
         cls.product = cls.env['product.product'].create({
             'name': 'Purchased Service Fixture',
             'type': 'service',
-            'service_to_purchase': True,
             'sale_ok': True,
             'purchase_ok': True,
             'uom_id': unit.id,
@@ -36,6 +35,7 @@ class PurchaseEstimateCase(SavepointCase):
             'price': 80.0,
             'delay': 0,
         })
+        cls.product.service_to_purchase = True
 
     def _line(self, purchase_estimate):
         order = self.env['sale.order'].create({
