@@ -1130,6 +1130,7 @@ class SaleOrderLine(models.Model):
             if (
                 (not line._origin or not line._origin.id)
                 and line.order_id
+                and line.product_id
                 and line._pricing_manual_price_authorized()
             ):
                 line.price_origin = 'edited'

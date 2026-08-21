@@ -580,3 +580,15 @@ class ProductPricingCase(SavepointCase):
         self.assertEqual(pending.price_origin, 'product_pricing')
         self.assertAlmostEqual(manual.price_unit, 63.0)
         self.assertEqual(manual.price_origin, 'edited')
+
+    def test_34_blank_newid_zero_price_is_not_manual(self):
+        order = self._order(global_factor=1.25)
+        line = self.env['sale.order.line'].with_user(self.pricing_user).new({
+            'order_id': order.id,
+            'price_unit': 0.0,
+        })
+
+        line._onchange_new_line_manual_price()
+
+        self.assertNotEqual(line.price_origin, 'edited')
+        self.assertFalse(line.price_origin_verified)
