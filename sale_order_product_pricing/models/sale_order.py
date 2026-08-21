@@ -564,7 +564,8 @@ class SaleOrderLine(models.Model):
         groups='sale_order_product_pricing.product_pricing_group')
     pricing_reprice_pending = fields.Boolean(
         copy=False, readonly=True,
-        help='Set when a product, UoM, or quantity change must be repriced by confirmed Apply.',
+        help='Set when a product, UoM, or quantity change must be repriced, or when a new '
+             'Product Pricing line is waiting for its purchasing cost.',
         groups='sale_order_product_pricing.product_pricing_group')
 
     @api.depends('price_origin', 'price_origin_verified')
@@ -633,8 +634,25 @@ class SaleOrderLine(models.Model):
             protected_line = line.sudo()
             pricelist_price = line._pricing_pricelist_price() if line.product_id else 0.0
             currency = line.order_id.currency_id
+            formula_price = (
+                protected_line.purchase_price_estimate
+                * (factor or 1.0)
+                * (protected_line.currency_rate_estimate or 1.0)
+                * (protected_line.line_factor or 1.0)
+            )
+            automatic_formula_payload = (
+                product_pricing
+                and protected_line.purchase_price_estimate > 0
+                and incoming_price is not None
+                and float_compare(
+                    incoming_price,
+                    formula_price,
+                    precision_rounding=currency.rounding,
+                ) == 0
+            )
             manual_price = (
                 incoming_price is not None
+                and not automatic_formula_payload
                 and float_compare(
                     incoming_price,
                     pricelist_price,
@@ -685,7 +703,16 @@ class SaleOrderLine(models.Model):
                 'price_origin_evidence': evidence,
                 'price_currency_id': currency_id,
                 'pricing_warning': warning,
-                'pricing_reprice_pending': False,
+                # A newly added Product Pricing row may not have a purchasing
+                # estimate until the user opens the Product Pricing tab.  Keep
+                # that specific fallback distinguishable from an ordinary
+                # pricelist line so entering the cost can finish the already
+                # active formula without another Preview/Apply cycle.
+                'pricing_reprice_pending': bool(
+                    product_pricing
+                    and origin == 'pricelist'
+                    and not protected_line.purchase_price_estimate
+                ),
             })
             line.order_id._pricing_log_line(
                 line, reason,
@@ -710,9 +737,12 @@ class SaleOrderLine(models.Model):
         visible until an explicit controlled reprice.
         """
         protected_prices = {}
+        protected_new_manual_prices = {}
         for line in self:
             persisted = line._origin
             if not persisted or not persisted.id:
+                if line.price_origin == 'edited' and line.price_origin_verified:
+                    protected_new_manual_prices[line.id] = line.price_unit
                 continue
             protected_line = persisted.sudo()
             if not (
@@ -726,6 +756,8 @@ class SaleOrderLine(models.Model):
         for line in self:
             if line.id in protected_prices:
                 line.price_unit = protected_prices[line.id]
+            elif line.id in protected_new_manual_prices:
+                line.price_unit = protected_new_manual_prices[line.id]
             elif (
                 (not line._origin or not line._origin.id)
                 and line.order_id.product_pricing
@@ -734,7 +766,6 @@ class SaleOrderLine(models.Model):
                 # The web client has not created this row yet.  Keep every new
                 # row, including the final row, aligned with the already active
                 # Product Pricing formula without requiring another Apply.
-                line.factor = line.order_id.global_factor or 1.0
                 line.price_unit = line._pricing_target_price()
 
     def write(self, vals):
@@ -767,6 +798,7 @@ class SaleOrderLine(models.Model):
             raise UserError(_(
                 'Only Product Pricing users or Sales Managers may manually edit a selling price.'))
         previous_costs = {line.id: line.sudo().purchase_price_estimate for line in self}
+        previous_pending = {line.id: line.sudo().pricing_reprice_pending for line in self}
         previous_prices = {line.id: line.price_unit for line in self}
         previous_origins = {line.id: line.sudo().price_origin for line in self}
         previous_products = {line.id: line.product_id.display_name for line in self}
@@ -960,17 +992,56 @@ class SaleOrderLine(models.Model):
                             }, old_price=previous_prices[line.id], old_origin=previous_origins[line.id])
             return True
 
+        pending_automatic_prices = {}
+        if cost_change and vals.get('purchase_price_estimate', 0) > 0:
+            for line in self:
+                protected_line = line.sudo()
+                if not (
+                    previous_costs[line.id] <= 0
+                    and previous_pending[line.id]
+                    and protected_line.order_id.product_pricing
+                ):
+                    continue
+                factor = protected_line.order_id.global_factor or 1.0
+                target = (
+                    vals['purchase_price_estimate']
+                    * factor
+                    * (protected_line.currency_rate_estimate or 1.0)
+                    * (protected_line.line_factor or 1.0)
+                )
+                incoming_price = vals.get('price_unit')
+                automatic_payload = (
+                    incoming_price is None
+                    or float_compare(
+                        incoming_price,
+                        previous_prices[line.id],
+                        precision_rounding=protected_line.order_id.currency_id.rounding,
+                    ) == 0
+                    or float_compare(
+                        incoming_price,
+                        target,
+                        precision_rounding=protected_line.order_id.currency_id.rounding,
+                    ) == 0
+                )
+                if automatic_payload:
+                    pending_automatic_prices[line.id] = (factor, target)
+
         result = super().write(vals)
         if price_change:
             # Core ACL and record rules have already authorized this write.  Any
             # non-automatic selling-price edit is explicitly protected from Apply.
-            self.sudo().with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN).write({
+            manual_lines = self.filtered(
+                lambda candidate: candidate.id not in pending_automatic_prices
+            )
+            manual_lines.sudo().with_context(
+                _pricing_internal_token=_PRICING_INTERNAL_TOKEN
+            ).write({
                 'price_origin': 'edited',
                 'price_origin_verified': True,
                 'price_origin_evidence': 'manual_edit',
                 'pricing_reprice_pending': False,
             })
-            for line in self:
+            for line in manual_lines:
                 line.sudo().with_context(_pricing_internal_token=_PRICING_INTERNAL_TOKEN).write({
                     'price_currency_id': line.order_id.currency_id.id,
                 })
@@ -999,11 +1070,33 @@ class SaleOrderLine(models.Model):
                         line, _('Purchasing cost changed to zero; Odoo Price List is now required.'),
                         old_price=previous_prices[line.id], old_origin=previous_origins[line.id])
                 elif previous_costs[line.id] <= 0 < protected_line.purchase_price_estimate:
-                    protected_line.with_context(
-                        _pricing_internal_token=_PRICING_INTERNAL_TOKEN
-                    ).write({
-                        'pricing_warning': False,
-                    })
+                    if line.id in pending_automatic_prices:
+                        factor, target = pending_automatic_prices[line.id]
+                        protected_line.with_context(
+                            _pricing_internal_token=_PRICING_INTERNAL_TOKEN
+                        ).write({
+                            'factor': factor,
+                            'price_unit': target,
+                            'price_reference': target,
+                            'price_origin': 'product_pricing',
+                            'price_origin_verified': True,
+                            'price_origin_evidence': 'product_pricing_apply',
+                            'price_currency_id': line.order_id.currency_id.id,
+                            'pricing_warning': False,
+                            'pricing_reprice_pending': False,
+                        })
+                        line.order_id._pricing_log_line(
+                            line,
+                            _('New quotation line automatically completed Product Pricing when purchasing cost was entered.'),
+                            old_price=previous_prices[line.id],
+                            old_origin=previous_origins[line.id],
+                        )
+                    else:
+                        protected_line.with_context(
+                            _pricing_internal_token=_PRICING_INTERNAL_TOKEN
+                        ).write({
+                            'pricing_warning': False,
+                        })
         return result
 
     @api.depends('purchase_price_estimate')
@@ -1030,17 +1123,34 @@ class SaleOrderLine(models.Model):
             if line.order_id and not line.factor:
                 line.factor = line.order_id.sudo().global_factor
 
-    @api.onchange('purchase_price_estimate', 'factor', 'line_factor')
+    @api.onchange('price_unit')
+    def _onchange_new_line_manual_price(self):
+        """Carry explicit manual intent across later NewId recomputations."""
+        for line in self:
+            if (
+                (not line._origin or not line._origin.id)
+                and line.order_id
+                and line._pricing_manual_price_authorized()
+            ):
+                line.price_origin = 'edited'
+                line.price_origin_verified = True
+                line.price_origin_evidence = 'manual_edit'
+                line.price_reference = line._pricing_pricelist_price()
+                line.price_currency_id = line.order_id.currency_id
+                line.pricing_reprice_pending = False
+
+    @api.onchange('product_id', 'purchase_price_estimate', 'factor', 'line_factor')
     def _onchange_new_line_product_pricing(self):
         """Price an unsaved eligible row immediately from the active formula."""
         for line in self:
             if (
                 (not line._origin or not line._origin.id)
                 and line.order_id.product_pricing
-                and line.purchase_price_estimate > 0
+                and not (line.price_origin == 'edited' and line.price_origin_verified)
             ):
                 line.factor = line.order_id.global_factor or 1.0
-                line.price_unit = line._pricing_target_price()
+                if line.purchase_price_estimate > 0:
+                    line.price_unit = line._pricing_target_price()
 
     @api.onchange('product_uom_qty')
     def _onchange_product_uom_qty_estimate(self):

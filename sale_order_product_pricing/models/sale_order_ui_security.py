@@ -270,6 +270,7 @@ class SaleOrderLine(models.Model):
         sanitize=False, groups="sale_order_product_pricing.product_pricing_group"
     )
 
+    @api.depends("order_id")
     @api.depends_context("uid")
     def _compute_can_edit_quoted_price(self):
         can_edit = self.env.user.has_group(

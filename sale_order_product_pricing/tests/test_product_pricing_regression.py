@@ -133,7 +133,7 @@ class ProductPricingCase(SavepointCase):
         self.assertTrue(line.pricing_warning)
         self.assertTrue(self._has_audit(order, 'changed to zero'))
 
-    def test_06_zero_to_positive_stays_pricelist_until_apply(self):
+    def test_06_new_zero_cost_line_auto_prices_when_cost_arrives(self):
         order = self._order()
         line = self._line(order, cost=0.0)
         self._preview(order)
@@ -141,9 +141,9 @@ class ProductPricingCase(SavepointCase):
         self._preview(order)
         self.assertTrue(line.pricing_eligible)
         self.assertFalse(line.pricing_warning)
-        self.assertEqual(line.price_origin, 'pricelist')
-        self._apply(order)
         self.assertEqual(line.price_origin, 'product_pricing')
+        self.assertAlmostEqual(line.price_unit, 60.0)
+        self.assertFalse(line.pricing_reprice_pending)
 
     def test_07_negative_cost_is_rejected(self):
         with self.assertRaises(ValidationError):
@@ -486,3 +486,97 @@ class ProductPricingCase(SavepointCase):
         self.assertAlmostEqual(surviving.price_unit, 131.0)
         self.assertEqual(surviving.price_origin, 'edited')
         self.assertEqual(len(order.order_line), 2)
+
+    def test_28_new_zero_cost_line_auto_prices_when_cost_is_entered(self):
+        order = self._order(global_factor=1.25)
+        line = self._line(order, cost=0.0)
+
+        self.assertTrue(line.pricing_reprice_pending)
+        self.assertEqual(line.price_origin, 'pricelist')
+
+        line.with_user(self.pricing_user).write({
+            'purchase_price_estimate': 40.0,
+        })
+
+        self.assertAlmostEqual(line.factor, 1.25)
+        self.assertAlmostEqual(line.price_unit, 50.0)
+        self.assertAlmostEqual(line.price_reference, 50.0)
+        self.assertEqual(line.price_origin, 'product_pricing')
+        self.assertEqual(line.price_origin_evidence, 'product_pricing_apply')
+        self.assertFalse(line.pricing_reprice_pending)
+
+    def test_29_new_zero_cost_line_keeps_simultaneous_manual_price(self):
+        order = self._order(global_factor=1.25)
+        line = self._line(order, cost=0.0)
+
+        line.with_user(self.pricing_user).write({
+            'purchase_price_estimate': 40.0,
+            'price_unit': 63.0,
+        })
+
+        self.assertAlmostEqual(line.price_unit, 63.0)
+        self.assertEqual(line.price_origin, 'edited')
+        self.assertEqual(line.price_origin_evidence, 'manual_edit')
+        self.assertFalse(line.pricing_reprice_pending)
+
+    def test_30_new_manual_price_is_not_pending_and_survives_later_cost(self):
+        order = self._order(global_factor=1.25)
+        line = self._line(order, cost=0.0, price=63.0)
+
+        self.assertEqual(line.price_origin, 'edited')
+        self.assertFalse(line.pricing_reprice_pending)
+
+        line.with_user(self.pricing_user).write({
+            'purchase_price_estimate': 40.0,
+        })
+
+        self.assertAlmostEqual(line.price_unit, 63.0)
+        self.assertEqual(line.price_origin, 'edited')
+        self.assertEqual(line.price_origin_evidence, 'manual_edit')
+
+    def test_31_browser_formula_payload_is_not_misclassified_as_manual(self):
+        order = self._order(global_factor=1.25)
+        line = self._line(order, cost=40.0, price=50.0)
+
+        self.assertAlmostEqual(line.price_unit, 50.0)
+        self.assertEqual(line.price_origin, 'product_pricing')
+        self.assertEqual(line.price_origin_evidence, 'product_pricing_apply')
+
+    def test_32_newid_manual_price_survives_quantity_recompute(self):
+        order = self._order(global_factor=1.25)
+        line = self.env['sale.order.line'].with_user(self.pricing_user).new({
+            'order_id': order.id,
+            'product_id': self.product.id,
+            'name': self.product.display_name,
+            'product_uom_qty': 1.0,
+            'purchase_price_estimate': 40.0,
+            'factor': 1.25,
+            'line_factor': 1.0,
+            'currency_rate_estimate': 1.0,
+            'price_unit': 50.0,
+        })
+        line._onchange_new_line_product_pricing()
+        self.assertAlmostEqual(line.price_unit, 50.0)
+
+        line.price_unit = 63.0
+        line._onchange_new_line_manual_price()
+        line.product_uom_qty = 2.0
+        line._compute_price_unit()
+
+        self.assertAlmostEqual(line.price_unit, 63.0)
+        self.assertEqual(line.price_origin, 'edited')
+        self.assertTrue(line.price_origin_verified)
+
+    def test_33_mixed_pending_and_manual_cost_write_preserves_manual_line(self):
+        order = self._order(global_factor=1.25)
+        pending = self._line(order, cost=0.0)
+        manual = self._line(order, self.other_product, cost=0.0, price=63.0)
+
+        (pending | manual).with_user(self.pricing_user).write({
+            'purchase_price_estimate': 40.0,
+        })
+
+        self.assertAlmostEqual(pending.price_unit, 50.0)
+        self.assertEqual(pending.price_origin, 'product_pricing')
+        self.assertAlmostEqual(manual.price_unit, 63.0)
+        self.assertEqual(manual.price_origin, 'edited')

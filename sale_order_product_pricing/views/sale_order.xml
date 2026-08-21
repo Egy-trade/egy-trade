@@ -75,6 +75,12 @@
 
                 <xpath expr="//field[@name='order_line']/tree/field[@name='price_unit']" position="before">
                     <field name="can_edit_quoted_price" invisible="1"/>
+                    <field name="price_origin" invisible="1"/>
+                    <field name="price_origin_verified" invisible="1"/>
+                    <field name="price_origin_evidence" invisible="1"/>
+                    <field name="price_reference" invisible="1"/>
+                    <field name="price_currency_id" invisible="1"/>
+                    <field name="pricing_reprice_pending" invisible="1"/>
                 </xpath>
 
                 <xpath expr="//field[@name='order_line']/tree/field[@name='price_unit']" position="attributes">
