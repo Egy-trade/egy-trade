@@ -766,7 +766,34 @@ class SaleOrderLine(models.Model):
                 # The web client has not created this row yet.  Keep every new
                 # row, including the final row, aligned with the already active
                 # Product Pricing formula without requiring another Apply.
-                line.price_unit = line._pricing_target_price()
+                target_price = line._pricing_target_price()
+                line.price_unit = target_price
+                line.price_reference = target_price
+                line.price_origin = 'product_pricing'
+                line.price_origin_verified = True
+                line.price_origin_evidence = 'product_pricing_apply'
+                line.price_currency_id = line.order_id.currency_id
+                line.pricing_reprice_pending = False
+            elif (
+                (not line._origin or not line._origin.id)
+                and line.product_id
+                and not (
+                    line.price_origin == 'edited'
+                    and line.price_origin_verified
+                )
+            ):
+                # ``super`` just produced the canonical pricelist value for an
+                # unsaved row. Record the matching reference before the web
+                # client echoes price_unit through its own onchange RPC.
+                line.price_reference = line.price_unit
+                line.price_origin = 'pricelist'
+                line.price_origin_verified = True
+                line.price_origin_evidence = 'new_pricelist'
+                line.price_currency_id = line.order_id.currency_id
+                line.pricing_reprice_pending = bool(
+                    line.order_id.product_pricing
+                    and not line.purchase_price_estimate
+                )
 
     def write(self, vals):
         if _is_pricing_internal(self.env):

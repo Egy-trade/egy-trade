@@ -662,3 +662,52 @@ class ProductPricingCase(SavepointCase):
         self.assertAlmostEqual(line.price_unit, 50.0)
         self.assertEqual(line.price_origin, 'edited')
         self.assertEqual(line.price_origin_evidence, 'manual_edit')
+
+    def test_38_newid_formula_compute_refreshes_reference_before_echo(self):
+        order = self._order(global_factor=1.25)
+        line = self.env['sale.order.line'].with_user(self.pricing_user).new({
+            'order_id': order.id,
+            'product_id': self.product.id,
+            'name': self.product.display_name,
+            'product_uom_qty': 1.0,
+            'purchase_price_estimate': 40.0,
+            'factor': 1.25,
+            'line_factor': 1.0,
+            'currency_rate_estimate': 1.0,
+            'price_unit': 50.0,
+            'price_reference': 50.0,
+            'price_origin': 'product_pricing',
+            'price_origin_verified': True,
+        })
+        # Simulate an automatic currency/rate recompute changing the formula
+        # before the browser echoes the resulting price_unit onchange.
+        line.currency_rate_estimate = 2.0
+
+        line._compute_price_unit()
+        line._onchange_new_line_manual_price()
+
+        self.assertAlmostEqual(line.price_unit, 100.0)
+        self.assertAlmostEqual(line.price_reference, 100.0)
+        self.assertEqual(line.price_origin, 'product_pricing')
+        self.assertTrue(line.price_origin_verified)
+
+    def test_39_newid_pricelist_compute_refreshes_reference_before_echo(self):
+        order = self._order(global_factor=1.25)
+        line = self.env['sale.order.line'].with_user(self.pricing_user).new({
+            'order_id': order.id,
+            'product_id': self.other_product.id,
+            'name': self.other_product.display_name,
+            'product_uom_qty': 1.0,
+            'purchase_price_estimate': 0.0,
+            'price_unit': 0.0,
+            'price_reference': 0.0,
+            'price_origin': 'pricelist',
+            'price_origin_verified': True,
+        })
+
+        line._compute_price_unit()
+        line._onchange_new_line_manual_price()
+
+        self.assertAlmostEqual(line.price_reference, line.price_unit)
+        self.assertEqual(line.price_origin, 'pricelist')
+        self.assertTrue(line.pricing_reprice_pending)
