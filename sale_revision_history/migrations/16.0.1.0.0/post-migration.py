@@ -3,8 +3,10 @@
 
 The legacy relation already points from each historical snapshot to the
 then-current quotation.  That direction remains valid.  Legacy snapshots were
-left active, however, so archive them and backfill the structured metadata
-needed by the new filtered history views.
+left active in the legacy ``cancel`` state, however, so archive those known
+snapshots and backfill the structured metadata needed by the new filtered
+history views. Confirmed or done orders are deliberately excluded even if bad
+legacy data gave them a revision pointer; a migration must never hide them.
 """
 
 
@@ -24,5 +26,6 @@ def migrate(cr, version):
                    ELSE revision_author_id
                END
          WHERE current_revision_id IS NOT NULL
+           AND state = 'cancel'
         """
     )

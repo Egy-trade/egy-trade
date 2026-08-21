@@ -56,7 +56,12 @@ class SaleOrder(models.Model):
     )
     product_pricing = fields.Boolean(
         copy=True, groups='sale_order_product_pricing.product_pricing_group',
-        help='Enable the controlled Purchase Price Estimate preview and Apply workflow.')
+        help=(
+            'Enable controlled Product Pricing. New rows inherit the Global '
+            'Factor. A positive Purchase Price Estimate can calculate the '
+            'selling price on save; Preview explains prices without changing '
+            'the quotation, and Apply confirms an unchanged preview.'
+        ))
     total_estimate_unit_price = fields.Float(
         compute='_compute_estimate_unit_price',
         groups='sale_order_product_pricing.product_pricing_group')
@@ -86,7 +91,11 @@ class SaleOrder(models.Model):
         groups='sale_order_product_pricing.product_pricing_group')
     global_factor = fields.Float(
         default=1.0, copy=True,
-        help='Default multiplier applied to eligible lines in the Product Pricing preview.',
+        help=(
+            'Default multiplier inherited by every new quotation row. The '
+            'formula is Purchase Price Estimate x Global Factor x Line Factor '
+            'x Currency Rate.'
+        ),
         groups='sale_order_product_pricing.product_pricing_group')
     analysis_created = fields.Boolean(copy=False)
     product_pricing_preview_hash = fields.Char(
@@ -499,21 +508,39 @@ class SaleOrderLine(models.Model):
 
     purchase_price_estimate = fields.Float(
         string='Purchase Price Estimate', copy=True,
-        help='Estimated supplier purchase price used only for quotation pricing. It is not the Accounting Cost.',
+        help=(
+            'Expected supplier purchase price in the selected Purchase '
+            'Currency. A positive value drives Product Pricing and seeds the '
+            'draft PO price. Zero leaves the quotation on the Odoo Pricelist '
+            'and lets the draft PO use the selected vendor price. This is not '
+            'the Accounting Cost.'
+        ),
         groups='sale_order_product_pricing.product_pricing_group')
     factor = fields.Float(
         copy=True, groups='sale_order_product_pricing.product_pricing_group',
-        help='Order-level multiplier copied to this line for the pricing formula.')
+        help=(
+            'Copy of the quotation Global Factor for this row. New rows '
+            'inherit it automatically; change it only when this row needs a '
+            'different multiplier.'
+        ))
     line_factor = fields.Float(
         default=1.0, copy=True,
         groups='sale_order_product_pricing.product_pricing_group',
-        help='Additional line-specific multiplier used by the pricing formula.')
+        help=(
+            'Additional multiplier for this row only. Keep 1.00 for no '
+            'adjustment. The selling formula multiplies Purchase Price '
+            'Estimate, Factor, Line Factor, and Currency Rate.'
+        ))
     qty_estimate = fields.Float(
         string='Quantity', default=1.0,
         help='Quotation quantity mirrored for the internal pricing worksheet.')
     estimate_unit_price = fields.Float(
         string='Estimated Unit Price', compute='_compute_estimate_unit_price', store=True,
-        help='Preview formula result before it is applied to Unit Price.',
+        help=(
+            'Calculated selling price from the Product Pricing formula. It is '
+            'shown for review and becomes Unit Price only through the '
+            'controlled automatic-save or Apply rules.'
+        ),
         groups='sale_order_product_pricing.product_pricing_group')
     currency_estimate_id = fields.Many2one(
         'res.currency', compute='_compute_currency_estimate',

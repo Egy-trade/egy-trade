@@ -13,9 +13,8 @@ def _purchase_estimate_price(values, purchase_order):
     if sale_line.purchase_price_estimate <= 0:
         return False
     source_currency = (
-        sale_line.order_id.currency_estimate_id
-        if hasattr(sale_line.order_id, 'currency_estimate_id')
-        else sale_line.order_id.currency_id
+        getattr(sale_line.order_id, 'currency_estimate_id', False)
+        or sale_line.order_id.currency_id
     )
     return source_currency._convert(
         sale_line.purchase_price_estimate,

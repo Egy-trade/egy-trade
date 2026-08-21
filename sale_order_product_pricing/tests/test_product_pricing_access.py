@@ -499,6 +499,24 @@ class TestProductPricingAccess(SavepointCase):
             button = root.xpath("//button[@name=$name]", name=action_name)
             self.assertEqual(len(button), 1)
             self.assertTrue(button[0].get('help'))
+
+    def test_pricing_fields_explain_formula_po_fallback_and_new_rows(self):
+        order_fields = self.env['sale.order'].fields_get([
+            'product_pricing', 'global_factor',
+        ])
+        line_fields = self.env['sale.order.line'].fields_get([
+            'purchase_price_estimate', 'factor', 'line_factor',
+            'estimate_unit_price',
+        ])
+
+        self.assertIn('New rows inherit', order_fields['product_pricing']['help'])
+        self.assertIn('Global Factor', order_fields['global_factor']['help'])
+        self.assertIn('draft PO', line_fields['purchase_price_estimate']['help'])
+        self.assertIn('vendor price', line_fields['purchase_price_estimate']['help'])
+        self.assertIn('inherit', line_fields['factor']['help'])
+        self.assertIn('Line Factor', line_fields['line_factor']['help'])
+        self.assertIn('Unit Price', line_fields['estimate_unit_price']['help'])
+
     def test_assigned_salesperson_can_crud_draft_lines_but_unassigned_cannot(self):
         order = self.env['sale.order'].with_user(self.basic_user).create({
             'partner_id': self.partner.id,
