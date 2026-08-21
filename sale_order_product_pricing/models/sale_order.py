@@ -1125,7 +1125,13 @@ class SaleOrderLine(models.Model):
 
     @api.onchange('price_unit')
     def _onchange_new_line_manual_price(self):
-        """Carry explicit manual intent across later NewId recomputations."""
+        """Carry explicit manual intent across later NewId recomputations.
+
+        Odoo's product onchange also changes ``price_unit`` and therefore
+        invokes this handler.  Prices equal to the current pricelist or active
+        Product Pricing formula are system payloads, not evidence of a manual
+        edit.
+        """
         for line in self:
             if (
                 (not line._origin or not line._origin.id)
@@ -1133,11 +1139,69 @@ class SaleOrderLine(models.Model):
                 and line.product_id
                 and line._pricing_manual_price_authorized()
             ):
+                currency = line.order_id.currency_id
+                rounding = currency.rounding or 0.01
+                pricelist_price = line._pricing_pricelist_price()
+                if (
+                    line.price_origin_verified
+                    and line.price_origin in ('pricelist', 'product_pricing')
+                    and float_compare(
+                        line.price_unit,
+                        line.price_reference,
+                        precision_rounding=rounding,
+                    ) == 0
+                ):
+                    # A companion product/cost onchange already recorded this
+                    # exact automatic payload. Do not turn it into a manual
+                    # edit when the web client echoes the changed price.
+                    continue
+                if line.price_origin_verified:
+                    # Once provenance exists, a later price-only onchange is
+                    # explicit user intent. Preserve it even when the chosen
+                    # number happens to equal a canonical pricelist/formula
+                    # amount.
+                    line.price_origin = 'edited'
+                    line.price_origin_evidence = 'manual_edit'
+                    line.price_reference = pricelist_price
+                    line.price_currency_id = currency
+                    line.pricing_reprice_pending = False
+                    continue
+                if float_compare(
+                    line.price_unit,
+                    pricelist_price,
+                    precision_rounding=rounding,
+                ) == 0:
+                    line.price_origin = 'pricelist'
+                    line.price_origin_verified = True
+                    line.price_origin_evidence = 'new_pricelist'
+                    line.price_reference = pricelist_price
+                    line.price_currency_id = currency
+                    line.pricing_reprice_pending = bool(
+                        line.order_id.product_pricing
+                        and not line.purchase_price_estimate
+                    )
+                    continue
+                if (
+                    line.order_id.product_pricing
+                    and line.purchase_price_estimate > 0
+                    and float_compare(
+                        line.price_unit,
+                        line._pricing_target_price(),
+                        precision_rounding=rounding,
+                    ) == 0
+                ):
+                    line.price_origin = 'product_pricing'
+                    line.price_origin_verified = True
+                    line.price_origin_evidence = 'product_pricing_apply'
+                    line.price_reference = line.price_unit
+                    line.price_currency_id = currency
+                    line.pricing_reprice_pending = False
+                    continue
                 line.price_origin = 'edited'
                 line.price_origin_verified = True
                 line.price_origin_evidence = 'manual_edit'
-                line.price_reference = line._pricing_pricelist_price()
-                line.price_currency_id = line.order_id.currency_id
+                line.price_reference = pricelist_price
+                line.price_currency_id = currency
                 line.pricing_reprice_pending = False
 
     @api.onchange('product_id', 'purchase_price_estimate', 'factor', 'line_factor')
@@ -1151,7 +1215,23 @@ class SaleOrderLine(models.Model):
             ):
                 line.factor = line.order_id.global_factor or 1.0
                 if line.purchase_price_estimate > 0:
-                    line.price_unit = line._pricing_target_price()
+                    target_price = line._pricing_target_price()
+                    line.price_unit = target_price
+                    line.price_reference = target_price
+                    line.price_origin = 'product_pricing'
+                    line.price_origin_verified = True
+                    line.price_origin_evidence = 'product_pricing_apply'
+                    line.price_currency_id = line.order_id.currency_id
+                    line.pricing_reprice_pending = False
+                elif line.product_id:
+                    pricelist_price = line._pricing_pricelist_price()
+                    line.price_unit = pricelist_price
+                    line.price_reference = pricelist_price
+                    line.price_origin = 'pricelist'
+                    line.price_origin_verified = True
+                    line.price_origin_evidence = 'new_pricelist'
+                    line.price_currency_id = line.order_id.currency_id
+                    line.pricing_reprice_pending = True
 
     @api.onchange('product_uom_qty')
     def _onchange_product_uom_qty_estimate(self):

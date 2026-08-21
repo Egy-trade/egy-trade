@@ -592,3 +592,73 @@ class ProductPricingCase(SavepointCase):
 
         self.assertNotEqual(line.price_origin, 'edited')
         self.assertFalse(line.price_origin_verified)
+
+    def test_35_newid_pricelist_payload_is_not_manual(self):
+        order = self._order(global_factor=1.25)
+        line = self.env['sale.order.line'].with_user(self.pricing_user).new({
+            'order_id': order.id,
+            'product_id': self.other_product.id,
+            'name': self.other_product.display_name,
+            'product_uom_qty': 1.0,
+        })
+        pricelist_price = line._pricing_pricelist_price()
+        line.price_unit = pricelist_price
+
+        line._onchange_new_line_manual_price()
+
+        self.assertAlmostEqual(line.price_unit, pricelist_price)
+        self.assertEqual(line.price_origin, 'pricelist')
+        self.assertTrue(line.price_origin_verified)
+        self.assertEqual(line.price_origin_evidence, 'new_pricelist')
+        self.assertTrue(line.pricing_reprice_pending)
+
+    def test_36_manual_price_equal_to_pricelist_keeps_manual_intent(self):
+        order = self._order(global_factor=1.25)
+        line = self.env['sale.order.line'].with_user(self.pricing_user).new({
+            'order_id': order.id,
+            'product_id': self.product.id,
+            'name': self.product.display_name,
+            'product_uom_qty': 1.0,
+            'purchase_price_estimate': 40.0,
+            'factor': 1.25,
+            'line_factor': 1.0,
+            'currency_rate_estimate': 1.0,
+            'price_unit': 50.0,
+            'price_reference': 50.0,
+            'price_origin': 'product_pricing',
+            'price_origin_verified': True,
+        })
+        manual_price = line._pricing_pricelist_price()
+        line.price_unit = manual_price
+
+        line._onchange_new_line_manual_price()
+        line._onchange_new_line_product_pricing()
+
+        self.assertAlmostEqual(line.price_unit, manual_price)
+        self.assertEqual(line.price_origin, 'edited')
+        self.assertEqual(line.price_origin_evidence, 'manual_edit')
+
+    def test_37_manual_formula_value_stays_manual_after_prior_edit(self):
+        order = self._order(global_factor=1.25)
+        line = self.env['sale.order.line'].with_user(self.pricing_user).new({
+            'order_id': order.id,
+            'product_id': self.product.id,
+            'name': self.product.display_name,
+            'product_uom_qty': 1.0,
+            'purchase_price_estimate': 40.0,
+            'factor': 1.25,
+            'line_factor': 1.0,
+            'currency_rate_estimate': 1.0,
+            'price_unit': 63.0,
+            'price_reference': 50.0,
+            'price_origin': 'edited',
+            'price_origin_verified': True,
+        })
+        line.price_unit = line._pricing_target_price()
+
+        line._onchange_new_line_manual_price()
+        line._onchange_new_line_product_pricing()
+
+        self.assertAlmostEqual(line.price_unit, 50.0)
+        self.assertEqual(line.price_origin, 'edited')
+        self.assertEqual(line.price_origin_evidence, 'manual_edit')
