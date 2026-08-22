@@ -243,20 +243,14 @@ class CheckPaymentTransaction(models.Model):
         return super(CheckPaymentTransaction, self).unlink()
 
     def action_receive(self):
-        self.reset_before_add('received')
         for rec in self:
             if rec.state != 'draft':
                 raise UserError(_("Only a check with status draft can be received."))
 
             if rec.amount == 0.00:
                 raise ValidationError(_("Check amount must be more than 0."))
-            # edit_move = rec.env['account.move'].search([('check_id', '=', rec.id)])
 
-            # for line in edit_move:
-            #     print(tuple(line.line_ids.ids))
-            #     if tuple(line.line_ids.ids):
-            #         rec.env.cr.execute("DELETE FROM account_move_line WHERE id in %s " % (tuple(line.line_ids.ids),))
-
+            rec.reset_before_add('received')
             rec.name = rec.check_number
             rec.create_move_rec()
             print("**** action_receive *****")
@@ -274,7 +268,6 @@ class CheckPaymentTransaction(models.Model):
                 raise UserError('The check Number Must be UNIQUE!')
 
     def action_deposit(self):
-        self.reset_before_add('deposited')
         for rec in self:
             if rec.state not in ['received','returned']:
                 raise UserError(_("Only a validated check can be deposited."))
@@ -284,18 +277,19 @@ class CheckPaymentTransaction(models.Model):
                 raise ValidationError(_("Please choose Deposit Date."))
             if not rec.bank_journal_id:
                 raise ValidationError(_("Please choose Bank Journal"))
+            rec.reset_before_add('deposited')
             rec.create_move_dep()
             if self.refund_customer:
                 self.refund_customer=False
             rec.write({'state': 'deposited'})
 
     def action_fund_credited(self):
-        self.reset_before_add('posted')
         for rec in self:
             if rec.state != 'deposited':
                 raise UserError(_("Only a check already deposited to bank can be posted."))
             if not rec.paid_date:
                 raise UserError(_("Please Choose Paid Date."))
+            rec.reset_before_add('posted')
             rec.create_move_coll()
             rec.write({'state': 'posted'})
 
@@ -354,31 +348,23 @@ class CheckPaymentTransaction(models.Model):
             rec.write({'state': 'draft'})
 
     def reset_draft(self):
-        jornal_i=self.env['account.move'].search([('check_id','=',self.id)])
-        # jornal_item = self.env['account.move.line'].search([('check_id', '=', self.id)])
-        # print(jornal_i)
-        # print(jornal_item)
-        # for item in jornal_item:
-        #     item.write({'parent_state': 'draft'})
-        for rec in jornal_i:
-            rec.button_draft()
-            print(tuple(rec.line_ids.ids))
-            if tuple(rec.line_ids.ids):
-                rec.env.cr.execute("DELETE FROM account_move_line WHERE id in %s " %(tuple(rec.line_ids.ids),))
-            else:
-                self.make_messege()
+        raise UserError(_(
+            "Resetting a check to draft is disabled because its accounting "
+            "entries cannot be deleted or altered. Any correction of existing "
+            "entries must be handled by an authorized reversal process."))
 
-        self.state='draft'
-
-    def reset_before_add(self,state):
-        journal_type = self.env['account.move'].search([('check_id', '=', self.id),('journal_state','=',state)])
-        for rec in journal_type:
-            rec.button_draft()
-            print(tuple(rec.line_ids.ids))
-            if tuple(rec.line_ids.ids):
-                rec.env.cr.execute("DELETE FROM account_move_line WHERE id in %s " % (tuple(rec.line_ids.ids),))
-            else:
-                self.make_messege()
+    def reset_before_add(self, state):
+        """Fail-closed duplicate-entry guard: matching journal entries are
+        inspected only; they are never drafted, altered, or deleted here."""
+        self.ensure_one()
+        existing_move = self.env['account.move'].search(
+            [('check_id', '=', self.id), ('journal_state', '=', state)], limit=1)
+        if existing_move:
+            raise UserError(_(
+                "This transition is blocked because an accounting entry already "
+                "exists for this check (entry %s). Existing entries must be "
+                "handled by an authorized reversal process."
+            ) % (existing_move.display_name,))
 
 
     def create_move_cancel(self):
@@ -459,22 +445,17 @@ class CheckPaymentTransaction(models.Model):
             rec.create_move_cancel()
             rec.write({'state': 'cancelled'})
     def action_issue(self):
-        self.reset_before_add('issued')
-
         for rec in self:
-
             if rec.state != 'draft':
                 raise UserError(_("Only a check with status draft can be issued."))
             if rec.amount == 0.00:
                 raise ValidationError(_("Check amount must be more than 0."))
-
+            rec.reset_before_add('issued')
             rec.name = rec.check_number
             rec.create_move()
             rec.write({'state': 'issued'})
 
     def action_fund_debited(self):
-        self.reset_before_add('posted_issued')
-
         for rec in self:
             print("************ ", rec)
             if rec.check_payment_date and rec.check_payment_date > fields.Date.today():
@@ -485,6 +466,7 @@ class CheckPaymentTransaction(models.Model):
                 raise UserError(_("Please select Bank !."))
             if not rec.check_payment_date:
                 raise ValidationError(_("Please choose Payment Date."))
+            rec.reset_before_add('posted_issued')
             rec.create_move_delivered()
             rec.write({'state': 'posted'})
 

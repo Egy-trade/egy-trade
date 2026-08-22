@@ -177,7 +177,6 @@
 <!--                        <button type="object" name="rest_draft" states="cancelled,returned" string="Rest To Draft"/>-->
 <!--                        <button type="object" name="rest_draft" attrs="{'invisible':[('state','=','draft')]}"  string="Rest To Draft"/>-->
                         <button type="object" name="action_endorse" states="received" string="Endorse"/>
-                        <button name="reset_draft" string="RESET TO  DRAFT" type="object" icon="fa-undo" class="btn-warning" />
 
 
 
@@ -272,7 +271,6 @@
                         <button type="object" name="action_return_issued_check" states="issued" string="Returned Check"/>
                         <button type="object" name="action_cancel_issue" states="draft" string="Cancel"/>
 <!--                        <button type="object" name="rest_draft" states="cancelled" string="Rest To Draft"/>-->
-                        <button name="reset_draft" string="RESET TO  DRAFT" type="object" icon="fa-undo" class="btn-warning" />
 <!--                        <button name="make_notification" string=" TO  DRAFT" type="object" icon="fa-undo" class="btn-warning" />-->
 
 
