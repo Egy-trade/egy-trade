@@ -28,15 +28,6 @@ class SaleOrder(models.Model):
         copy=False
     )
 
-    @api.onchange('global_factor', 'order_line')
-    def _onchange_global_factor(self):
-        """ global_factor """
-        for rec in self:
-            if rec.product_pricing_ids:
-                rec.product_pricing_ids.write({
-                    'factor': rec.global_factor
-                })
-
     def apply_estimate_product_price(self):
         for rec in self.order_line:
             if rec.estimate_unit_price:
@@ -188,7 +179,9 @@ class SaleOrderLine(models.Model):
 
     purchase_price_estimate = fields.Float(copy=True)
     factor = fields.Float(
-        copy=True
+        related='order_id.global_factor',
+        store=True,
+        precompute=True,
     )
     line_factor = fields.Float(
         default=1,
@@ -200,6 +193,14 @@ class SaleOrderLine(models.Model):
 
     currency_rate_estimate = fields.Float(compute='change_currency_rate_func', store=True)
     note = fields.Char(string='Note')
+
+    def write(self, vals):
+        """ factor is derived from the order's global_factor; direct writes are ignored """
+        if 'factor' in vals:
+            vals = {key: value for key, value in vals.items() if key != 'factor'}
+            if not vals:
+                return True
+        return super(SaleOrderLine, self).write(vals)
 
     @api.depends('factor', 'purchase_price_estimate', 'currency_id', 'product_uom_qty', 'currency_rate_estimate','currency_estimate_id', 'line_factor')
     def _compute_estimate_unit_price(self):

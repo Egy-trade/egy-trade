@@ -68,7 +68,7 @@
                                 <field name="margin_percent" optional="show"/>
                                 <field name="currency_estimate_id" optional="show"/>
                                 <field name="currency_rate_estimate" optional="show"/>
-                                <field name="factor" optional="show" sum="Total Factor"/>
+                                <field name="factor" optional="show" sum="Total Factor" readonly="1"/>
                                 <field name="line_factor" optional="show" />
                                 <field name="note" optional="show"/>
                                 <field name="product_uom_qty" optional="hide"/>
