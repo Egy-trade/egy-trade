@@ -45,6 +45,9 @@ class CrmLead(models.Model):
 
     partner_id = fields.Many2one(
         'res.partner', string='Customer', check_company=True, index=True, tracking=10,
-        domain="[('allowed_users_ids', 'ilike', user_id)]",
+        # Current-user membership filter using the ``uid`` domain free variable;
+        # a record-field reference such as ``user_id`` fails ir.ui.view
+        # validation when the view's ``user_id`` node carries narrower groups.
+        domain="[('allowed_users_ids', 'in', uid)]",
         help="Linked partner (optional). Usually created when converting the lead. You can find a partner by its Name, TIN, Email or Internal Reference.")
 
