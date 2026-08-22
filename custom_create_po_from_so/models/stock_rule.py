@@ -64,7 +64,10 @@ class StockRule(models.Model):
 
             # Get the set of procurement origin for the current domain.
             origins = set([p.origin for p in procurements])
-            po = []
+            # Always a recordset: stays empty when no positive quantity
+            # requires creating an RFQ (e.g. MTO cancel/reset flows), so the
+            # line grouping below degrades to "no candidates".
+            po = self.env['purchase.order']
             # Check if a PO exists for the current domain.
             # po = self.env['purchase.order'].sudo().search([dom for dom in domain], limit=1)
             company_id = procurements[0].company_id

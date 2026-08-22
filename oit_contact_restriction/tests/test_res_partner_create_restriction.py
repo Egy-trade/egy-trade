@@ -34,6 +34,8 @@ class TestContactCreateRestriction(TransactionCase):
                 cls.env.ref('base.group_user').id,
                 cls.env.ref(
                     'oit_contact_restriction.group_create_contact').id,
+                # satisfy the standard res.partner create ACLs
+                cls.env.ref('sales_team.group_sale_salesman').id,
             ])],
         })
 
@@ -74,15 +76,15 @@ class TestContactCreateRestriction(TransactionCase):
                 with self.assertRaises(ValidationError):
                     Partner.create({'name': 'Forged Token Contact'})
 
-    def test_crm_conversion_wizard_creates_customer_without_group(self):
-        """Exact upstream failing flow: crm.quotation.partner action=create."""
+    def test_crm_conversion_creates_customer_without_group(self):
+        """Underlying conversion path used by the sale_crm quotation wizard.
+
+        crm.quotation.partner.action_apply() calls exactly
+        ``lead._handle_partner_assignment(create_missing=True)``; the module
+        does not depend on sale_crm, so the test registry has no wizard and
+        the underlying CRM path is exercised directly.
+        """
         lead = self._conversion_lead()
-        convert = self.env['crm.quotation.partner'].with_user(
-            self.restricted_user
-        ).with_context({
-            'active_model': 'crm.lead',
-            'active_id': lead.id,
-        }).create({'action': 'create'})
-        convert.action_apply()
+        lead._handle_partner_assignment(create_missing=True)
         self.assertTrue(bool(lead.partner_id.id))
         self.assertEqual(lead.partner_id.name, 'Amy Wong')

@@ -25,15 +25,21 @@ class SaleOrder(models.Model):
     def _get_follower_user_ids(self):
         """Store, per order, the users following it.
 
-        Batched implementation: a single ``res.users`` search covers every
-        order of ``self`` instead of issuing one query per order; the stored
-        values are identical to the previous per-order searches.
+        Zero-search common path: mail.thread creation subscribes the current
+        user's partner first, so that mapping is seeded directly from
+        ``self.env.user`` without any query; a single batched ``res.users``
+        search runs only for additional follower partners. Every record of
+        ``self`` is always assigned.
         """
-        users_by_partner = {}
         follower_partners = self.message_follower_ids.mapped('partner_id')
-        if follower_partners:
+        current_partner = self.env.user.partner_id
+        users_by_partner = {}
+        if current_partner in follower_partners:
+            users_by_partner[current_partner.id] = self.env.user
+        unknown_partners = follower_partners - current_partner
+        if unknown_partners:
             for user in self.env['res.users'].search(
-                    [('partner_id', 'in', follower_partners.ids)]):
+                    [('partner_id', 'in', unknown_partners.ids)]):
                 known = users_by_partner.get(user.partner_id.id)
                 if known:
                     users_by_partner[user.partner_id.id] |= user

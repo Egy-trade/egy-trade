@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from odoo import fields
 from odoo.tests import TransactionCase
 
 
@@ -103,13 +102,12 @@ class TestSaleOrderCreateBatching(TransactionCase):
         purchase_order = self.env['purchase.order'].create({
             'partner_id': self.partner.id,
         })
+        # note line: valid without product/accountable fields, and supports
+        # the sale_line_id link used by the propagation constraint
         purchase_line = self.env['purchase.order.line'].create({
             'order_id': purchase_order.id,
+            'display_type': 'line_note',
             'name': 'ORIGINAL NOTE',
-            'product_qty': 1.0,
-            'product_uom': self.env.ref('uom.product_uom_unit').id,
-            'price_unit': 1.0,
-            'date_planned': purchase_order.date_order or fields.Datetime.now(),
             'sale_line_id': line_note.id,
         })
 
