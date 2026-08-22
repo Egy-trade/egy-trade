@@ -100,8 +100,13 @@ class AccountMoveLine(models.Model):
 
     discount_1 = fields.Float()
     discount_2 = fields.Float()
+    # store=True + readonly=False keep the upstream column writable so
+    # explicitly passed discounts survive creation; the compute still
+    # drives the value whenever Universal Discount fields change.
     discount = fields.Float(
-        compute='_compute_discount'
+        compute='_compute_discount',
+        store=True,
+        readonly=False,
     )
 
     @api.depends('discount_1', 'discount_2')
