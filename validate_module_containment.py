@@ -1,9 +1,11 @@
 import ast
+import re
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent
-DESTRUCTIVE = ("clear_data", "eg_cancel_stock_move")
+# Modules that must never be installable/auto-installable on UAT builds:
+DESTRUCTIVE = ("clear_data", "eg_cancel_stock_move", "deltatech_no_quick_create")
 failures = []
 
 
@@ -49,6 +51,46 @@ for module, manifest in parsed.items():
         not bad,
         ("%s depends on %s" % (module, bad)) if bad else "",
     )
+
+
+def global_relational_field_patches(module_dir):
+    """Detect JS assets that include-patch the core legacy relational fields
+    to mutate quick_create behavior globally.
+
+    deltatech_no_quick_create used to force ``quick_create`` off onto the
+    shared FieldMany2One prototype, removing standard create/name_create
+    flows from every backend view; this guard keeps that class of blanket
+    mutation out of the repository. Detection is purely structural
+    (require + .include + forcing pattern): no content-based exemptions
+    exist, so adding explanatory comments cannot bypass it.
+    """
+    offenders = []
+    forcing = re.compile(r"quick_create\s*:\s*false|no_quick_create\s*:\s*true", re.IGNORECASE)
+    js_files = sorted((module_dir / "static").rglob("*.js")) if (module_dir / "static").exists() else []
+    for js_path in js_files:
+        try:
+            text = js_path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        lowered = text.lower()
+        if (
+            "relational_fields" in lowered
+            and ".include(" in lowered
+            and forcing.search(text)
+        ):
+            offenders.append(
+                str(js_path.relative_to(module_dir)).replace("\\", "/"))
+    return offenders
+
+
+patch_offenders = []
+for module in sorted(parsed):
+    patch_offenders += global_relational_field_patches(REPO_ROOT / module)
+check(
+    "no global quick_create JS patch on relational fields",
+    not patch_offenders,
+    ", ".join(patch_offenders),
+)
 
 print("%d manifest(s) scanned" % len(parsed))
 if failures:
