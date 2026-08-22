@@ -15,13 +15,31 @@ class SaleOrder(models.Model):
     #         lambda l: l.name == max([x.name for x in self.currency_id.rate_ids])).inverse_company_rate
     #     return res
 
-    @api.model
+    @api.model_create_multi
     def create(self, vals_list):
-        currency_rate_ids = self.env['res.currency'].browse(
-            int(vals_list.get('currency_id')) if vals_list.get('currency_id') else self.currency_id.id).rate_ids
+        """Snapshot each order's creation-time currency rate.
 
-        vals_list['currency_rate_confirm'] = currency_rate_ids.filtered(
-            lambda l: l.name == max([x.name for x in currency_rate_ids])).inverse_company_rate
+        Grouped implementation: the latest inverse rate is resolved once per
+        DISTINCT currency across the whole input list (the ORM cache serves
+        repeated currencies), instead of once per record. Handles both single
+        dicts and lists and falls back to the company currency when no
+        explicit currency is given.
+        """
+        company_currency_id = self.env.company.currency_id.id
+        latest_inverse_rate = {}
+        for vals in vals_list:
+            currency_id = vals.get('currency_id') or company_currency_id
+            if currency_id not in latest_inverse_rate:
+                rates = self.env['res.currency'].browse(currency_id).rate_ids
+                latest_inverse_rate[currency_id] = (
+                    rates.filtered(
+                        lambda l: l.name == max([x.name for x in rates])
+                    ).inverse_company_rate
+                    if rates else False
+                )
+        for vals in vals_list:
+            vals['currency_rate_confirm'] = (
+                latest_inverse_rate[vals.get('currency_id') or company_currency_id])
 
         return super(SaleOrder, self).create(vals_list)
 

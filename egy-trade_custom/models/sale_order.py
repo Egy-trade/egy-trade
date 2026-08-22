@@ -20,11 +20,30 @@ class SaleOrder(models.Model):
     arch_consultants = fields.Many2one('res.users', string='Architecture Consultant')
     electrical_consultants = fields.Many2one('res.users', string='Electrical Consultant')
     project = fields.Char()
-    
+
     @api.depends('message_follower_ids')
     def _get_follower_user_ids(self):
+        """Store, per order, the users following it.
+
+        Batched implementation: a single ``res.users`` search covers every
+        order of ``self`` instead of issuing one query per order; the stored
+        values are identical to the previous per-order searches.
+        """
+        users_by_partner = {}
+        follower_partners = self.message_follower_ids.mapped('partner_id')
+        if follower_partners:
+            for user in self.env['res.users'].search(
+                    [('partner_id', 'in', follower_partners.ids)]):
+                known = users_by_partner.get(user.partner_id.id)
+                if known:
+                    users_by_partner[user.partner_id.id] |= user
+                else:
+                    users_by_partner[user.partner_id.id] = user
+        empty_users = self.env['res.users']
         for rec in self:
-            follower_users = self.env['res.users'].search([('partner_id', 'in', rec.message_follower_ids.mapped('partner_id').ids)])
+            follower_users = empty_users
+            for partner in rec.message_follower_ids.mapped('partner_id'):
+                follower_users |= users_by_partner.get(partner.id, empty_users)
             rec.follower_user_ids = [(6, 0, follower_users.ids)]
 
     # Incomplete validation of the approved state
@@ -87,11 +106,15 @@ class SaleOrderLine(models.Model):
 
     @api.constrains('name')
     def _check_name_c(self):
-        """ Validate name_c """
+        """Propagate SO line names to their linked purchase lines.
+
+        Batched implementation: a single ``purchase.order.line`` search covers
+        every constrained line instead of issuing one query per line; the
+        propagated values are identical to the previous per-line searches.
+        """
+        linked_purchase_lines = self.env['purchase.order.line'].search(
+            [('sale_line_id', 'in', self.ids)])
         for rec in self:
-            purchase_line_ids = self.env['purchase.order.line'].search([
-                ('sale_line_id','=', rec.id)
-            ])
-            if purchase_line_ids:
-                for line in purchase_line_ids:
-                    line.name = rec.name
+            for line in linked_purchase_lines.filtered(
+                    lambda l: l.sale_line_id == rec):
+                line.name = rec.name
