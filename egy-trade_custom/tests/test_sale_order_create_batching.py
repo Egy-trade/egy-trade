@@ -103,11 +103,13 @@ class TestSaleOrderCreateBatching(TransactionCase):
             'partner_id': self.partner.id,
         })
         # note line: valid without product/accountable fields, and supports
-        # the sale_line_id link used by the propagation constraint
+        # the sale_line_id link used by the propagation constraint; product_qty
+        # stays a NOT NULL database column even for note lines
         purchase_line = self.env['purchase.order.line'].create({
             'order_id': purchase_order.id,
             'display_type': 'line_note',
             'name': 'ORIGINAL NOTE',
+            'product_qty': 0.0,
             'sale_line_id': line_note.id,
         })
 

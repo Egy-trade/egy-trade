@@ -152,4 +152,6 @@ class ResCompany(models.Model):
             lg_menu.users = [(4, self.env.user.id)]
         else:
             lg_menu = self.env['res.groups'].search([('id', '=', self.env.ref('Letter_Guarantee.use_lg').id)])
-            lg_menu.users = [(2, self.env.user.id)]
+            # (3, id) only unlinks the group membership; (2, id) would DELETE
+            # the comodel record itself, i.e. remove the user account.
+            lg_menu.users = [(3, self.env.user.id)]

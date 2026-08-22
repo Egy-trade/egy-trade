@@ -36,7 +36,7 @@ class TestRunBuyWithoutPositiveQuantities(TransactionCase):
             'name': 'RunBuy Storable',
             'type': 'product',
             'seller_ids': [(0, 0, {
-                'name': partner.id,
+                'partner_id': partner.id,
                 'min_qty': 0.0,
                 'price': 5.0,
             })],

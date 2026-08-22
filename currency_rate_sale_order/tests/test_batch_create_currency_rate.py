@@ -27,15 +27,13 @@ class TestBatchCreateCurrencyRate(TransactionCase):
         self.assertEqual(len(orders), 2)
         for order in orders:
             self.assertEqual(order.currency_id, self.env.company.currency_id)
-            self.assertTrue(order.currency_rate_confirm)
+            # company currency converts to itself: deterministic snapshot 1.0
+            self.assertEqual(float(order.currency_rate_confirm), 1.0)
 
-    def test_single_create_with_explicit_currency(self):
+    def test_single_create_with_company_currency(self):
         order = self.env['sale.order'].create({
             'partner_id': self.partners[0].id,
             'currency_id': self.env.company.currency_id.id,
         })
-        rates = order.currency_id.rate_ids
-        expected = rates.filtered(
-            lambda l: l.name == max([x.name for x in rates])
-        ).inverse_company_rate
-        self.assertEqual(float(order.currency_rate_confirm), float(expected))
+        # explicit company currency takes the same no-query fast path
+        self.assertEqual(float(order.currency_rate_confirm), 1.0)

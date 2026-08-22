@@ -23,20 +23,24 @@ class SaleOrder(models.Model):
         DISTINCT currency across the whole input list (the ORM cache serves
         repeated currencies), instead of once per record. Handles both single
         dicts and lists and falls back to the company currency when no
-        explicit currency is given.
+        explicit currency is given. The company currency converts to itself,
+        so its snapshot is the deterministic 1.0 without any rate lookup.
         """
         company_currency_id = self.env.company.currency_id.id
         latest_inverse_rate = {}
         for vals in vals_list:
             currency_id = vals.get('currency_id') or company_currency_id
             if currency_id not in latest_inverse_rate:
-                rates = self.env['res.currency'].browse(currency_id).rate_ids
-                latest_inverse_rate[currency_id] = (
-                    rates.filtered(
-                        lambda l: l.name == max([x.name for x in rates])
-                    ).inverse_company_rate
-                    if rates else False
-                )
+                if currency_id == company_currency_id:
+                    latest_inverse_rate[currency_id] = 1.0
+                else:
+                    rates = self.env['res.currency'].browse(currency_id).rate_ids
+                    latest_inverse_rate[currency_id] = (
+                        rates.filtered(
+                            lambda l: l.name == max([x.name for x in rates])
+                        ).inverse_company_rate
+                        if rates else False
+                    )
         for vals in vals_list:
             vals['currency_rate_confirm'] = (
                 latest_inverse_rate[vals.get('currency_id') or company_currency_id])
