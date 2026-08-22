@@ -13,7 +13,7 @@
 
     'images': ['static/description/banner.png'],
     'license': "OPL-1",
-    'installable': True,
+    'installable': False,
     'application': True,
     'auto_install': False,
 }
